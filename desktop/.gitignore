@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dist-*/
+releases/
+*.log
+# What scripts/bundle.js fetches and stages for an installer
+vendor/

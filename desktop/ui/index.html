@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Only this app's own scripts run here, whatever a site's answer carries: no
+     inline script, no handler attribute, nothing fetched but pictures. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>LineRight Regbot</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="charts.css">
+</head>
+<body class="mode-app">
+<div id="bars">
+  <!-- Browser mode only: the open booking pages, with the app as the first tab. -->
+  <div id="tabbar">
+    <button id="apptab" class="tab app" title="Back to the application">◉ LineRight Regbot</button>
+    <div id="tabs" role="tablist"></div>
+    <button id="newtab" title="New tab" aria-label="New tab">+</button>
+  </div>
+
+  <!-- Browser mode only: navigation for the page underneath. -->
+  <div id="navbar">
+    <button id="back" title="Back" aria-label="Back">‹</button>
+    <button id="forward" title="Forward" aria-label="Forward">›</button>
+    <button id="reload" title="Reload" aria-label="Reload">↻</button>
+    <button id="home" title="Back to the application" aria-label="Back to the application">⌂</button>
+    <input id="address" type="text" spellcheck="false" autocomplete="off" aria-label="Address">
+    <button id="fill" class="pill" title="Type your profile into this form">✎ Fill form</button>
+    <button id="found2" class="pill" title="Report a slot you found to the board">⌕ Found a slot</button>
+    <span id="navwho" class="muted"></span>
+    <span id="navtoast"></span>
+  </div>
+
+  <!-- App mode only: the application's own bar. -->
+  <div id="appbar">
+    <nav id="topnav">
+      <button data-page="sites">Sites</button>
+      <button data-page="console">Console</button>
+    </nav>
+    <div id="crumbs"></div>
+    <div id="right">
+      <button id="found" class="pill" title="Report a slot you found to the board">⌕ Found a slot</button>
+      <button id="update" class="pill hidden" title="An update is ready"></button>
+      <span id="who" class="muted"></span>
+      <button id="buy" class="pill hidden" title="Buy credits to bid with">+ Credits</button>
+      <span id="status" class="muted"></span>
+      <button id="gear" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+  </div>
+
+  <div id="banner" class="hidden"></div>
+  <div id="foundform" class="section hidden"></div>
+</div>
+
+<main id="page"></main>
+<div id="toasts"></div>
+<!-- The weekly re-import asks here, over the application — never over a booking page. -->
+<div id="modal" class="hidden"></div>
+
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

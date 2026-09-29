@@ -1,0 +1,105 @@
+# Installers for the three desktop platforms, and where updates are published.
+#
+#   npm run dist          every target this machine can build (Linux builds
+#                         Linux; Windows and macOS builds need their own OS or
+#                         CI — see .github/workflows/desktop-release.yml)
+#   npm run release       build and publish to the feed below
+#
+# Every installer carries what the app runs itself: the DMV robots and their
+# stand-in (../dmq) and the Chromium the robots drive. scripts/bundle.js puts
+# them in vendor/ — the browser for the platform and CPU being packed — and the
+# extraResources below copy them beside the app, where src/robots.js and
+# src/stack.js find them. It runs by itself before each pack (beforePack), so a
+# build needs nothing installed beyond npm ci. The lineright server is not part
+# of this app and never goes in an installer (practice mode finds a checkout of
+# it: src/stack.js).
+#
+# The `publish` block is embedded in the app as app-update.yml, which is what
+# electron-updater reads at runtime. GitHub Releases needs GH_TOKEN at publish
+# time and nothing at all at runtime for a public repository. To self-host
+# instead, point the app at a generic feed (its Settings, or REGBOT_UPDATE_URL)
+# served by scripts/update-server.js.
+appId: dev.regbot.desktop
+productName: LineRight Regbot
+copyright: LineRight Regbot
+directories:
+  output: dist
+  buildResources: build
+files:
+  - src/**/*
+  - ui/**/*
+  - config.json
+  - package.json
+asar: true
+compression: normal
+
+# ${os}-${arch} is the platform and CPU being packed: linux-x64, win-x64,
+# mac-arm64 and so on, which is how scripts/bundle.js names vendor/.
+extraResources:
+  - from: vendor/stack
+    to: stack
+  - from: vendor/${os}-${arch}/browsers
+    to: browsers
+beforePack: scripts/bundle.js
+
+publish:
+  provider: github
+  owner: grandrew
+  repo: lineright-client
+  releaseType: release
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # regbot.exe, and the folder it installs to, as before: only what people see is renamed.
+  executableName: regbot
+  artifactName: LineRight-Regbot-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: true
+  perMachine: false
+  deleteAppDataOnUninstall: false
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    # The zip is not optional: it is the artifact electron-updater installs from on macOS.
+    - target: zip
+      arch: [x64, arm64]
+  artifactName: LineRight-Regbot-${version}-mac-${arch}.${ext}
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # Signing covers every binary in the bundle — the robots' Chromium under
+  # Resources as well as Electron — and they all get these.
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+linux:
+  target:
+    - AppImage
+    - deb
+  # The launcher's tooltip and the package's text. package.json's description is
+  # the name alone, because Windows shows it as the program's name (Task Manager).
+  description: "LineRight Regbot: your place in line for appointments that are hard to get — your details kept on
+    your own computer, and a robot that looks for openings and books your slot."
+  category: Utility
+  maintainer: LineRight Regbot
+  artifactName: LineRight-Regbot-${version}-linux-${arch}.${ext}
+  # The app calls itself regbot inside (src/main.js), which is the window class
+  # the desktop entry has to name for the dock to put the window with it.
+  desktop:
+    StartupWMClass: regbot
+
+# On Linux the executable becomes a launcher that turns Chromium's sandbox off
+# only where the system allows it none (Ubuntu 24.04's AppArmor, an AppImage's
+# nosuid mount); without it the app aborts at start there. It runs before any
+# Linux target is made. See scripts/linux-launcher.js.
+afterPack: scripts/linux-launcher.js
+
+# The AppImage gets the AppImage project's static runtime as soon as it is
+# built, because the one electron-builder 25 embeds needs libfuse2 and current
+# distributions no longer ship it. This hook runs before the artifact is
+# uploaded or its update info recorded. See scripts/appimage-runtime.js.
+artifactBuildCompleted: scripts/appimage-runtime.js

@@ -1,0 +1,33 @@
+/* regbot charts — the look of charts.js. Uses the page's tokens (--surface,
+   --line, --muted, --mono…) where it has them, with fallbacks so it stands on
+   its own. desktop/ui/charts.css is a copy, kept identical by a test. */
+.rc{position:relative; min-width:0; background:var(--surface,#fff); border:1px solid var(--line-soft,#e7ecf5);
+  border-radius:14px; padding:12px 14px 10px; box-shadow:var(--lift,none)}
+.rc-head{display:flex; align-items:baseline; gap:8px; margin:0 0 2px}
+.rc-title{font-size:13px; font-weight:700; color:var(--text,#101a2d); letter-spacing:-.01em}
+.rc-unit{font:11px var(--mono,monospace); color:var(--muted,#56667e)}
+.rc-plot{position:relative}
+.rc-svg{display:block; width:100%; height:auto; overflow:visible}
+.rc-grid{stroke:var(--line-soft,#e7ecf5); stroke-width:1}
+.rc-axis{stroke:var(--line,#d3dbea); stroke-width:1}
+.rc-tick{font:10.5px var(--mono,monospace); fill:var(--faint,#8a99b1)}
+.rc-empty{font:12px var(--sans,sans-serif); fill:var(--faint,#8a99b1)}
+.rc-cursor{stroke:var(--faint,#8a99b1); stroke-width:1; stroke-dasharray:3 3}
+.rc-tip{position:absolute; z-index:5; pointer-events:none; min-width:150px; padding:7px 10px; border-radius:8px;
+  background:#101a2d; color:#fff; font-size:11.5px; line-height:1.55; box-shadow:0 10px 24px -10px rgba(0,0,0,.45)}
+.rc-tip-t{color:#aab6cc; margin-bottom:3px; white-space:nowrap}
+.rc-tip div{white-space:nowrap}
+.rc-tip b{float:right; margin-left:14px; font-family:var(--mono,monospace); font-weight:600}
+.rc-tip i,.rc-key i{display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:6px; vertical-align:0}
+.rc-legend{display:flex; flex-wrap:wrap; gap:3px 14px; margin-top:4px; font-size:11.5px; color:var(--muted,#56667e)}
+.rc-key b{color:var(--text,#101a2d); font-family:var(--mono,monospace); font-weight:600}
+.rc-key small{color:var(--faint,#8a99b1)}
+.rc-charts{display:grid; grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr)); gap:14px}
+.rc-group{margin:22px 0 10px; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted,#56667e)}
+.rc-range{display:inline-flex; gap:2px; padding:3px; border-radius:999px; background:var(--surface-2,#f2f5fa);
+  box-shadow:inset 0 0 0 1px var(--line,#d3dbea)}
+.rc-range a,.rc-range button{padding:4px 11px; border-radius:999px; border:0; background:none; cursor:pointer;
+  font:600 12.5px var(--sans,sans-serif); color:var(--muted,#56667e); text-decoration:none}
+.rc-range a.on,.rc-range button.on{background:var(--surface,#fff); color:var(--text,#101a2d);
+  box-shadow:0 1px 2px rgba(16,26,45,.12)}

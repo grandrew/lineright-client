@@ -1,0 +1,414 @@
+'use strict';
+/**
+ * The app's side of regbot's client API, and the loop that drives it.
+ *
+ * Everything here is plain Node: no Electron, so it runs under `node --test`
+ * against a fake fetch. The app hands in the real fetch and, for pairing, a
+ * fetch bound to the home tab's cookie jar — that is how a sign-in on the
+ * site becomes a device token without a password ever passing through here.
+ *
+ * The server decides everything. This module carries positions and hand-offs
+ * to the screen and answers back; it never decides whose turn it is. See
+ * regbot/client_api.py for the other half and the reasons.
+ */
+
+class SyncError extends Error {
+  constructor(message, status = 0, body = null, retryAfter = 0) {
+    super(message);
+    this.name = 'SyncError';
+    this.status = status;
+    this.body = body;
+    // Seconds the site asked to be left alone for (a 429's Retry-After).
+    this.retryAfter = retryAfter;
+  }
+}
+
+class NotPaired extends SyncError {
+  constructor(message = 'This app is not paired with an account yet.') {
+    super(message, 401);
+    this.name = 'NotPaired';
+  }
+}
+
+class SyncClient {
+  /**
+   * @param {object} opts
+   * @param {string} opts.serverUrl        where regbot is
+   * @param {string|null} [opts.token]     bearer token from pairing
+   * @param {Function} [opts.fetch]        fetch to use (Node's by default)
+   * @param {object} [opts.app]            {name, version, platform} sent on pair/sync
+   * @param {number} [opts.timeoutMs]      per-request deadline
+   * @param {Function} [opts.onRequest]    ({method, path, status, ms}) after every request,
+   *                                       for this app's own telemetry (telemetry.js)
+   */
+  constructor({ serverUrl, token = null, fetch = globalThis.fetch, app = {}, timeoutMs = 10000, onRequest = null }) {
+    this.serverUrl = String(serverUrl || '').replace(/\/+$/, '');
+    this.token = token || null;
+    this.fetch = fetch;
+    this.app = { name: '', version: '', platform: '', ...app };
+    this.timeoutMs = timeoutMs;
+    this.onRequest = onRequest;
+  }
+
+  get paired() {
+    return Boolean(this.token);
+  }
+
+  url(path) {
+    return `${this.serverUrl}${path}`;
+  }
+
+  async request(path, options = {}) {
+    const started = Date.now();
+    let status = 0;
+    try {
+      const reply = await this.send(path, options);
+      status = 200;
+      return reply;
+    } catch (err) {
+      status = err.status || 0;
+      throw err;
+    } finally {
+      if (this.onRequest) {
+        try { this.onRequest({ method: options.method || 'POST', path, status, ms: Date.now() - started }); } catch { /* never the problem */ }
+      }
+    }
+  }
+
+  async send(path, { method = 'POST', body, fetch = this.fetch, auth = true } = {}) {
+    const headers = { accept: 'application/json' };
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    if (auth) {
+      if (!this.token) throw new NotPaired();
+      headers.authorization = `Bearer ${this.token}`;
+    }
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
+    let res;
+    try {
+      res = await fetch(this.url(path), {
+        method, headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller ? controller.signal : undefined,
+      });
+    } catch (err) {
+      throw new SyncError(`Could not reach ${this.serverUrl}: ${err.message}`, 0);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    let parsed = null;
+    try {
+      parsed = await res.json();
+    } catch {
+      parsed = null;
+    }
+    if (res.status === 401 && auth) {
+      // The token was revoked, or never valid. Forget it: the next home-tab
+      // sign-in pairs again.
+      this.token = null;
+      throw new NotPaired((parsed && parsed.error) || 'This device is not paired.');
+    }
+    if (!res.ok) {
+      const wait = Number((res.headers && res.headers.get && res.headers.get('retry-after')) || 0);
+      throw new SyncError((parsed && parsed.error) || `${method} ${path} failed (${res.status})`,
+        res.status, parsed, Number.isFinite(wait) ? wait : 0);
+    }
+    return parsed;
+  }
+
+  /**
+   * Turn a signed-in site session into a device token.
+   * @param {Function} cookieFetch a fetch that sends the home tab's cookies
+   */
+  async pair(cookieFetch) {
+    const body = { name: this.app.name, platform: this.app.platform, app_version: this.app.version };
+    let reply;
+    try {
+      reply = await this.request('/api/client/pair', { body, fetch: cookieFetch, auth: false });
+    } catch (err) {
+      // A 401 here is not a failure, it is "nobody is signed in on the home
+      // tab yet". The app asks at start and after every home-tab navigation,
+      // and most of those asks land before the person has signed in.
+      if (err instanceof SyncError && err.status === 401) throw new NotPaired(err.message);
+      throw err;
+    }
+    this.token = reply.token;
+    return reply;
+  }
+
+  /** `extra` rides along in the body — the reader's capabilities (reader.js). */
+  async sync(extra = {}) {
+    return this.request('/api/client/sync', { body: { app_version: this.app.version, ...extra } });
+  }
+
+  /** What this device's robot saw for a read the site handed it. */
+  async answerRead(readId, result) {
+    return this.request(`/api/client/reads/${Number(readId)}`, { body: result });
+  }
+
+  /** Presence and a round trip the site times itself (pinger.js). */
+  async ping(body = {}) {
+    return this.request('/api/client/ping', { body });
+  }
+
+  /** This device is closing mid-read and gives the read back, so no line waits on it. */
+  async releaseRead(readId) {
+    return this.request(`/api/client/reads/${Number(readId)}/release`, { body: {} });
+  }
+
+  /** This device is about to book a hand-off with its robot; the first device to say so has it. */
+  async claim(jobId) {
+    return this.request(`/api/client/handoffs/${Number(jobId)}/claim`, { body: {} });
+  }
+
+  /** The slot was not there when this device went to book it. */
+  async gone(jobId, reason = '') {
+    return this.request(`/api/client/handoffs/${Number(jobId)}/gone`, { body: { reason } });
+  }
+
+  async found(report) {
+    return this.request('/api/client/found', { body: report });
+  }
+
+  async booked(jobId, confirmation = '', { robot = false } = {}) {
+    const body = robot ? { confirmation, robot: true } : { confirmation };
+    return this.request(`/api/client/handoffs/${Number(jobId)}/booked`, { body });
+  }
+
+  async pass(jobId, reason = '') {
+    return this.request(`/api/client/handoffs/${Number(jobId)}/pass`, { body: { reason } });
+  }
+
+  async places(siteSlug) {
+    const reply = await this.request(`/api/client/places/${encodeURIComponent(siteSlug)}`, { method: 'GET' });
+    return reply.places || [];
+  }
+
+  /** Unpair another device of this account. */
+  async revokeDevice(clientId) {
+    return this.request(`/api/client/devices/${Number(clientId)}/revoke`, { body: {} });
+  }
+
+  async unpair() {
+    try {
+      await this.request('/api/client/unpair', { body: {} });
+    } finally {
+      this.token = null;
+    }
+  }
+
+  // -- signing in by code ------------------------------------------------
+  // The app never loads the site and never sees a password. It asks for a
+  // code, the person approves that code on the site in their own browser,
+  // and the app collects a token when it next asks.
+  async pairStart() {
+    const body = { name: this.app.name, platform: this.app.platform, app_version: this.app.version };
+    return this.request('/api/client/pair/start', { body, auth: false });
+  }
+
+  /** One poll: {status:'pending'} | {status:'approved', token, user} | throws SyncError 410 when over. */
+  async pairPoll(secret) {
+    const reply = await this.request('/api/client/pair/poll', { body: { secret }, auth: false });
+    if (reply && reply.status === 'approved' && reply.token) this.token = reply.token;
+    return reply;
+  }
+
+  // -- what the screens show -----------------------------------------------
+  // Readable before pairing (the directory is public); the token, when there
+  // is one, lets the server say which position is yours.
+  async sites(q = '') {
+    const query = q ? `?q=${encodeURIComponent(q)}` : '';
+    return this.request(`/api/client/sites${query}`, { method: 'GET', auth: this.paired });
+  }
+
+  async site(slug) {
+    return this.request(`/api/client/sites/${encodeURIComponent(slug)}`, { method: 'GET', auth: this.paired });
+  }
+
+  async board(queueId) {
+    return this.request(`/api/client/queues/${Number(queueId)}`, { method: 'GET', auth: this.paired });
+  }
+
+  async placeBid(queueId, bid) {
+    return this.request(`/api/client/queues/${Number(queueId)}/bids`, { body: bid });
+  }
+
+  async raiseBid(bidId, delta) {
+    return this.request(`/api/client/bids/${Number(bidId)}/raise`, { body: { delta: Number(delta) } });
+  }
+
+  async withdrawBid(bidId) {
+    return this.request(`/api/client/bids/${Number(bidId)}/withdraw`, { body: {} });
+  }
+
+  async account() {
+    return this.request('/api/client/account', { method: 'GET' });
+  }
+
+  /** Buy a pack of credits: a payment page to open, or (practice) credited now. The
+   *  older route, which every regbot site has; /credits/checkout is its new name. */
+  async topup(pack) {
+    return this.request('/api/client/topup', { body: { pack } });
+  }
+
+  /** The balance kept on the site, what is on sale, the purchases and every movement. */
+  async credits() {
+    return this.request('/api/client/credits', { method: 'GET' });
+  }
+
+  /** How one purchase stands — the site asks the payment provider while it is open. */
+  async payment(paymentId) {
+    return this.request(`/api/client/payments/${Number(paymentId)}`, { method: 'GET' });
+  }
+
+  async cancelPayment(paymentId) {
+    return this.request(`/api/client/payments/${Number(paymentId)}/cancel`, { body: {} });
+  }
+
+  /** The lines this person asked for, and what others have asked for. */
+  async siteRequests() {
+    return this.request('/api/client/site-requests', { method: 'GET' });
+  }
+
+  /** Ask for a line on a booking site the site does not cover yet. */
+  async requestSite(body) {
+    return this.request('/api/client/site-requests', { body });
+  }
+
+  /** "Me too" on a line somebody else asked for. */
+  async supportSiteRequest(requestId) {
+    return this.request(`/api/client/site-requests/${Number(requestId)}/support`, { body: {} });
+  }
+
+  /** What this app's person chose to share of its telemetry (telemetry.js). */
+  async shareTelemetry(payload) {
+    return this.request('/api/client/telemetry', { body: payload });
+  }
+}
+
+/** Which hand-offs are new since the last sync, which are gone, by job id. */
+function diffHandoffs(before = [], after = []) {
+  const was = new Map((before || []).map((h) => [h.job_id, h]));
+  const now = new Map((after || []).map((h) => [h.job_id, h]));
+  return {
+    arrived: [...now.values()].filter((h) => !was.has(h.job_id)),
+    gone: [...was.values()].filter((h) => !now.has(h.job_id)),
+    kept: [...now.values()].filter((h) => was.has(h.job_id)),
+  };
+}
+
+function describeHandoff(h) {
+  const where = h.slot
+    ? `${h.slot.office_name}, ${h.slot.date} at ${h.slot.time}`
+    : `you reached the front of ${h.queue_name}`;
+  return `${h.queue_name} — ${where}`;
+}
+
+function clock(seconds) {
+  const s = Math.max(0, Math.floor(Number(seconds) || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** Back-off for a server that is not answering: 2s, 4s, 8s … capped at a minute. */
+function backoffMs(failures) {
+  return Math.min(60000, 2000 * 2 ** Math.max(0, Math.min(failures - 1, 6)));
+}
+
+/**
+ * Polls at the cadence the server asks for, backs off when it does not
+ * answer, and reports every document and every error to whoever is listening.
+ * Timers are injectable so the loop can be tested without waiting.
+ */
+class SyncLoop {
+  constructor(client, { onDoc, onError, onStatus, body, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout, defaultMs = 4000 } = {}) {
+    this.client = client;
+    // What else each sync says, asked afresh every time: the reader's state
+    // changes between one sync and the next.
+    this.body = body || (() => ({}));
+    this.onDoc = onDoc || (() => {});
+    this.onError = onError || (() => {});
+    this.onStatus = onStatus || (() => {});
+    this.setTimeout = st;
+    this.clearTimeout = ct;
+    this.defaultMs = defaultMs;
+    this.timer = null;
+    this.running = false;
+    this.failures = 0;
+    this.inFlight = null;
+    this.last = null;
+  }
+
+  start() {
+    this.running = true;
+    this.poke();
+    return this;
+  }
+
+  stop() {
+    this.running = false;
+    if (this.timer) this.clearTimeout(this.timer);
+    this.timer = null;
+  }
+
+  /** Sync now rather than at the next tick. */
+  poke() {
+    if (!this.running) return;
+    if (this.timer) this.clearTimeout(this.timer);
+    this.timer = null;
+    this.tick();
+  }
+
+  schedule(ms) {
+    if (!this.running) return;
+    if (this.timer) this.clearTimeout(this.timer);
+    this.timer = this.setTimeout(() => { this.timer = null; this.tick(); }, ms);
+  }
+
+  async tick() {
+    if (this.inFlight) return this.inFlight;
+    // No address yet: the server this app runs itself has not said where it
+    // is. That is a wait, not a failure — no back-off, and whoever starts it
+    // pokes the loop the moment it is up.
+    if (!this.client.serverUrl) {
+      this.onStatus({ state: 'starting' });
+      this.schedule(this.defaultMs);
+      return null;
+    }
+    if (!this.client.paired) {
+      this.onStatus({ state: 'unpaired' });
+      this.schedule(this.defaultMs);
+      return null;
+    }
+    this.onStatus({ state: 'syncing' });
+    this.inFlight = (async () => {
+      try {
+        const doc = await this.client.sync(this.body());
+        this.failures = 0;
+        this.last = doc;
+        this.onStatus({ state: 'synced', at: Date.now() });
+        this.onDoc(doc);
+        this.schedule(Number(doc.poll_after_ms) > 0 ? Number(doc.poll_after_ms) : this.defaultMs);
+        return doc;
+      } catch (err) {
+        if (err instanceof NotPaired) {
+          this.failures = 0;
+          this.onStatus({ state: 'unpaired', message: err.message });
+          this.onError(err);
+          this.schedule(this.defaultMs);
+          return null;
+        }
+        this.failures += 1;
+        const wait = backoffMs(this.failures);
+        this.onStatus({ state: 'offline', message: err.message, retryMs: wait, failures: this.failures });
+        this.onError(err);
+        this.schedule(wait);
+        return null;
+      } finally {
+        this.inFlight = null;
+      }
+    })();
+    return this.inFlight;
+  }
+}
+
+module.exports = { SyncClient, SyncLoop, SyncError, NotPaired, diffHandoffs, describeHandoff, clock, backoffMs };

@@ -1,0 +1,39 @@
+{
+  "name": "regbot-desktop",
+  "productName": "LineRight Regbot",
+  "version": "0.3.0",
+  "description": "LineRight Regbot",
+  "main": "src/main.js",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "LineRight Regbot",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grandrew/lineright-client.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "smoke": "node test/smoke.test.js",
+    "fixtures": "electron scripts/make-import-fixtures.js",
+    "bundle": "node scripts/bundle.js",
+    "dist": "electron-builder --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
+    "dist:appimage": "electron-builder --linux AppImage --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "release": "electron-builder --publish always",
+    "update-server": "node scripts/update-server.js"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^25.1.8",
+    "playwright": "1.59.1"
+  }
+}

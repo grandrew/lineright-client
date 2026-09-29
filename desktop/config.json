@@ -1,0 +1,5 @@
+{
+  "serverUrl": "https://lineright.org",
+  "updateUrl": "",
+  "_note": "Build-time defaults. serverUrl is the public LineRight Regbot site the app pairs with by default — the site that holds the bidding queue; this app looks for openings and books for its person against it. Empty means the app runs its own server (Practice on this computer, which needs a lineright-server checkout) unless the person chooses a site. updateUrl is an optional self-hosted update feed. A person can change both in the app's Settings, and REGBOT_SERVER_URL / REGBOT_UPDATE_URL (or --server=<url>, --practice) override them for one run without saving anything."
+}

@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+.env
+
+# What a run leaves behind: the robots' run log, and the RQP/1 replay store
+# (real booking references)
+*_run_log.txt
+*.log
+data/

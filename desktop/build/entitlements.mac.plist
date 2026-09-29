@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  What the hardened runtime has to allow for everything this app carries:
+  Electron itself, and the headless Chromium the DMV robots drive, compile
+  JavaScript at run time, which needs writable-then-executable memory. The
+  bundled Python needs nothing extra. The same set is given to every nested
+  binary (entitlementsInherit in electron-builder.yml), because the robots'
+  browser and the server's Python are nested binaries too.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+</dict>
+</plist>

@@ -1,0 +1,72 @@
+# Build the desktop app's installers on all three platforms and publish them,
+# with their update manifests, to a GitHub Release. Push a tag like
+# `desktop-v0.1.1` (matching desktop/package.json) and the release appears;
+# every installed copy then picks the new version up on its next check.
+name: desktop release
+
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: The tag must name the version in package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF#refs/tags/desktop-v}"
+          pkg="$(node -p "require('./package.json').version")"
+          test "$tag" = "$pkg" || { echo "tag $tag != package.json $pkg"; exit 1; }
+      - run: npm ci
+      # The robots and their browser, for this machine: the tests run them for
+      # real. electron-builder fetches what each packed platform needs itself.
+      # (No server: practice mode's tests skip without a lineright-server
+      # checkout, which this public repository's CI does not have.)
+      - run: npm ci
+        working-directory: dmq
+      - run: npm run bundle
+      - name: Install a display for the smoke test
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: npm test
+      - name: Build and publish
+        run: npx electron-builder --publish ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS: set these to sign and notarise, without which macOS refuses
+          # to auto-update (and Gatekeeper warns on first launch).
+          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        with:
+          name: regbot-desktop-${{ matrix.os }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+            desktop/dist/latest*.yml

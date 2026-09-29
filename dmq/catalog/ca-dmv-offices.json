@@ -1,0 +1,6244 @@
+{
+ "source": "https://www.dmv.ca.gov/portal/wp-json/dmv/v1/field-offices + https://www.dmv.ca.gov/portal/wp-json/dmv/v1/appointment/branches",
+ "generated": "2026-09-17",
+ "note": "Regenerate with: node tools/build-catalog.mjs",
+ "offices": [
+  {
+   "code": "537!f851dc91008db76688d659c88058b9032eb5887bc63e78f0d415736861df",
+   "slug": "alturas",
+   "name": "Alturas",
+   "branch": "ALTURAS",
+   "street": "903 W C St",
+   "city": "Alturas",
+   "zip": "96101",
+   "lat": 41.491962,
+   "lng": -120.549754,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "587!a851adb5d504571f5f90bdd8ca2eeff4a9ef3d223f35667eb1f21b6ee3d4",
+   "slug": "arleta",
+   "name": "Arleta",
+   "branch": "ARLETA",
+   "street": "14400 Van Nuys Blvd",
+   "city": "Arleta",
+   "zip": "91331",
+   "lat": 34.249224,
+   "lng": -118.445215,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "661!ddecb9e0380793634b1b679218bd2f93de6555567ba2ef61b195efdf28c5",
+   "slug": "arvin",
+   "name": "Arvin",
+   "branch": "ARVIN",
+   "street": "317 Campus Dr",
+   "city": "Arvin",
+   "zip": "93203",
+   "lat": 35.2108,
+   "lng": -118.8332,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "570!58e0e9e4671c89757a014d9891ca46f34db5e82f3f5a68602661b7b88a2e",
+   "slug": "auburn",
+   "name": "Auburn",
+   "branch": "AUBURN",
+   "street": "11722 Enterprise Dr",
+   "city": "Auburn",
+   "zip": "95603",
+   "lat": 38.907416,
+   "lng": -121.08393,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "529!ae60d4f7e1f81c485299d25f429711bbe8764e59f5abbe49427834a33d8a",
+   "slug": "bakersfield",
+   "name": "Bakersfield",
+   "branch": "BAKERSFIELD",
+   "street": "3120 F Street",
+   "city": "Bakersfield",
+   "zip": "93301",
+   "lat": 35.3883,
+   "lng": -119.0225,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "682!de34db5cf95fc31bb60726d8565c3f85ac6497ab065cb7e7f7a23cbc1779",
+   "slug": "bakersfield-ibc",
+   "name": "Bakersfield IBC",
+   "branch": "IBC Bakersfield",
+   "street": "5800 District Blvd, Suite 100",
+   "city": "Bakersfield",
+   "zip": "93313",
+   "lat": 35.31368,
+   "lng": -119.06675,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "679!738724fc8215048b0d7038af03628d4bd4206b8d5f78359c3703b8b6e4a7",
+   "slug": "bakersfield-southwest",
+   "name": "Bakersfield Southwest",
+   "branch": "BAKERSFIELD SW",
+   "street": "7000 Schirra Ct",
+   "city": "Bakersfield",
+   "zip": "93313",
+   "lat": 35.317031,
+   "lng": -119.079704,
+   "open": true,
+   "hours": {}
+  },
+  {
+   "code": "582!e5a9a889a31cb6af6141025b6597738590bba47ce91dfc8a5d9cff91ff0c",
+   "slug": "barstow",
+   "name": "Barstow",
+   "branch": "BARSTOW",
+   "street": "528 E Virginia Way",
+   "city": "Barstow",
+   "zip": "92311",
+   "lat": 34.888119,
+   "lng": -117.022119,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "576!37590d64fa386627869fb686800e63f0e43b205571d9dbfafbae5ca40927",
+   "slug": "bell-gardens",
+   "name": "Bell Gardens",
+   "branch": "BELL GARDENS",
+   "street": "6801 South Garfield",
+   "city": "Bell Gardens",
+   "zip": "90201",
+   "lat": 33.9701,
+   "lng": -118.1491,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "606!0d16298745567bb6c3c46fd11f0c25cb6ebf9e2f1f498c1c4975fb1f958b",
+   "slug": "bellflower",
+   "name": "Bellflower",
+   "branch": "BELLFLOWER",
+   "street": "9520 Artesia Blvd",
+   "city": "Bellflower",
+   "zip": "90706",
+   "lat": 33.873631,
+   "lng": -118.131195,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "585!91b9a3ba9f18b52334fcbd3060a06a46c98ba93756bcc9f97b6d4a6e533c",
+   "slug": "bishop",
+   "name": "Bishop",
+   "branch": "BISHOP",
+   "street": "1115 West Line Street",
+   "city": "Bishop",
+   "zip": "93514",
+   "lat": 37.3613,
+   "lng": -118.4078,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "528!fef8ccf65391d3d5bfcb7413db4b1271726cfcf7bb80e8eb1f0a2730db44",
+   "slug": "blythe",
+   "name": "Blythe",
+   "branch": "BLYTHE",
+   "street": "430 S Broadway",
+   "city": "Blythe",
+   "zip": "92225",
+   "lat": 33.6042,
+   "lng": -114.5962,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "597!5fb73e718707af62caa132ae5bd6da5abde93d2d6bece42b03cd3561d7e4",
+   "slug": "brawley",
+   "name": "Brawley",
+   "branch": "BRAWLEY",
+   "street": "173 W Main St.",
+   "city": "Brawley",
+   "zip": "92227",
+   "lat": 32.9790193,
+   "lng": -115.5453627,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "550!4fe320ff961e379feb7b2d012aa719c91aff133fd8d71d6089faa8b35b28",
+   "slug": "capitola",
+   "name": "Capitola",
+   "branch": "CAPITOLA",
+   "street": "4200 Capitola Road",
+   "city": "Capitola",
+   "zip": "95010",
+   "lat": 36.9732,
+   "lng": -121.9627,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "625!baccce9e7b195200c892aa7185933f98fa7529d5dbebc12bead85fe3e004",
+   "slug": "carmichael",
+   "name": "Carmichael",
+   "branch": "CARMICHAEL",
+   "street": "5209 North Ave",
+   "city": "Carmichael",
+   "zip": "95608",
+   "lat": 38.625159,
+   "lng": -121.343288,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "520!8e508ba26aa5ffef3bfaf6197e88732f4ff995e0125c426ea4a78dc2de7d",
+   "slug": "chico",
+   "name": "Chico",
+   "branch": "CHICO",
+   "street": "107 Parmac Rd #1",
+   "city": "Chico",
+   "zip": "95926",
+   "lat": 39.7528,
+   "lng": -121.8491,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "613!933619e9e0450fa37b843acd4c3b81916b839acbb62942074bfd2ac56937",
+   "slug": "chula-vista",
+   "name": "Chula Vista",
+   "branch": "CHULA VISTA",
+   "street": "30 N Glover Avenue",
+   "city": "Chula Vista",
+   "zip": "91910",
+   "lat": 32.6525,
+   "lng": -117.0864,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "830!bfb51d134d1a3355d79aa2589cc5f30596be2a639afa29e0c6a261fa18a1",
+   "slug": "clearlake",
+   "name": "Clearlake",
+   "branch": "CLEARLAKE",
+   "street": "15930 Dam Rd, Unit B",
+   "city": "Clearlake",
+   "zip": "95422",
+   "lat": 38.92956,
+   "lng": -122.61626,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "580!b4038a6378651e959659f3b777b8b1899db64b69ede4fb60a823b7c9a099",
+   "slug": "clovis",
+   "name": "Clovis",
+   "branch": "CLOVIS",
+   "street": "2103 Shaw Avenue",
+   "city": "Clovis",
+   "zip": "93611",
+   "lat": 36.8095,
+   "lng": -119.6766,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "603!42e4e666a5935f61a548b6dcc3ad70aed5ba497adfd3235608af92c1807b",
+   "slug": "coalinga",
+   "name": "Coalinga",
+   "branch": "COALINGA",
+   "street": "406 East Elm Avenue",
+   "city": "Coalinga",
+   "zip": "93210",
+   "lat": 36.143,
+   "lng": -120.3572,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "564!70c128cefae272fb6b5c0d97ef8926d6822c55256dd62092c287be3bc501",
+   "slug": "colusa",
+   "name": "Colusa",
+   "branch": "COLUSA",
+   "street": "1025 Bridge St STE B",
+   "city": "Colusa",
+   "zip": "95932",
+   "lat": 39.2039,
+   "lng": -122.0044,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "581!b6c3d8e87c4cb3379dbfd4d4c515c8c343d6db351b7165f37fc3a6f62818",
+   "slug": "compton",
+   "name": "Compton",
+   "branch": "COMPTON",
+   "street": "2111 South Santa Fe Avenue",
+   "city": "Compton",
+   "zip": "90221",
+   "lat": 33.8765,
+   "lng": -118.2154,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "523!aec3be1be4ddf9a422d2345e5b5a84910148bcb7d1d934fb85f53018f39d",
+   "slug": "concord",
+   "name": "Concord",
+   "branch": "CONCORD",
+   "street": "2070 Diamond Boulevard",
+   "city": "Concord",
+   "zip": "94520",
+   "lat": 37.9747,
+   "lng": -122.0566,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "534!d201cf59649073f2b5e480e5db77c1069c8d3560898163ec3427dc9c65c3",
+   "slug": "corte-madera",
+   "name": "Corte Madera",
+   "branch": "CORTE MADERA",
+   "street": "75 Tamal Vista Boulevard",
+   "city": "Corte Madera",
+   "zip": "94925",
+   "lat": 37.9347,
+   "lng": -122.5177,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "628!4bbd75c86ed4a7c60fe5b8b7d4581c89d7b14a15218776c5c999dd2baa61",
+   "slug": "costa-mesa",
+   "name": "Costa Mesa",
+   "branch": "COSTA MESA",
+   "street": "650 W 19th Street",
+   "city": "Costa Mesa",
+   "zip": "92627",
+   "lat": 33.6435,
+   "lng": -117.9259,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "524!591366f706bc4b780718b1d244dd031440dfe3bebcbbc374f6ed96793b12",
+   "slug": "crescent-city",
+   "name": "Crescent City",
+   "branch": "CRESCENT CITY",
+   "street": "1475 Parkway Drive",
+   "city": "Crescent City",
+   "zip": "95531",
+   "lat": 41.7719,
+   "lng": -124.1847,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "514!53d29c8862e8b0a446760f30c1f95e4c08fc43e93cce0678435d4fc8ed02",
+   "slug": "culver-city",
+   "name": "Culver City",
+   "branch": "CULVER CITY",
+   "street": "11400 W Washington Blvd",
+   "city": "Culver City",
+   "zip": "90066",
+   "lat": 34.002309,
+   "lng": -118.415368,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "599!3ecbcd8f2037f24213f2561900c01cc6fd6c39c57bab8d9fbb69255c1e22",
+   "slug": "daly-city",
+   "name": "Daly City",
+   "branch": "DALY CITY",
+   "street": "1500 Sullivan Avenue",
+   "city": "Daly City",
+   "zip": "94015",
+   "lat": 37.689,
+   "lng": -122.4728,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "598!502d1ba0371e9abc704c4afea90102b9dd78e2a16c5cd94a704a2a9ed233",
+   "slug": "davis",
+   "name": "Davis",
+   "branch": "DAVIS",
+   "street": "505 Pole Line Road",
+   "city": "Davis",
+   "zip": "95616",
+   "lat": 38.5492,
+   "lng": -121.7267,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "615!693b7c6ce4136fea9b4deb2ccf4316b8d8204ced6904c4e090841413a1dd",
+   "slug": "delano",
+   "name": "Delano",
+   "branch": "DELANO",
+   "street": "631 Jefferson Street",
+   "city": "Delano",
+   "zip": "93215",
+   "lat": 35.7651,
+   "lng": -119.2437,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "669!402a5aa110f9077f18fde50e7824f9d4d4564c47d1e1c357ed15c85eb602",
+   "slug": "el-cajon",
+   "name": "El Cajon",
+   "branch": "EL CAJON",
+   "street": "1450 Graves Avenue",
+   "city": "El Cajon",
+   "zip": "92021",
+   "lat": 32.8168,
+   "lng": -116.9597,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "527!f160068b6e739d5ef60b2511870b67eef5fec3129246fc27dda1acac1286",
+   "slug": "el-centro",
+   "name": "El Centro",
+   "branch": "EL CENTRO",
+   "street": "233 N Imperial Avenue",
+   "city": "El Centro",
+   "zip": "92243",
+   "lat": 32.7948,
+   "lng": -115.5694,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "556!f7aec83c898ee830413ade0fc0b46fad9cc21a5dc381dba80a2ea5fed51b",
+   "slug": "el-cerrito",
+   "name": "El Cerrito",
+   "branch": "EL CERRITO",
+   "street": "6400 Manila Avenue",
+   "city": "El Cerrito",
+   "zip": "94530",
+   "lat": 37.9161,
+   "lng": -122.3107,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "685!8edf7556c9ddf38c4de76643658d4466219068215d3ee0974821dab88937",
+   "slug": "el-monte",
+   "name": "El Monte",
+   "branch": "EL MONTE",
+   "street": "4000 Arden Drive",
+   "city": "El Monte",
+   "zip": "91731",
+   "lat": 34.080477,
+   "lng": -118.044722,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "526!ecc43475ba99a7aa735076305e3dcf590d0559cb6386e4542ea113fae1cc",
+   "slug": "eureka",
+   "name": "Eureka",
+   "branch": "EUREKA",
+   "street": "2500 6th&nbsp;St",
+   "city": "Eureka",
+   "zip": "95501",
+   "lat": 40.803319,
+   "lng": -124.143646,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "621!828eac346d061e1b65faf62c8b21b36761c7758ecaec8c834f8fdfa434f5",
+   "slug": "fairfield",
+   "name": "Fairfield",
+   "branch": "FAIRFIELD",
+   "street": "160 Serrano Drive",
+   "city": "Fairfield",
+   "zip": "94533",
+   "lat": 38.2467,
+   "lng": -122.0731,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "665!950f89d69f4c98f61c7a91948566ce41f4f7ee233d103ec916e66bb776eb",
+   "slug": "fairfield-ibc",
+   "name": "Fairfield IBC",
+   "branch": "IBC Fairfield",
+   "street": "4630 Westamerica Dr",
+   "city": "Fairfield",
+   "zip": "94534",
+   "lat": 38.23032,
+   "lng": -122.13151,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "643!32b0b166be664679e45010c5eec6aa2a1f7a0f1335b524af874fafb20840",
+   "slug": "fall-river-mills",
+   "name": "Fall River Mills",
+   "branch": "FALL RIVER MILLS",
+   "street": "43467 Hwy 299E",
+   "city": "Fall River Mills",
+   "zip": "96028",
+   "lat": 41.019824,
+   "lng": -121.427987,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "655!c7dce61c58f02af9e9a96ec2a814278eb873e39915811921710ef4da44f7",
+   "slug": "folsom",
+   "name": "Folsom",
+   "branch": "FOLSOM",
+   "street": "323 E Bidwell A",
+   "city": "Folsom",
+   "zip": "95630",
+   "lat": 38.6741,
+   "lng": -121.1681,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "657!33b747ed875918ae949f74cb0a9be0cf619360bff3f37d947048c831c1ba",
+   "slug": "fontana",
+   "name": "Fontana",
+   "branch": "FONTANA",
+   "street": "8026 Hemlock Ave",
+   "city": "Fontana",
+   "zip": "92336",
+   "lat": 34.107862,
+   "lng": -117.476956,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "699!ca25bf140affeb3fab32780b7af9556dc413fb78d34208566f6f3ee712df",
+   "slug": "fontana-commercial-drive-test-center",
+   "name": "Fontana Commercial Drive Test Center",
+   "branch": "FONTANA CDTC",
+   "street": "10207 Poplar Ave",
+   "city": "Fontana",
+   "zip": "92335",
+   "lat": 34.067682,
+   "lng": -117.461396,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "590!ec1b88264b779fd1b4dffc6ad644ea5eef48b594e306be813774bece27f7",
+   "slug": "fort-bragg",
+   "name": "Fort Bragg",
+   "branch": "FORT BRAGG",
+   "street": "410 S Franklin Street",
+   "city": "Fort Bragg",
+   "zip": "95437",
+   "lat": 39.4379,
+   "lng": -123.8042,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "644!03ada32357f5fd32a107fca81b020fd9b4fd0062cbaabf014dcacb6b5516",
+   "slug": "fremont",
+   "name": "Fremont",
+   "branch": "FREMONT",
+   "street": "4287 Central Avenue",
+   "city": "Fremont",
+   "zip": "94536",
+   "lat": 37.5531,
+   "lng": -122.0073,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "505!3fd71a6f58d5a1455c6cfbdd5087bceed9f470a3fe289980312c7e1a1730",
+   "slug": "fresno",
+   "name": "Fresno",
+   "branch": "FRESNO",
+   "street": "655 W Olive Avenue",
+   "city": "Fresno",
+   "zip": "93728",
+   "lat": 36.7575,
+   "lng": -119.8194,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "215!27c4335b3d4d6265b26ee54f69aea1443f6bbbddb5305ed0bda8b94cbf57",
+   "slug": "fresno-commercial-drive-test-center",
+   "name": "Fresno Commercial Drive Test Center",
+   "branch": "FRESNO CDTC",
+   "street": "735 E North Ave",
+   "city": "Fresno",
+   "zip": "93725",
+   "lat": 36.692246,
+   "lng": -119.778029,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "694!31d54aabef967ace08fb1a4ee4e1ad5816a0c186ad3736c868a32fb3af25",
+   "slug": "fresno-ibc",
+   "name": "Fresno IBC",
+   "branch": "IBC Fresno",
+   "street": "6420 North Blackstone Ave.",
+   "city": "Fresno",
+   "zip": "93710",
+   "lat": 36.83051,
+   "lng": -119.78867,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "646!33fed3347c817039c8903e397a9c2cc2e7effe54ad25ef84119822a7c78b",
+   "slug": "fresno-north",
+   "name": "Fresno North",
+   "branch": "FRESNO NORTH",
+   "street": "6420 N Blackstone Avenue",
+   "city": "Fresno",
+   "zip": "93710",
+   "lat": 36.831,
+   "lng": -119.7901,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "607!48c4e5f82e3be3881582ae164482b7b3b55085a153cf0c1fe7a7be96f005",
+   "slug": "fullerton",
+   "name": "Fullerton",
+   "branch": "FULLERTON",
+   "street": "909 W Valencia Drive",
+   "city": "Fullerton",
+   "zip": "92832",
+   "lat": 33.8666,
+   "lng": -117.9399,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "627!822f6c173179c7d5c0123f504d69dbc4dac5f7af3bb9f579100023803800",
+   "slug": "garberville",
+   "name": "Garberville",
+   "branch": "GARBERVILLE",
+   "street": "1180 Evergreen Rd",
+   "city": "Redway",
+   "zip": "95560",
+   "lat": 40.120878,
+   "lng": -123.800749,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "498!793a7a9045014895a9d66257dc830b94e1678f9a6caf8ec9e36d49e1b5c4",
+   "slug": "gardena-commercial-drive-test-center",
+   "name": "Gardena Commercial Drive Test Center",
+   "branch": "GARDENA CDTC",
+   "street": "14825 S Avalon Blvd",
+   "city": "Gardena",
+   "zip": "90248",
+   "lat": 33.897043,
+   "lng": -118.265943,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "623!7d6e807879fe5c298d463eeabed992b7b28b2feb80ad74dbb1a4ce5ebae6",
+   "slug": "gilroy",
+   "name": "Gilroy",
+   "branch": "GILROY",
+   "street": "6984 Automall Parkway Suite A",
+   "city": "Gilroy",
+   "zip": "95020",
+   "lat": 37.0017,
+   "lng": -121.5606,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "510!839f7f382ae68dd7dbb5e23bcbba75f92298af25098a6205cecde8b03fa6",
+   "slug": "glendale",
+   "name": "Glendale",
+   "branch": "GLENDALE",
+   "street": "1335 W Glenoaks Boulevard",
+   "city": "Glendale",
+   "zip": "91201",
+   "lat": 34.1667,
+   "lng": -118.2833,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "670!bab94e5fb408108520ee9682175a263d4b526d7e56143e0a5462ea249112",
+   "slug": "goleta",
+   "name": "Goleta",
+   "branch": "GOLETA",
+   "street": "7127 Hollister Avenue Suite 24/26",
+   "city": "Goleta",
+   "zip": "93117",
+   "lat": 34.4285,
+   "lng": -119.8765,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "541!fe4b1d33bba77bae5016b59d9744bac390c2c0692939d68d840683a3905d",
+   "slug": "grass-valley",
+   "name": "Grass Valley",
+   "branch": "GRASS VALLEY",
+   "street": "890 Sutton Way",
+   "city": "Grass Valley",
+   "zip": "95945",
+   "lat": 39.2321,
+   "lng": -121.03601,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "565!80af84ab8d86d7f5de724705bd8be5e1dd2fcedc93b276c519fd9db49427",
+   "slug": "hanford",
+   "name": "Hanford",
+   "branch": "HANFORD",
+   "street": "701 W Hanford Armona Road (corner of W Armona)",
+   "city": "Hanford",
+   "zip": "93230",
+   "lat": 36.3134,
+   "lng": -119.6444,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "609!aba7ad6992f7b13031e17e76d1dcc0757308c766c2291e082899104798d2",
+   "slug": "hawthorne",
+   "name": "Hawthorne",
+   "branch": "HAWTHORNE",
+   "street": "3700 W El Segundo Boulevard",
+   "city": "Hawthorne",
+   "zip": "90250",
+   "lat": 33.9164,
+   "lng": -118.3373,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "579!e3f16de81bced9419c1f500ac10b216280d9e6cb1d32c0083171b4126005",
+   "slug": "hayward",
+   "name": "Hayward",
+   "branch": "HAYWARD",
+   "street": "150 Jackson Street",
+   "city": "Hayward",
+   "zip": "94544",
+   "lat": 37.6595,
+   "lng": -122.0878,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "635!0faa041e7419f45f72ce31a206caf72fca94b8b6a0cf756c4f37a83bcb3e",
+   "slug": "hemet",
+   "name": "Hemet",
+   "branch": "HEMET",
+   "street": "1200 S State St",
+   "city": "Hemet",
+   "zip": "92543",
+   "lat": 33.727792,
+   "lng": -116.970199,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "546!871b1bb07423b31673498a533b5fcd0ec1bb6d1105134535352496e48c98",
+   "slug": "hollister",
+   "name": "Hollister",
+   "branch": "HOLLISTER",
+   "street": "80 N Sally Street",
+   "city": "Hollister",
+   "zip": "95023",
+   "lat": 36.858174,
+   "lng": -121.399748,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "508!51efc4ea9e67a3e3251ef7500a0459979ef147094fd910d02b956e8e8b4c",
+   "slug": "hollywood",
+   "name": "Hollywood",
+   "branch": "HOLLYWOOD COLE",
+   "street": "803 Cole Avenue",
+   "city": "Hollywood",
+   "zip": "90038",
+   "lat": 34.0853,
+   "lng": -118.3299,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "578!feb992b48616e07979a3d7ef5675b33601839a1cac1e246b4341efc7e23f",
+   "slug": "indio",
+   "name": "Indio",
+   "branch": "INDIO",
+   "street": "44480 Jackson St",
+   "city": "Indio",
+   "zip": "92201",
+   "lat": 33.72622,
+   "lng": -116.215742,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "610!f8334fbfe65f03c8a666f5f46ff50375f5285151faefa487b90bcdd0a0e3",
+   "slug": "inglewood",
+   "name": "Inglewood",
+   "branch": "INGLEWOOD",
+   "street": "621 N La Brea Ave",
+   "city": "Inglewood",
+   "zip": "90302",
+   "lat": 33.970142,
+   "lng": -118.357099,
+   "open": true,
+   "hours": {}
+  },
+  {
+   "code": "521!fc8915605378bbc901358e2a34958857d387fdaae534f8497a1ac178a49f",
+   "slug": "jackson",
+   "name": "Jackson",
+   "branch": "JACKSON",
+   "street": "201 Clinton Road",
+   "city": "Jackson",
+   "zip": "95642",
+   "lat": 38.342199,
+   "lng": -120.76362,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "647!0188a8a0e33975a13fa2701772659603df735fe8b4b9839e354d8990b99d",
+   "slug": "king-city",
+   "name": "King City",
+   "branch": "KING CITY",
+   "street": "101 E San Antonio Dr",
+   "city": "King City",
+   "zip": "93930",
+   "lat": 36.222399,
+   "lng": -121.127305,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "687!c628a59565ce3273ff51f655de2fe79f5d2227427774595c05e7eeebb4eb",
+   "slug": "lake-isabella",
+   "name": "Lake Isabella",
+   "branch": "LAKE ISABELLA",
+   "street": "5520 Lake Isabella Road G-1",
+   "city": "Lake Isabella",
+   "zip": "93240",
+   "lat": 35.616825,
+   "lng": -118.478236,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "530!058b7dc39c2c34502e35daea29d72ca58045b00e09791509c5e123edce88",
+   "slug": "lakeport",
+   "name": "Lakeport",
+   "branch": "LAKEPORT",
+   "street": "965 Parallel Drive",
+   "city": "Lakeport",
+   "zip": "95453",
+   "lat": 39.036613,
+   "lng": -122.927301,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "595!4ff14b90fded6be8b2514d8e179131d1fce28abf43da3aef3bc2e1dbcfc0",
+   "slug": "lancaster",
+   "name": "Lancaster",
+   "branch": "LANCASTER",
+   "street": "721 W Ave L6",
+   "city": "Lancaster",
+   "zip": "93535",
+   "lat": 34.654836,
+   "lng": -118.146912,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "617!b70be6b0f01155a5727549878624649f247324cb464688eb1a6b2a1ad0e4",
+   "slug": "lincoln-park",
+   "name": "Lincoln Park",
+   "branch": "LINCOLN PARK",
+   "street": "3529 N Mission Road",
+   "city": "Los Angeles",
+   "zip": "90031",
+   "lat": 34.0673,
+   "lng": -118.2035,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "622!b0ffadca976615467e86f4155ad0f3a1270fbcc160b32d070e7e652d8d94",
+   "slug": "lodi",
+   "name": "Lodi",
+   "branch": "LODI",
+   "street": "1222 Pixley Parkway",
+   "city": "Lodi",
+   "zip": "95240",
+   "lat": 38.1179,
+   "lng": -121.2522,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "692!41a551f6da6112d6ec44fc9a6f2bf26a004b20482226acabd659946af004",
+   "slug": "lompoc",
+   "name": "Lompoc",
+   "branch": "LOMPOC",
+   "street": "1601 N H St",
+   "city": "Lompoc",
+   "zip": "93436",
+   "lat": 34.663552,
+   "lng": -120.45838,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "507!12b091bf5c10dcd67c31fc4c2d1788265e01d5ea4683ad3d6d52f641f6d3",
+   "slug": "long-beach",
+   "name": "Long Beach",
+   "branch": "LONG BEACH",
+   "street": "3700 East Willow Street",
+   "city": "Long Beach",
+   "zip": "90815",
+   "lat": 33.8037,
+   "lng": -118.1494,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "502!9a515f8d9203e313fca8fdda9e2a54ca3224b5ecacc361e17003398872a4",
+   "slug": "los-angeles",
+   "name": "Los Angeles",
+   "branch": "LOS ANGELES",
+   "street": "3615 S Hope Street",
+   "city": "Los Angeles",
+   "zip": "90007",
+   "lat": 34.0182,
+   "lng": -118.2787,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "485!8ce0e1c5c0154c984d58eaceca859c977daec3102ac8d5453481616facbd",
+   "slug": "los-angeles-metro-ibc",
+   "name": "Los Angeles Metro IBC",
+   "branch": "IBC LA Metro",
+   "street": "1365 North Grand Avenue, Suite 100",
+   "city": "Covina",
+   "zip": "91724",
+   "lat": 34.10466,
+   "lng": -117.87372,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "650!4ac2131e2f9adf73d4b9679e5fd25e3c9498f1ff5e0e603612e8a5cad92e",
+   "slug": "los-banos",
+   "name": "Los Banos",
+   "branch": "LOS BANOS",
+   "street": "814 West L Street",
+   "city": "Los Banos",
+   "zip": "93635",
+   "lat": 37.0598,
+   "lng": -120.863,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "640!9ffc1fef9b57f8bf1ba6984ffdb4981acbf88d4b101ae27edac9d65a45f4",
+   "slug": "los-gatos",
+   "name": "Los Gatos",
+   "branch": "LOS GATOS",
+   "street": "600 N Santa Cruz Avenue",
+   "city": "Los Gatos",
+   "zip": "95030",
+   "lat": 37.234,
+   "lng": -121.9781,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "533!e2930f6dbfa2be0c61f8c015715b20cb23324d977c45ffeb4fb02db9d3dc",
+   "slug": "madera",
+   "name": "Madera",
+   "branch": "MADERA",
+   "street": "1206 Maple Street",
+   "city": "Madera",
+   "zip": "93637",
+   "lat": 36.9501,
+   "lng": -120.0717,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "658!705c6f922604b651fc7278be9ac0780aa0c2c98f53b4498e56877d950321",
+   "slug": "manteca",
+   "name": "Manteca",
+   "branch": "MANTECA",
+   "street": "955 Davis Street",
+   "city": "Manteca",
+   "zip": "95336",
+   "lat": 37.8006,
+   "lng": -121.2303,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "566!286d253bc39bef7527953f712f38cd8f5c61cbc8e9a7ad4366d9503448f0",
+   "slug": "mariposa",
+   "name": "Mariposa",
+   "branch": "MARIPOSA",
+   "street": "5264 Highway 49-North",
+   "city": "Mariposa",
+   "zip": "95338",
+   "lat": 37.494628,
+   "lng": -119.968383,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "822!66d49fc6d94fc49b4dee1ca7c24905957a9d88e7b97096c31cf1f03fb5e2",
+   "slug": "mendota",
+   "name": "Mendota",
+   "branch": "MENDOTA TRAVEL RUN",
+   "street": "655 Quince Street",
+   "city": "Mendota",
+   "zip": "93640",
+   "lat": 36.7541,
+   "lng": -120.3826,
+   "open": true,
+   "hours": {}
+  },
+  {
+   "code": "536!941bc2aba03d4ac59ea2769cc07a6fcf42b7c579c79b5e24db0ad369bca3",
+   "slug": "merced",
+   "name": "Merced",
+   "branch": "MERCED",
+   "street": "1313 W 12th Street",
+   "city": "Merced",
+   "zip": "95340",
+   "lat": 37.3007,
+   "lng": -120.4987,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "557!793709c7ed52baefdf5ecd075135430bde681a2560d2d82df87b891dd655",
+   "slug": "modesto",
+   "name": "Modesto",
+   "branch": "MODESTO",
+   "street": "124 Burney Street",
+   "city": "Modesto",
+   "zip": "95354",
+   "lat": 37.6384,
+   "lng": -120.9888,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "511!63003b9a8e38cfc3cad4eb4080439f2aaf77748cb9c2fbeb6ce646bd6ec0",
+   "slug": "montebello",
+   "name": "Montebello",
+   "branch": "MONTEBELLO",
+   "street": "424 N Wilcox Avenue",
+   "city": "Montebello",
+   "zip": "90640",
+   "lat": 34.0194,
+   "lng": -118.1227,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "600!dbcb498535ae75a8f3c4db2908dea9b2dbf1ef36a22ef5209d3f344385c1",
+   "slug": "mountain-view-ibc",
+   "name": "Mountain View IBC",
+   "branch": "IBC Mountain View",
+   "street": "595 Showers Dr.",
+   "city": "Mountain View",
+   "zip": "94040",
+   "lat": 37.40072,
+   "lng": -122.10758,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "518!103196ee58a6ba6a47cfb4e78a16148a26dcd57de97d87c3240cd5e70df0",
+   "slug": "mountain-view-industry-business-center",
+   "name": "Mountain View Industry Business Center",
+   "branch": "MOUNTAIN VIEW IBC CDTC",
+   "street": "595 Showers Drive",
+   "city": "Mountain View",
+   "zip": "94040",
+   "lat": 37.40072,
+   "lng": -122.10758,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "639!f24817512391e60756b00bf5fe411d98ad6844c0ca70538989b6818e063c",
+   "slug": "mt-shasta",
+   "name": "Mt Shasta",
+   "branch": "MOUNT SHASTA",
+   "street": "154 Morgan Way",
+   "city": "Mt Shasta",
+   "zip": "96067",
+   "lat": 41.310225,
+   "lng": -122.31703,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "427!b5a5127f82abc858cd329d601dee58fca9a997714380457daf53977eb416",
+   "slug": "murrieta-express",
+   "name": "Murrieta Express",
+   "branch": "MURRIETA EXPRESS",
+   "street": "27890 Clinton Keith Road, Suite F",
+   "city": "Murrieta",
+   "zip": "92562",
+   "lat": 33.59945,
+   "lng": -117.17596,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "540!91ebbed7302ad542eb0309ea0a68062b7c36db28543c296ad1c6a59f5e19",
+   "slug": "napa",
+   "name": "Napa",
+   "branch": "NAPA",
+   "street": "2550 Napa Valley Corporate Drive",
+   "city": "Napa",
+   "zip": "94558",
+   "lat": 38.2554,
+   "lng": -122.2739,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "584!d66f939925ad3014663e235cafa63f357cef527d6ea947f1c4c12b966525",
+   "slug": "needles",
+   "name": "Needles",
+   "branch": "NEEDLES",
+   "street": "1040 E Broadway St",
+   "city": "Needles",
+   "zip": "92363",
+   "lat": 34.825497,
+   "lng": -114.596291,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "662!61ded2c0bff8afa0ba184030205f48c45fdba5a37c384745a620c6783009",
+   "slug": "newhall",
+   "name": "Newhall",
+   "branch": "NEWHALL",
+   "street": "24427 Newhall Avenue",
+   "city": "Newhall",
+   "zip": "91321",
+   "lat": 34.3795,
+   "lng": -118.5325,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "586!3497d798fd3e5376fa6a18ce8d29aa37e5f485022db7d7e9e2e57d1d12ff",
+   "slug": "norco",
+   "name": "Norco",
+   "branch": "NORCO",
+   "street": "3201 Horseless Carriage Drive",
+   "city": "Norco",
+   "zip": "92860",
+   "lat": 33.9283,
+   "lng": -117.5614,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "686!181727772bbe93d6f7b0daaa2dc8ae813c1c4996d2a49020a7762e9de7ca",
+   "slug": "novato",
+   "name": "Novato",
+   "branch": "NOVATO",
+   "street": "936 7th Street A",
+   "city": "Novato",
+   "zip": "94947",
+   "lat": 38.1066,
+   "lng": -122.5787,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "504!a472ae686c95a31825f62e4c6e8e936e59453c2a18b0481a38fe676c15d2",
+   "slug": "oakland",
+   "name": "Oakland",
+   "branch": "OAKLAND CLAREMONT",
+   "street": "5300 Claremont Avenue",
+   "city": "Oakland",
+   "zip": "94618",
+   "lat": 37.84,
+   "lng": -122.2597,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "604!46ed976cdea3e62352e4a719325276b798a20212a227eab1cebe2c27f742",
+   "slug": "oakland-coliseum",
+   "name": "Oakland Coliseum",
+   "branch": "OAKLAND COLISEUM",
+   "street": "501 85th Ave",
+   "city": "Oakland",
+   "zip": "94621",
+   "lat": 37.739673,
+   "lng": -122.193223,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "596!526e5b6dd38b44b54f92ca8083eacd56135a8ffb4cb79bd48f8a37f69cb4",
+   "slug": "oceanside",
+   "name": "Oceanside",
+   "branch": "OCEANSIDE",
+   "street": "4005 Plaza Drive",
+   "city": "Oceanside",
+   "zip": "92056",
+   "lat": 33.1834,
+   "lng": -117.289,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "522!40d36174f874e0ebd9cf7c1f8dbb5ef0053366d825af5f8004b6f3b02cf9",
+   "slug": "oroville",
+   "name": "Oroville",
+   "branch": "OROVILLE",
+   "street": "775 Mitchell Avenue",
+   "city": "Oroville",
+   "zip": "95965",
+   "lat": 39.504455,
+   "lng": -121.565331,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "636!30c08a09f861206c61b83b891eef83aa24b162616761236abbe4d354d74c",
+   "slug": "oxnard",
+   "name": "Oxnard",
+   "branch": "OXNARD",
+   "street": "4050 Saviers Road",
+   "city": "Oxnard",
+   "zip": "93033",
+   "lat": 34.1629,
+   "lng": -119.1775,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "068!e7f70121ac051f36ef04c13362228cc70e56c955ea91789659bc0ed8301b",
+   "slug": "oxnard-express",
+   "name": "Oxnard Express",
+   "branch": "OXNARD EXPRESS",
+   "street": "137 N Ventura Rd",
+   "city": "Port Hueneme",
+   "zip": "93041",
+   "lat": 34.14844,
+   "lng": -119.195629,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "683!1ddbcc6f2797346b4495f18803756fb35d524b05fcc8ea85054a6214a592",
+   "slug": "palm-desert",
+   "name": "Palm Desert",
+   "branch": "PALM DESERT",
+   "street": "74-740 Technology Drive",
+   "city": "Palm Desert",
+   "zip": "92211",
+   "lat": 33.7828,
+   "lng": -116.3576,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "659!8049eec522e383928084d0bd15349b8f2a72f7f0e8186a0a47883d6b99e7",
+   "slug": "palm-springs",
+   "name": "Palm Springs",
+   "branch": "PALM SPRINGS",
+   "street": "950 N Farrell Drive",
+   "city": "Palm Springs",
+   "zip": "92262",
+   "lat": 33.8366,
+   "lng": -116.5187,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "509!b044659948aa202e1897754f1a9dc9e84f30803e79d789d9ccb96bf35c68",
+   "slug": "pasadena",
+   "name": "Pasadena",
+   "branch": "PASADENA",
+   "street": "49 S Rosemead Boulevard",
+   "city": "Pasadena",
+   "zip": "91107",
+   "lat": 34.1452,
+   "lng": -118.0742,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "574!f8de2690e9da888f969d21fbbe326556cdf30b477173729c6ca0f3700cf4",
+   "slug": "paso-robles",
+   "name": "Paso Robles",
+   "branch": "PASO ROBLES",
+   "street": "841 Park Street",
+   "city": "Paso Robles",
+   "zip": "93446",
+   "lat": 35.6233,
+   "lng": -120.6898,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "634!726d0410fe494df397f27600cf72362e47c499c2e4ca329dc8b37bc09ea7",
+   "slug": "petaluma",
+   "name": "Petaluma",
+   "branch": "PETALUMA",
+   "street": "715 - J Southpoint Boulevard",
+   "city": "Petaluma",
+   "zip": "94954",
+   "lat": 38.257,
+   "lng": -122.6453,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "592!471cea957420e1ee2e8a2e4a63d52d56722ab46ae270d11e3b77dc5ede49",
+   "slug": "pittsburg",
+   "name": "Pittsburg",
+   "branch": "PITTSBURG",
+   "street": "1399 Buchanan Road",
+   "city": "Pittsburg",
+   "zip": "94565",
+   "lat": 37.9988,
+   "lng": -121.8726,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "691!f8b6100a0c04ed736f0c3e925420fa7869ef7f249d64c51f32bc522a765e",
+   "slug": "placentia-ibc",
+   "name": "Placentia IBC",
+   "branch": "IBC Placentia",
+   "street": "2390 Rose Drive",
+   "city": "Placentia",
+   "zip": "92870",
+   "lat": 33.90499,
+   "lng": -117.8412,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "525!178a08ee93cbaaed98512c8841256cadbed450ab0082408fb32957642bbf",
+   "slug": "placerville",
+   "name": "Placerville",
+   "branch": "PLACERVILLE",
+   "street": "2919 Cold Springs Road",
+   "city": "Placerville",
+   "zip": "95667",
+   "lat": 38.7347,
+   "lng": -120.8251,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "631!c533ba75524ac439cdf0826fc9eafc888c8242fa3863104a1b383c3bfb05",
+   "slug": "pleasanton",
+   "name": "Pleasanton",
+   "branch": "PLEASANTON",
+   "street": "6300 W Las Positas Blvd",
+   "city": "Pleasanton",
+   "zip": "94588",
+   "lat": 37.680167,
+   "lng": -121.905706,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "664!069a1925ec35493cf58cdefb2f21609b6f2b75c31152d9096cd94c838939",
+   "slug": "pleasanton-stoneridge",
+   "name": "Pleasanton Stoneridge",
+   "branch": "PLEASANTON STONERIDGE",
+   "street": "2621 Stoneridge Mall, Unit G225B",
+   "city": "Pleasanton",
+   "zip": "94588",
+   "lat": 37.69687,
+   "lng": -121.92606,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "532!cd2bf50e47341b05c52f6adf2bc44617592036b7f3d42c41433956f68293",
+   "slug": "pomona",
+   "name": "Pomona",
+   "branch": "POMONA",
+   "street": "1600 S Garey Avenue",
+   "city": "Pomona",
+   "zip": "91766",
+   "lat": 34.0424,
+   "lng": -117.7495,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "573!7ae1e2b552ee801012fe5b4036cf5accda1561d25b4ebe71bc93ec11b610",
+   "slug": "porterville",
+   "name": "Porterville",
+   "branch": "PORTERVILLE",
+   "street": "329 E Olive Avenue",
+   "city": "Porterville",
+   "zip": "93257",
+   "lat": 36.0634,
+   "lng": -119.0094,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "676!3472dc00914391903a9caac47f0cb698042792eb72e99b7a733c0d7b013b",
+   "slug": "poway",
+   "name": "Poway",
+   "branch": "POWAY",
+   "street": "13461 Community Road",
+   "city": "Poway",
+   "zip": "92064",
+   "lat": 32.9602,
+   "lng": -117.0407,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "544!02470cd9b770ef245f2572e1454bf6ecb7e725319b3305210bd111360a39",
+   "slug": "quincy",
+   "name": "Quincy",
+   "branch": "QUINCY",
+   "street": "1953 E Main Street Suite 3",
+   "city": "Quincy",
+   "zip": "95971",
+   "lat": 39.935062,
+   "lng": -120.882972,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "612!7e0c24a496ce4ce95a2bfd6e7ef5a72e1505282d8deb9a8ed22afa33f350",
+   "slug": "rancho-cucamonga",
+   "name": "Rancho Cucamonga",
+   "branch": "RANCHO CUCAMONGA",
+   "street": "8629 Hellman Avenue",
+   "city": "Rancho Cucamonga",
+   "zip": "91730",
+   "lat": 34.0969,
+   "lng": -117.6016,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "601!e627f0a2ff5d583d16e69693c4efeb6a63e19d7bc73496d37d45f1297611",
+   "slug": "rancho-san-diego-ibc",
+   "name": "Rancho San Diego IBC",
+   "branch": "IBC Rancho San Diego",
+   "street": "1530 Hilton Head Rd",
+   "city": "El Cajon",
+   "zip": "92019",
+   "lat": 32.74525,
+   "lng": -116.92667,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "614!bebe8bd69d1ec8ea6eb258d7ac15553d4029a67c7a002421c84c24db9bfc",
+   "slug": "rancho-san-diego-industry-business-center",
+   "name": "Rancho San Diego Industry Business Center",
+   "branch": "RANCHO SAN DIEGO CDTC",
+   "street": "1530 Hilton Head Rd.",
+   "city": "El Cajon",
+   "zip": "92019",
+   "lat": 32.756415,
+   "lng": -116.927344,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "558!1894f9fe40b075af4f9b4025a0c1b32946593f2ae59356c77e43bc2055f1",
+   "slug": "red-bluff",
+   "name": "Red Bluff",
+   "branch": "RED BLUFF",
+   "street": "675 Monroe Street",
+   "city": "Red Bluff",
+   "zip": "96080",
+   "lat": 40.1748,
+   "lng": -122.239,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "551!faf87585b61163848569a49f2884e4baa658fc5ce04e24927af2b18798b6",
+   "slug": "redding",
+   "name": "Redding",
+   "branch": "REDDING",
+   "street": "2135 Civic Center Drive",
+   "city": "Redding",
+   "zip": "96001",
+   "lat": 40.5759,
+   "lng": -122.3805,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "626!e272753c6cd3cecdc77448e056e65514653bc3738a20a28f983be9ec22e9",
+   "slug": "redlands",
+   "name": "Redlands",
+   "branch": "REDLANDS",
+   "street": "1659 W Lugonia Avenue",
+   "city": "Redlands",
+   "zip": "92374",
+   "lat": 34.0703,
+   "lng": -117.2111,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "548!c6a4228d96cbe545c591e4257d1c035da72cbe10671d502597460e5f0730",
+   "slug": "redwood-city",
+   "name": "Redwood City",
+   "branch": "REDWOOD CITY",
+   "street": "300 Brewster Avenue",
+   "city": "Redwood City",
+   "zip": "94063",
+   "lat": 37.4926,
+   "lng": -122.229,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "633!1fbd2b5d48c4186fac7a92e6187e945266a44f08dc8bfd58e8abb4e6083e",
+   "slug": "reedley",
+   "name": "Reedley",
+   "branch": "REEDLEY",
+   "street": "1890 E Dinuba Avenue",
+   "city": "Reedley",
+   "zip": "93654",
+   "lat": 36.5901,
+   "lng": -119.4434,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "577!314c02cfc8ebefb30b41131cfcf2043e4b63dc661fc80aeeeceaa4606ce4",
+   "slug": "ridgecrest",
+   "name": "Ridgecrest",
+   "branch": "RIDGECREST",
+   "street": "540A Perdew Avenue",
+   "city": "Ridgecrest",
+   "zip": "93555",
+   "lat": 35.648927,
+   "lng": -117.679474,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "545!cbda28b5da777d1d268aa4f0755c647decc90561447af4da237ffcc2b11b",
+   "slug": "riverside",
+   "name": "Riverside",
+   "branch": "RIVERSIDE",
+   "street": "6280 Brockton Avenue",
+   "city": "Riverside",
+   "zip": "92506",
+   "lat": 33.9575,
+   "lng": -117.3966,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "656!9f8d7d5d6d714947708ddafb8ee982a45cc73a04f7ca460a204f225f6cef",
+   "slug": "riverside-east",
+   "name": "Riverside East",
+   "branch": "RIVERSIDE EAST",
+   "street": "6425 Sycamore Canyon Blvd",
+   "city": "Riverside",
+   "zip": "92507",
+   "lat": 33.9345,
+   "lng": -117.2992,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "673!3b5d3f33d4c6f08b4b1a6312d437431374da73f4f24d6833de46d9957895",
+   "slug": "rocklin",
+   "name": "Rocklin",
+   "branch": "ROCKLIN",
+   "street": "5245 South Grove",
+   "city": "Rocklin",
+   "zip": "95677",
+   "lat": 38.7874,
+   "lng": -121.2316,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "543!c1274d224c35df93bf6d26476c2a104573b8f389fab5a46757efd040c587",
+   "slug": "roseville",
+   "name": "Roseville",
+   "branch": "ROSEVILLE",
+   "street": "7200 Galilee Road",
+   "city": "Roseville",
+   "zip": "95678",
+   "lat": 38.7756,
+   "lng": -121.3061,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "501!074cbea2098e88cdfe741369f94ef8201751a9e2871f777a5040626bc21e",
+   "slug": "sacramento",
+   "name": "Sacramento",
+   "branch": "SACRAMENTO",
+   "street": "4700 Broadway",
+   "city": "Sacramento",
+   "zip": "95820",
+   "lat": 38.5461,
+   "lng": -121.4509,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "681!69da607710013ed034a4a77e44e4c7fd46443cf7450bdcbbe890358a8970",
+   "slug": "sacramento-florin-ibc",
+   "name": "Sacramento-Florin IBC",
+   "branch": "IBC Sacramento-Florin",
+   "street": "7226 Florin Mall Dr.",
+   "city": "Sacramento",
+   "zip": "95823",
+   "lat": 38.49457,
+   "lng": -121.43485,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "602!293bd33e8fb764c8ee2c3d5d710b59dcd089a139054be5c36e6812fd65b4",
+   "slug": "sacramento-south",
+   "name": "Sacramento South",
+   "branch": "SACRAMENTO SOUTH",
+   "street": "7775 La Mancha Way",
+   "city": "Sacramento",
+   "zip": "95823",
+   "lat": 38.4764,
+   "lng": -121.4263,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "539!e164a1494b69c0091142384729f0324a440720c215c3096e0a2ae93372ed",
+   "slug": "salinas",
+   "name": "Salinas",
+   "branch": "SALINAS",
+   "street": "260 E Laurel Drive",
+   "city": "Salinas",
+   "zip": "93906",
+   "lat": 36.6979,
+   "lng": -121.6478,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "443!e98171b7b16991962ae23a735b01ab78f7b47df52234cde826958efe5648",
+   "slug": "salinas-commercial-drive-test-center",
+   "name": "Salinas Commercial Drive Test Center",
+   "branch": "SALINAS CDTC",
+   "street": "838 Vertin Ave",
+   "city": "Salinas",
+   "zip": "93901",
+   "lat": 36.66003,
+   "lng": -121.63036,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "09:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "568!41b7abf6434c39c4ce0da558a207d9ff538c78025d57821210d3d45b7084",
+   "slug": "san-andreas",
+   "name": "San Andreas",
+   "branch": "SAN ANDREAS",
+   "street": "745 Mountain Ranch Rd",
+   "city": "San Andreas",
+   "zip": "95249",
+   "lat": 38.191088,
+   "lng": -120.671187,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "512!0469419b8ef2db772a8bcdb016113802eea859719ca93e305dcb4cfa8355",
+   "slug": "san-bernardino",
+   "name": "San Bernardino",
+   "branch": "SAN BERNARDINO",
+   "street": "1310 N Waterman Avenue",
+   "city": "San Bernardino",
+   "zip": "92404",
+   "lat": 34.1234,
+   "lng": -117.2788,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "173!695e20df7107e0564c1513df04fad6a20c29ab594830ce4707603f8f475e",
+   "slug": "san-bernardino-ibc",
+   "name": "San Bernardino IBC",
+   "branch": "IBC San Bernardino",
+   "street": "473 East Carnegie Dr Ste. 125",
+   "city": "San Bernardino",
+   "zip": "92408",
+   "lat": 34.06777,
+   "lng": -117.27467,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "648!d04cd5bf585d51a14643f28fadbb2f675a3b169ce28b8e7015ef5e5a902d",
+   "slug": "san-clemente",
+   "name": "San Clemente",
+   "branch": "SAN CLEMENTE",
+   "street": "2727 Via Cascadita",
+   "city": "San Clemente",
+   "zip": "92672",
+   "lat": 33.4428,
+   "lng": -117.6428,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "506!db4e40a076ef618f0232d833a84767ee6695dffaca7384396d10d6af8843",
+   "slug": "san-diego",
+   "name": "San Diego",
+   "branch": "SAN DIEGO NORMAL",
+   "street": "3960 Normal Street",
+   "city": "San Diego",
+   "zip": "92103",
+   "lat": 32.7503,
+   "lng": -117.149,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "519!0edc0f1a66920be0ba1b22b2d45a47329cea8a27865002935f0c2c645f86",
+   "slug": "san-diego-clairemont",
+   "name": "San Diego Clairemont",
+   "branch": "SAN DIEGO CLAIREMONT",
+   "street": "4375 Derrick Drive",
+   "city": "San Diego",
+   "zip": "92117",
+   "lat": 32.8235,
+   "lng": -117.1832,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "503!9df81c551883400674d20004d81cfe425439dbedfb93cf6d024fd0e12ee5",
+   "slug": "san-francisco",
+   "name": "San Francisco",
+   "branch": "SAN FRANCISCO",
+   "street": "1377 Fell Street",
+   "city": "San Francisco",
+   "zip": "94117",
+   "lat": 37.7736,
+   "lng": -122.4404,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "516!56b48e272ba45819d81868f440fb30eb6c406b705436cf1d101d2ea2c75c",
+   "slug": "san-jose",
+   "name": "San Jose",
+   "branch": "SAN JOSE",
+   "street": "111 W Alma Avenue",
+   "city": "San Jose",
+   "zip": "95110",
+   "lat": 37.315,
+   "lng": -121.8763,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "547!a30ec7a1486198f9bc0e93aa8821328b01402c25baad027aae99fcbe3840",
+   "slug": "san-luis-obispo",
+   "name": "San Luis Obispo",
+   "branch": "SAN LUIS OBISPO",
+   "street": "3190 S Higuera Street",
+   "city": "San Luis Obispo",
+   "zip": "93401",
+   "lat": 35.2575,
+   "lng": -120.6695,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "689!a3ba7633c42472ef4d666c3a9ccc19bbc9b93633ab5e80e9d3306e3a07c5",
+   "slug": "san-marcos",
+   "name": "San Marcos",
+   "branch": "SAN MARCOS",
+   "street": "590 Rancheros Dr",
+   "city": "San Marcos",
+   "zip": "92069",
+   "lat": 33.140079,
+   "lng": -117.149742,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "465!b9ffa13d9725f1d5c9cb39520fa1b53b7bc50d11eeaeb7828ef206d19589",
+   "slug": "san-marcos-ibc",
+   "name": "San Marcos IBC",
+   "branch": "IBC San Marcos",
+   "street": "590 Rancheros Drive",
+   "city": "San Marcos",
+   "zip": "92078",
+   "lat": 33.14068,
+   "lng": -117.1474,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "593!fabfb52efab03764853fcdefa999d2a0be739510bec5207f4b82d5fb16e0",
+   "slug": "san-mateo",
+   "name": "San Mateo",
+   "branch": "SAN MATEO",
+   "street": "425 N Amphlett Boulevard",
+   "city": "San Mateo",
+   "zip": "94401",
+   "lat": 37.5792,
+   "lng": -122.3235,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "619!44497202067af0dfe45d5af44b0c0422e6b3de5b67ad856a0b364fd0de64",
+   "slug": "san-pedro",
+   "name": "San Pedro",
+   "branch": "SAN PEDRO",
+   "street": "1511 N Gaffey Street",
+   "city": "San Pedro",
+   "zip": "90731",
+   "lat": 33.7588,
+   "lng": -118.2926,
+   "open": false,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "677!0339efa316a95d1f8bb25c78f462a8da9f927f1f0906805c2dd4051076f8",
+   "slug": "san-ysidro",
+   "name": "San Ysidro",
+   "branch": "SAN YSIDRO",
+   "street": "6111 Business Center Court",
+   "city": "San Diego",
+   "zip": "92154",
+   "lat": 32.5693,
+   "lng": -117.0051,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "542!7a56567b1d6b2331a42a0f405c3de459ba86c31c23329e76aecf50883697",
+   "slug": "santa-ana",
+   "name": "Santa Ana",
+   "branch": "SANTA ANA",
+   "street": "1330 E First Street",
+   "city": "Santa Ana",
+   "zip": "92701",
+   "lat": 33.7454,
+   "lng": -117.8506,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "549!c082732065fedea2c0f17d2250c70562297e54e6c618b3ddc116656adb48",
+   "slug": "santa-barbara",
+   "name": "Santa Barbara",
+   "branch": "SANTA BARBARA",
+   "street": "535 Castillo Street",
+   "city": "Santa Barbara",
+   "zip": "93101",
+   "lat": 34.4129,
+   "lng": -119.7011,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "632!afa980930a4d9da9dea767520801e38ef924a286d22bf6d97782c5d20731",
+   "slug": "santa-clara",
+   "name": "Santa Clara",
+   "branch": "SANTA CLARA",
+   "street": "3665 Flora Vista Ave",
+   "city": "Santa Clara",
+   "zip": "95051",
+   "lat": 37.350082,
+   "lng": -121.993984,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "563!2d4f114f5717c0961bd9e14612bd710088cdd00c6e3c80bd1f83aa6a619a",
+   "slug": "santa-maria",
+   "name": "Santa Maria",
+   "branch": "SANTA MARIA",
+   "street": "2850 Santa Maria Way",
+   "city": "Santa Maria",
+   "zip": "93455",
+   "lat": 34.9475,
+   "lng": -120.4347,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "616!2d204b2e4d0e3ce68a177af719bad86289fd174c41e93fd21e53243d0e3b",
+   "slug": "santa-monica",
+   "name": "Santa Monica",
+   "branch": "SANTA MONICA",
+   "street": "2235 Colorado Avenue",
+   "city": "Santa Monica",
+   "zip": "90404",
+   "lat": 34.028,
+   "lng": -118.4745,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "630!d80206a2a13ea5c5a5c8755b3b483d186ee803e1b860a581e8b62fc5f402",
+   "slug": "santa-paula",
+   "name": "Santa Paula",
+   "branch": "SANTA PAULA",
+   "street": "250 W Harvard Boulevard A",
+   "city": "Santa Paula",
+   "zip": "93060",
+   "lat": 34.3445,
+   "lng": -119.0756,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "555!60bf63ca8d949f37cb7acbd384215d603b297549163aace9fb0bddce60f9",
+   "slug": "santa-rosa",
+   "name": "Santa Rosa",
+   "branch": "SANTA ROSA",
+   "street": "2570 Corby Ave",
+   "city": "Santa Rosa",
+   "zip": "95407",
+   "lat": 38.414974,
+   "lng": -122.716768,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "668!425f963ed312b21424c080ab6ad65d91e820502590e03c8c28c2accc263c",
+   "slug": "santa-teresa",
+   "name": "Santa Teresa",
+   "branch": "SANTA TERESA",
+   "street": "180 Martinvale Lane",
+   "city": "San Jose",
+   "zip": "95119",
+   "lat": 37.2297,
+   "lng": -121.7785,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "567!2857631ed3a1cd1dc643e0253cd3c7c71ecda3e3c014284dc2ffd46fa74b",
+   "slug": "seaside",
+   "name": "Seaside",
+   "branch": "SEASIDE",
+   "street": "1180 Canyon Del Rey Blvd",
+   "city": "Seaside",
+   "zip": "93955",
+   "lat": 36.602656,
+   "lng": -121.853174,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "660!27eeb7d15d6df981a0a5b085b99282a249bacc1a9f82f18356fc8337fa44",
+   "slug": "shafter",
+   "name": "Shafter",
+   "branch": "SHAFTER",
+   "street": "548 Walker Street",
+   "city": "Shafter",
+   "zip": "93263",
+   "lat": 35.5034,
+   "lng": -119.2725,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "680!7c3483df24ccb972baf833d88c096ae879fb62d9ea825d0e28e9d8cadaac",
+   "slug": "simi-valley",
+   "name": "Simi Valley",
+   "branch": "SIMI VALLEY",
+   "street": "3855 D - Alamo Street",
+   "city": "Simi Valley",
+   "zip": "93063",
+   "lat": 34.2864,
+   "lng": -118.7234,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "569!629145ecc1a7be45608e11cd60c127f25243f66133b351a7ac7eaa828d7b",
+   "slug": "sonora",
+   "name": "Sonora",
+   "branch": "SONORA",
+   "street": "885 Morning Star Drive",
+   "city": "Sonora",
+   "zip": "95370",
+   "lat": 37.9844,
+   "lng": -120.3702,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "538!c91fb332896bf19f1b88ce0ccb06ff0db7022c4f6461316826863c0192a0",
+   "slug": "south-lake-tahoe",
+   "name": "South Lake Tahoe",
+   "branch": "SOUTH LAKE TAHOE",
+   "street": "3344 B Lake Tahoe Boulevard",
+   "city": "South Lake Tahoe",
+   "zip": "96150",
+   "lat": 38.945748,
+   "lng": -119.96989,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "517!bdfe27c0e741ff0b8a01f94191cf8841d47180fba50835d3ce598a075401",
+   "slug": "stockton",
+   "name": "Stockton",
+   "branch": "STOCKTON",
+   "street": "55 South Lincoln Street",
+   "city": "Stockton",
+   "zip": "95203",
+   "lat": 37.9513,
+   "lng": -121.2976,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "531!2c9f5eee43770713d241a172c9e436318c444eb53c51c0816a794a43a77f",
+   "slug": "susanville",
+   "name": "Susanville",
+   "branch": "SUSANVILLE",
+   "street": "2615 Main Street",
+   "city": "Susanville",
+   "zip": "96130",
+   "lat": 40.412221,
+   "lng": -120.63843,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "575!47cf1072110b91ac75e7760d3f48fabe5d48ba670af8b594518fd98ed170",
+   "slug": "taft",
+   "name": "Taft",
+   "branch": "TAFT",
+   "street": "165 Center Street",
+   "city": "Taft",
+   "zip": "93268",
+   "lat": 35.139321,
+   "lng": -119.453756,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "672!b895b2b8364054770033a4ce77843b780ba106b36c84e15b75769fbc3a8e",
+   "slug": "temecula",
+   "name": "Temecula",
+   "branch": "TEMECULA",
+   "street": "27851 Diaz Road",
+   "city": "Temecula",
+   "zip": "92590",
+   "lat": 33.5062,
+   "lng": -117.1613,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "663!c417f2eb5f013ff3513362b2738f48cd23f056201c4c14a32e6b88782497",
+   "slug": "thousand-oaks",
+   "name": "Thousand Oaks",
+   "branch": "THOUSAND OAKS",
+   "street": "1810 E Avenida De Los Arboles",
+   "city": "Thousand Oaks",
+   "zip": "91362",
+   "lat": 34.2113,
+   "lng": -118.845,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "608!11920855d41ca3066a1b5b6c9d01caecfbf73e5f081118970fe2c140dbbe",
+   "slug": "torrance",
+   "name": "Torrance",
+   "branch": "TORRANCE",
+   "street": "1785 W 220th Street",
+   "city": "Torrance",
+   "zip": "90501",
+   "lat": 33.8279,
+   "lng": -118.3113,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "642!b450fd742178e7a280d6dfd0eb23bd8cc28deb5df6273e25f1d9f1aa530f",
+   "slug": "tracy",
+   "name": "Tracy",
+   "branch": "TRACY",
+   "street": "2785 Auto Plaza Drive",
+   "city": "Tracy",
+   "zip": "95304",
+   "lat": 37.7622,
+   "lng": -121.4651,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "513!bcf898b3b5c8d89171548a403d17fb744c37412994a117a10eabf0d97655",
+   "slug": "truckee",
+   "name": "Truckee",
+   "branch": "TRUCKEE",
+   "street": "11357 Donner Pass Road Suite I",
+   "city": "Truckee",
+   "zip": "96162",
+   "lat": 39.32611,
+   "lng": -120.210732,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "594!68d567a1b9022e0ed35ea46dea80200e10ef895cd143c64117186000ff78",
+   "slug": "tulare",
+   "name": "Tulare",
+   "branch": "TULARE",
+   "street": "274 E Cross Avenue",
+   "city": "Tulare",
+   "zip": "93274",
+   "lat": 36.2134,
+   "lng": -119.3464,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "649!3d58264f4fa3888d826264e9c47348b19fff4bad23a8d6813e8914b91988",
+   "slug": "turlock",
+   "name": "Turlock",
+   "branch": "TURLOCK",
+   "street": "825 E Monte Vista Avenue",
+   "city": "Turlock",
+   "zip": "95382",
+   "lat": 37.521866,
+   "lng": -120.839588,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "638!06768d3cbd5e9be3fc7464f7190f0aebd682569dfd44a0e7fb04467f67e5",
+   "slug": "twentynine-palms",
+   "name": "Twentynine Palms",
+   "branch": "TWENTYNINE PALMS",
+   "street": "3668 Adobe Road G-J",
+   "city": "Twentynine Palms",
+   "zip": "92277",
+   "lat": 34.199775,
+   "lng": -116.054016,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "535!90ed1eed80d12cdc61543c1ca463c85cce3c70a555c41ff1a21f9860c63e",
+   "slug": "ukiah",
+   "name": "Ukiah",
+   "branch": "UKIAH",
+   "street": "542 S Orchard Avenue",
+   "city": "Ukiah",
+   "zip": "95482",
+   "lat": 39.1476,
+   "lng": -123.1988,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "588!d5c22b0e9c37a0732a9dab913b170133a4a85bc2b252796710944a16efa6",
+   "slug": "vacaville",
+   "name": "Vacaville",
+   "branch": "VACAVILLE",
+   "street": "621 Orange Drive",
+   "city": "Vacaville",
+   "zip": "95687",
+   "lat": 38.3784,
+   "lng": -121.9448,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "554!4b64c7ec24cf00bca2eea80bc37f3010be0faacc5d83dc93a475c5d28d87",
+   "slug": "vallejo",
+   "name": "Vallejo",
+   "branch": "VALLEJO",
+   "street": "200 Couch Street",
+   "city": "Vallejo",
+   "zip": "94590",
+   "lat": 38.1171,
+   "lng": -122.2519,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "515!6cb1d280dd89281a7faa4538c4ccda97704c93e3e5b072e54d7f676818b8",
+   "slug": "van-nuys",
+   "name": "Van Nuys",
+   "branch": "VAN NUYS",
+   "street": "14920 Vanowen Street",
+   "city": "Van Nuys",
+   "zip": "91405",
+   "lat": 34.1939,
+   "lng": -118.4582,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "560!18bcc050cedd5063ad3e13b60aec6d6d4f708fed13c336c267659b37264f",
+   "slug": "ventura",
+   "name": "Ventura",
+   "branch": "VENTURA",
+   "street": "4260 Market Street",
+   "city": "Ventura",
+   "zip": "93003",
+   "lat": 34.2567,
+   "lng": -119.2363,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "629!f47b09f3033c5fc096107f3b94edf49c181c54a36ec284f847cbf1eb49c8",
+   "slug": "victorville",
+   "name": "Victorville",
+   "branch": "VICTORVILLE",
+   "street": "14855 Corta Drive",
+   "city": "Victorville",
+   "zip": "92395",
+   "lat": 34.5205,
+   "lng": -117.3055,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "559!6eb3a76173a246371835a1da04977eb522445c9dbdc04eb63db80d6a7abc",
+   "slug": "visalia",
+   "name": "Visalia",
+   "branch": "VISALIA",
+   "street": "1711 East Main Street",
+   "city": "Visalia",
+   "zip": "93292",
+   "lat": 36.3302,
+   "lng": -119.2739,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "583!7b6eed59fdff6db73b9d7fb931a46875cf7b2aeccd22777e7e5592bcef97",
+   "slug": "watsonville",
+   "name": "Watsonville",
+   "branch": "WATSONVILLE",
+   "street": "90 Alta Vista Avenue",
+   "city": "Watsonville",
+   "zip": "95076",
+   "lat": 36.927,
+   "lng": -121.7682,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "572!30c6185ad1e830218a6ebb54317acdfc9daf45879791e1eb79cc8a965f8f",
+   "slug": "weaverville",
+   "name": "Weaverville",
+   "branch": "WEAVERVILLE",
+   "street": "1511 Main Street",
+   "city": "Weaverville",
+   "zip": "96093",
+   "lat": 40.7256,
+   "lng": -122.9331,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "618!25ad19dea168faad14917eec60af32ff537fca0d141204170a857f82c6cc",
+   "slug": "west-covina",
+   "name": "West Covina",
+   "branch": "WEST COVINA",
+   "street": "800 So Glendora Avenue",
+   "city": "West Covina",
+   "zip": "91790",
+   "lat": 34.061,
+   "lng": -117.9316,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "652!ee017262eccfe2cea83bd8ba184d5d6b863f989ca7558bb266e1af9387a5",
+   "slug": "west-hollywood",
+   "name": "West Hollywood",
+   "branch": "HOLLYWOOD WEST",
+   "street": "936 N Formosa Ave",
+   "city": "West Hollywood",
+   "zip": "90046",
+   "lat": 34.088257,
+   "lng": -118.345865,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "697!224cf570a09ed2529dae6a143ae91f2acc654465d54d2a1159aad8697824",
+   "slug": "west-sacramento-commercial-drive-test-center",
+   "name": "West Sacramento Commercial Drive Test Center",
+   "branch": "SACRAMENTO WEST CDTC",
+   "street": "2528 Evergreen Avenue",
+   "city": "West Sacramento",
+   "zip": "95691",
+   "lat": 38.577,
+   "lng": -121.544,
+   "open": true,
+   "hours": {
+    "mon": [
+     "07:00",
+     "16:00"
+    ],
+    "tue": [
+     "07:00",
+     "16:00"
+    ],
+    "wed": [
+     "08:00",
+     "16:00"
+    ],
+    "thu": [
+     "07:00",
+     "16:00"
+    ],
+    "fri": [
+     "07:00",
+     "16:00"
+    ]
+   }
+  },
+  {
+   "code": "611!2a45f10734c6406e59f36396fcf6da62054d0f08880dfb97676a51bfe511",
+   "slug": "westminster",
+   "name": "Westminster",
+   "branch": "WESTMINSTER",
+   "street": "13700 Hoover Street",
+   "city": "Westminster",
+   "zip": "92683",
+   "lat": 33.7643,
+   "lng": -117.9982,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "591!86323e360823372ac3e27fb3f13da667f3bc7da1585718605de9c839152f",
+   "slug": "whittier",
+   "name": "Whittier",
+   "branch": "WHITTIER",
+   "street": "9338 S Painter Avenue",
+   "city": "Whittier",
+   "zip": "90605",
+   "lat": 33.9528,
+   "lng": -118.0432,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "571!167846fc054a9d12ea50d2e5202743c2793edda60272cd1775bb81878adb",
+   "slug": "willows",
+   "name": "Willows",
+   "branch": "WILLOWS",
+   "street": "815 N Humboldt Avenue",
+   "city": "Willows",
+   "zip": "95988",
+   "lat": 39.529404,
+   "lng": -122.212047,
+   "open": true,
+   "hours": {
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "637!379f47bbb99b46a559ebb936573bb90d073da764f21417b685d2894d0262",
+   "slug": "winnetka",
+   "name": "Winnetka",
+   "branch": "WINNETKA",
+   "street": "20725 Sherman Way",
+   "city": "Winnetka",
+   "zip": "91306",
+   "lat": 34.201,
+   "lng": -118.5846,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "671!9c604542651a592ea2447cf4c5ecdcebce0e1293fa86fc0a3e35045de7f1",
+   "slug": "winnetka-ibc",
+   "name": "Winnetka IBC",
+   "branch": "IBC Winnetka",
+   "street": "20725 Sherman Way",
+   "city": "Winnetka",
+   "zip": "91306",
+   "lat": 34.20148,
+   "lng": -118.58478,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "561!d67a358d5716991eab973923085eef0a1588a7a616ae1d66b706da60d8f9",
+   "slug": "woodland",
+   "name": "Woodland",
+   "branch": "WOODLAND",
+   "street": "1224 E. Gibson Road",
+   "city": "Woodland",
+   "zip": "95776",
+   "lat": 38.669155,
+   "lng": -121.764585,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "552!7f3dce0870c940cacc0079c9bf14296aa8d8cae4de231fe83ebaa8781fcb",
+   "slug": "yreka",
+   "name": "Yreka",
+   "branch": "YREKA",
+   "street": "1848 Fort Jones Rd",
+   "city": "Yreka",
+   "zip": "96097",
+   "lat": 41.702574,
+   "lng": -122.645547,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  },
+  {
+   "code": "562!c9f8c9930378cc7f0afdb55eb42ddca221f4232f78ac40f74c6610b95c1b",
+   "slug": "yuba-city",
+   "name": "Yuba City",
+   "branch": "YUBA CITY",
+   "street": "1570 Poole Boulevard",
+   "city": "Yuba City",
+   "zip": "95993",
+   "lat": 39.1439,
+   "lng": -121.6433,
+   "open": true,
+   "hours": {
+    "mon": [
+     "08:00",
+     "17:00"
+    ],
+    "tue": [
+     "08:00",
+     "17:00"
+    ],
+    "wed": [
+     "09:00",
+     "17:00"
+    ],
+    "thu": [
+     "08:00",
+     "17:00"
+    ],
+    "fri": [
+     "08:00",
+     "17:00"
+    ]
+   }
+  }
+ ],
+ "partners": [
+  {
+   "code": "AS4!1310f12efc609146fc84ddc70d2e7b917a849f13a7b5dd34562a33483527",
+   "branch": "AAA Chatsworth",
+   "street": "10210 Mason Ave",
+   "zip": "91311"
+  },
+  {
+   "code": "AS5!47c034fc88e37213dd3366a5dded86c6d17fb796126f5fb39949e91de4be",
+   "branch": "AAA Chino",
+   "street": "5402 Philadelphia St",
+   "zip": "91710"
+  },
+  {
+   "code": "AS6!7954f8b44f75e9953cf11f31932261d9a8643a2d8964598dc9ee2341271d",
+   "branch": "AAA Clairemont",
+   "street": "4973 Clairemont Dr",
+   "zip": "92117"
+  },
+  {
+   "code": "AN2!ac7260666f9973ae15d8c4a72137fee14ab07acd6b0a644b6456690e5c24",
+   "branch": "AAA Concord",
+   "street": "2095 Diamond Blvd, Suite 135",
+   "zip": "93637"
+  },
+  {
+   "code": "AS7!6b84b3ed18fba0c09c27acc3282cfbf2e6d6e09aa5de8676a9014bd500f6",
+   "branch": "AAA Costa Mesa",
+   "street": "3350 Harbor Blvd",
+   "zip": "92626"
+  },
+  {
+   "code": "AN3!cbdd9000fdceca4aae78dc554a2462dea843d3a6b9f8eece055ce5e54c43",
+   "branch": "AAA Daly City",
+   "street": "455 Hickey Blvd, 3rd Floor",
+   "zip": "95610"
+  },
+  {
+   "code": "AN4!f0da3a3c5bde24f9312bc51f16903ec9207f9fd2556c178f8bd32afcaa47",
+   "branch": "AAA Dublin",
+   "street": "4460 Tassajara Rd, Suite B",
+   "zip": "93611"
+  },
+  {
+   "code": "AS8!7dda051758a6a179f0a2da7cc3d71fb92d5cd031914daf8c67ad71705d45",
+   "branch": "AAA Fullerton",
+   "street": "1450 N harbor Blvd",
+   "zip": "92835"
+  },
+  {
+   "code": "AN5!247562af3b0f74bc3533873182062c74f2e2af69f3922a40b411e6559e6b",
+   "branch": "AAA Greenhaven",
+   "street": "1056 Florin Rd",
+   "zip": "95405"
+  },
+  {
+   "code": "AN6!323e9c36fb8a8b380e5bfc545ae9a737dffbb85c2c281ab7da20ebc0e023",
+   "branch": "AAA Hayward",
+   "street": "1580 Chabot Ct",
+   "zip": "93720"
+  },
+  {
+   "code": "AS9!baf3b32ed4f51b398b87630b23fdd6fe219b522d2aa623b611900129f00a",
+   "branch": "AAA Inglewood/Ladera",
+   "street": "1234 Centinela Ave",
+   "zip": "90302"
+  },
+  {
+   "code": "AS0!187e2b9d40303466104fc578902dccc3b0bcccd9e0c13c4deed72df70c2d",
+   "branch": "AAA La Quinta",
+   "street": "46-050 Washington St",
+   "zip": "92253"
+  },
+  {
+   "code": "AT1!d24a28e38d1cdc433a9a6a4506bc83756f76cab4a5a213ca772a818de54f",
+   "branch": "AAA Laguna Hills",
+   "street": "25181 Paseo De Alicia",
+   "zip": "92653"
+  },
+  {
+   "code": "AT2!13be0ec4ed4b308968b69a67515d4a4cf8a3c352ec1a771e63c3c9d70542",
+   "branch": "AAA Long Beach",
+   "street": "4800 Airport Plaza",
+   "zip": "90815"
+  },
+  {
+   "code": "AT3!9b52b656a1ff587e4258f288c36eb1ca6be91b36045bd309adcfdfe02880",
+   "branch": "AAA Los Angeles HQ",
+   "street": "2601 S Figueroa",
+   "zip": "90007"
+  },
+  {
+   "code": "AT4!b91a8ca8efee24d7e1be8d1880d6c0228ae84655dac9c6e5f6f6cc53187c",
+   "branch": "AAA Manhattan Beach",
+   "street": "700 S Aviation Blvd",
+   "zip": "90266"
+  },
+  {
+   "code": "AN7!2449cc55aec072c2142a94a5b49ea7094edf5d78b954eb23fae9868a60e1",
+   "branch": "AAA Modesto",
+   "street": "3525 Coffee Rd",
+   "zip": "95118"
+  },
+  {
+   "code": "AT5!fb908b18b541a054d0fc5bb979cb30e16169718b773905bb7413d13ad648",
+   "branch": "AAA Northridge",
+   "street": "9440 Reseda Boulevard",
+   "zip": "91324"
+  },
+  {
+   "code": "AN8!dc85265963b40d6f0f139cd4446d6c01faca17cc00c9453c87e5163574d3",
+   "branch": "AAA Oroville",
+   "street": "2024-A Oro Dam Blvd East",
+   "zip": "95023"
+  },
+  {
+   "code": "AT6!3f8b704515ea96b9c3b7efd66f525485855eb160003558a22a8a5bb5158d",
+   "branch": "AAA Rancho Palos Verdes",
+   "street": "28901 S. Western Ave Suite 137",
+   "zip": "90275"
+  },
+  {
+   "code": "AT7!01191f09319572a07e94bd37b15204236efe0d61647822491e61b09431dc",
+   "branch": "AAA Redlands",
+   "street": "1330 Industrial Park Ave",
+   "zip": "92374"
+  },
+  {
+   "code": "AT8!e3b195615ba1f10bf93138e924f96ae8c782b85a86f21c5c12d48fd6e77f",
+   "branch": "AAA Riverside",
+   "street": "3700 Central Ave",
+   "zip": "92506"
+  },
+  {
+   "code": "AN9!bf41fff5fa9daa64ccc98967cc0f052ed8e57f63e8b95b0774be108441d5",
+   "branch": "AAA San Jose",
+   "street": "5120 Stevens Creek Blvd",
+   "zip": "95678"
+  },
+  {
+   "code": "AT9!e3e25cc09e876b33909cec4c3b775749b1acacce37e81b353d8d6bda22fc",
+   "branch": "AAA Santa Barbara",
+   "street": "3712 State Street",
+   "zip": "93105"
+  },
+  {
+   "code": "AN1!7dc18deb846c15b55ccb88ab7accd6d136d32fc391dcda6060fc5e6a7ab2",
+   "branch": "AAA University Village",
+   "street": "2216 Fair Oaks Blvd",
+   "zip": "95825"
+  },
+  {
+   "code": "AN0!d814179ac4f2f53b5b1a527ff937604bf900e2df197577eef414c1ab3324",
+   "branch": "AAA Yuba City",
+   "street": "1290 Stabler Lane, Suite 800",
+   "zip": "95121"
+  },
+  {
+   "code": "698!4d730cf3cd022600422bce0f5bb2a3d8c3dd37110bfd56f2e7fe022ffe8a",
+   "branch": "ANAHEIM DLPC",
+   "street": "3170 W. Lincoln Ave",
+   "zip": "92804"
+  },
+  {
+   "code": "641!5a10ad741dd42f6b65def879aa96ac88f2f3ca7828bc4c751e94b9a46089",
+   "branch": "BANNING",
+   "street": "1034 W. Ramsey Street B",
+   "zip": "92220"
+  },
+  {
+   "code": "88c91f703785ab87c32006048dbfa494163ec94ce30c28beb81a016c81547fc1",
+   "branch": "CLEARLAKE TRAVEL RUN",
+   "street": "14884 Olympic Dr.",
+   "zip": "95453"
+  },
+  {
+   "code": "AS1!4ade46ed7881300fc2e6ecf38930d12456af9ecde64c9fd3bb3598094080",
+   "branch": "DRC 1",
+   "street": "",
+   "zip": ""
+  },
+  {
+   "code": "AS2!a78b471517975a1d7b08c5fd1160df696e7263cf777fe60573438937b3c7",
+   "branch": "DRC 2",
+   "street": "",
+   "zip": ""
+  },
+  {
+   "code": "AS3!7d699f36257cfda46b3a6b06ae1703b3fe4dbe25380fe4a8d71b2746c409",
+   "branch": "DRC 3",
+   "street": "",
+   "zip": ""
+  },
+  {
+   "code": "688!6a0f87f936073238f59153dcce87de050469bca4ea0250b2d0723277d1b2",
+   "branch": "FONTANA DLPC",
+   "street": "16499 Merrill Ave",
+   "zip": "92335"
+  },
+  {
+   "code": "999!9b7e92e9b15a7b15cbca7c5114ca8f18efa3061eb8a6ac0ba67cdf1720",
+   "branch": "HEADQUARTERS",
+   "street": "2415 1ST ST",
+   "zip": "95818"
+  },
+  {
+   "code": "701!19902f6b29065d12ecd65db286e402ba3bec6537bae6ca2d1e11e1308f4d",
+   "branch": "IBC Rancho San Diego BAD",
+   "street": "1530 Hilton Head Rd",
+   "zip": "92019"
+  },
+  {
+   "code": "765!9be202d431842f7cfaf7b56caf383996426a4e370636b138f148276f1153",
+   "branch": "IBC San Marcos BAD",
+   "street": "590 Rancheros Dr",
+   "zip": "92078"
+  },
+  {
+   "code": "605!87902cd58dd0163034fe5724dfcd1bd34d1df561a369fd092ab5a9f87773",
+   "branch": "LAGUNA HILLS",
+   "street": "23535 Moulton Parkway",
+   "zip": "92653"
+  },
+  {
+   "code": "693!5c74381d4ec4522373f84bd438339590bbc6ed4e1903f40c66335cd609d0",
+   "branch": "PACOIMA DLPC",
+   "street": "11623 Glenoaks Boulevard",
+   "zip": "91331"
+  },
+  {
+   "code": "2a89fc091ba16ee4ff614d742426c66a337f0d8cd536256a01f0906b03e87977",
+   "branch": "PARADISE",
+   "street": "5921 Clark Road",
+   "zip": "95969"
+  },
+  {
+   "code": "645!27a5b6c9770c02d7fac8e85a18b626c1bb32f39c83b244b201f2b365bb0b",
+   "branch": "SAN JOSE DLPC",
+   "street": "2222 Senter Rd",
+   "zip": "95112"
+  },
+  {
+   "code": "991!ee5ffd4cab956bb22e4d50c9d24682bf8b941f74ff4b8b348960d3fa21bb",
+   "branch": "Special Event",
+   "street": "2415 1st Ave",
+   "zip": "95818"
+  },
+  {
+   "code": "3a4185e1413982ccaf4536ce9f83374e06fd884ce0c7c272a496471a624fbcda",
+   "branch": "test_schedule",
+   "street": "",
+   "zip": "92333"
+  },
+  {
+   "code": "553!4220e0d5fe56ffacb6df5223b755cfdb32b71d9f8a85f53f4eefece3ac9d",
+   "branch": "TULELAKE",
+   "street": "399 Main St.",
+   "zip": "96134"
+  },
+  {
+   "code": "624!6810e1cc1d04fe8881aa1d73f8a068e7f7a30afb02d98bf9e80029f06cb4",
+   "branch": "WALNUT CREEK",
+   "street": "1910 N. Broadway",
+   "zip": "94596"
+  }
+ ]
+}

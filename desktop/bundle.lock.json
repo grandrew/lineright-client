@@ -1,0 +1,17 @@
+{
+  "_note": "What scripts/bundle.js puts in an installer beside the app: the browser the booking robots drive, by the Playwright version package.json pins. Targets are electron-builder's ${os}-${arch}.",
+  "browser": {
+    "_note": "Installed by the Playwright this package pins (package.json), so the browser always matches the library that drives it. Playwright has no per-file digests; its CDN is HTTPS and the revision is fixed by the version.",
+    "install": [
+      "--only-shell",
+      "chromium"
+    ],
+    "hostPlatform": {
+      "linux-x64": "ubuntu24.04-x64",
+      "linux-arm64": "ubuntu24.04-arm64",
+      "mac-x64": "mac15",
+      "mac-arm64": "mac15-arm64",
+      "win-x64": "win64"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+LineRight Regbot — the desktop app and its robots
+Copyright 2026 The LineRight Regbot authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes the U.S. Census Bureau's 2020 ZCTA gazetteer centroids for
+California ZIP codes (dmq/catalog/ca-zip-centroids.csv), which are in the
+public domain.
