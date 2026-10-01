@@ -33,12 +33,40 @@ test('once something was imported, File re-imports it in one click, naming where
   assert.deepEqual(calls, ['again']);
 });
 
-test('the Sites menu lists what the server lists, and says so when it lists nothing', () => {
-  const items = template({ platform: 'win32', sites: [{ name: 'California DMV', slug: 'ca-dmv' }, { name: 'Clinic', slug: 'clinic' }] });
+test('the Sites menu lists what the app lists, test sites named as such, and says so when it lists nothing', () => {
+  const items = template({ platform: 'win32', sites: [{ name: 'California DMV', slug: 'ca-dmv' }, { name: 'Helios Arena', slug: 'helios-arena', mock: true }] });
   const sites = outline(items).find((m) => m.label === '&Sites');
-  assert.deepEqual(sites.items, ['All sites', 'Console', 'California DMV', 'Clinic']);
+  assert.deepEqual(sites.items, ['All sites', 'Console', 'California DMV', 'Helios Arena — test site']);
   const none = outline(template({ platform: 'win32', sites: [] })).find((m) => m.label === '&Sites');
   assert.ok(none.items.some((i) => /No sites yet/.test(i)));
+});
+
+test('View switches developer mode, and only developer mode has the developer tools', () => {
+  const view = (developer) => template({ platform: 'linux', developer }).find((m) => m.label === '&View').submenu;
+  const switchOf = (items) => items.find((i) => /^Developer mode/.test(i.label || ''));
+
+  const off = view({ on: false, forced: null });
+  assert.equal(switchOf(off).type, 'checkbox');
+  assert.equal(switchOf(off).checked, false);
+  assert.equal(switchOf(off).enabled, true);
+  assert.ok(!off.some((i) => i.role === 'toggleDevTools'), 'the public app has no developer tools in its menu');
+  assert.ok(!view(undefined).some((i) => i.role === 'toggleDevTools'), 'nor does one built without saying');
+
+  const on = view({ on: true, forced: null });
+  assert.equal(switchOf(on).checked, true);
+  assert.equal(switchOf(on).enabled, true, 'turned on from the menu, it turns off there too');
+  assert.ok(on.some((i) => i.role === 'toggleDevTools'));
+
+  // Held on by the command line, or by practising: said, and not switchable.
+  for (const [forced, label] of [['flag', 'Developer mode (on for this run)'], ['practice', 'Developer mode (on while practising)']]) {
+    const item = switchOf(view({ on: true, forced }));
+    assert.deepEqual([item.label, item.checked, item.enabled], [label, true, false]);
+  }
+
+  const calls = [];
+  const items = template({ platform: 'linux', actions: { developer: () => calls.push('developer') } });
+  switchOf(items.find((m) => m.label === '&View').submenu).click();
+  assert.deepEqual(calls, ['developer']);
 });
 
 test('items call their actions by name, with the site slug where there is one', () => {

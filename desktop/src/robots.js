@@ -23,6 +23,8 @@ const { killTree, robotPlatformEnv, OWNED } = require('./stack');
 const SCRIPTS = { scout: 'rqp-scout.js', book: 'rqp-handler.js' };
 /** The robots this app carries, as the site knows them (a connector's app_robot). */
 const ROBOTS = ['dmq-rqp/1'];
+/** The booking systems they work, as the site names them (a site's connector). */
+const CONNECTORS = ['dmv.ca.gov.qmatic'];
 const REAL_DMV = 'https://www.dmv.ca.gov';
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
@@ -179,4 +181,4 @@ class RobotRunner {
   }
 }
 
-module.exports = { RobotRunner, robotEnv, targetAllowed, isRealDmv, isLoopback, lastJson, ROBOTS, REAL_DMV, SCRIPTS };
+module.exports = { RobotRunner, robotEnv, targetAllowed, isRealDmv, isLoopback, lastJson, ROBOTS, CONNECTORS, REAL_DMV, SCRIPTS };

@@ -5,6 +5,11 @@
  * without Electron, and rebuilt whenever what it shows changes: which server
  * the app is using, whether anybody is signed in, and which sites it lists.
  *
+ * View → Developer mode switches what only the people who work on the app see
+ * (developer.js): test sites, marked as such in Sites; Chromium's developer
+ * tools; and the servers that are not the public site. A run started with
+ * --developer, or practising, has it on and cannot switch it off.
+ *
  * With the server this app runs itself (`builtin`, Practice on this computer)
  * there is nobody to sign in to — the app is the person using it — so File has
  * no sign-in, and View gains that server's control room.
@@ -13,8 +18,14 @@
  * names mean. Nothing here touches a window.
  */
 
+const DEVELOPER = {
+  practice: 'Developer mode (on while practising)',
+  flag: 'Developer mode (on for this run)',
+};
+
 function template({ platform = process.platform, builtin = false, paired = false, user = null, sites = [],
-  actions = {}, version = '', importRecommended = false, importAgain = '' } = {}) {
+  actions = {}, version = '', importRecommended = false, importAgain = '',
+  developer = { on: false, forced: null } } = {}) {
   const act = (name, arg) => () => { if (actions[name]) actions[name](arg); };
   const mac = platform === 'darwin';
   const who = user && user.nickname ? ` (${user.nickname})` : '';
@@ -45,7 +56,8 @@ function template({ platform = process.platform, builtin = false, paired = false
     ],
   };
 
-  const siteItems = sites.map((s) => ({ label: s.name, click: act('site', s.slug) }));
+  // Made-up sites are only ever here in developer mode, and say what they are.
+  const siteItems = sites.map((s) => ({ label: s.mock ? `${s.name} — test site` : s.name, click: act('site', s.slug) }));
   const sitesMenu = {
     label: '&Sites',
     submenu: [
@@ -68,7 +80,9 @@ function template({ platform = process.platform, builtin = false, paired = false
       ] : []),
       { role: 'togglefullscreen' },
       { type: 'separator' },
-      { role: 'toggleDevTools' },
+      { label: DEVELOPER[developer.forced] || 'Developer mode', type: 'checkbox', checked: Boolean(developer.on),
+        enabled: !developer.forced, click: act('developer') },
+      ...(developer.on ? [{ role: 'toggleDevTools' }] : []),
     ],
   };
 

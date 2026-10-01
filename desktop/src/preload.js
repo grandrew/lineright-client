@@ -10,7 +10,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const EVENTS = new Set([
   'shell:state', 'sync:doc', 'sync:status', 'update:state', 'pair:state', 'toast',
-  'app:navigate', 'autofill:done', 'stack:state', 'robots:state', 'import:due',
+  'app:navigate', 'autofill:done', 'stack:state', 'robots:state', 'import:due', 'developer:state',
 ]);
 const CALLS = new Set([
   // the browser half

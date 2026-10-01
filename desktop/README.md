@@ -15,16 +15,19 @@ The first time it opens it offers to bring your details across from a browser
 you already use, then asks you to create your account on the site — or sign in —
 and approve the code it shows (see *Your account on the regbot site*, below).
 The site it pairs with is the one `config.json` names: `https://lineright.org`
-(for a development site, `--server=http://127.0.0.1:5000` or Settings).
+(for a development site, `--server=http://127.0.0.1:5000`, or Settings in
+developer mode).
 
-The app can also run a whole regbot of its own — the website and its JSON API,
-the queue processor, the control room, the California DMV robots and a DMV
-stand-in for them to practise on — as **Practice on this computer** (Settings →
-Server): a private line with simulated rivals, nobody to sign in to. The robots
-and their browser come with the app; the server and the stand-in are
-lineright-server, which is not open source and never ships in the app, so
-practice is offered only where a checkout of it is on the same machine (see
-*Practice on this computer*) — a tool for the people who work on the server.
+What only the people who work on LineRight Regbot need is behind **developer
+mode** (View → Developer mode, or `--developer`; see *Developer mode*): the
+test sites a development server lists, other servers, Chromium's developer
+tools, and **Practice on this computer** — a whole regbot of the app's own (the
+website and its JSON API, the queue processor, the control room, the
+California DMV robots and a DMV stand-in for them to practise on), a private
+line with simulated rivals and nobody to sign in to. The robots and their
+browser come with the app; the server and the stand-in are lineright-server,
+which is not open source and never ships in the app, so practice is offered
+only where a checkout of it is on the same machine.
 
 The app becomes a browser only when a booking site needs one: then the same
 window shows tabs and an address bar over a sandboxed page, and types your
@@ -57,6 +60,7 @@ cd desktop
 npm install
 npm run bundle                               # once: the robots' browser, as an installer carries it
 npm start                                    # the site config.json names
+npm start -- --developer                     # developer mode, for one run
 npm start -- --practice                      # practice: the lineright server from a checkout beside this one
 REGBOT_SERVER_URL=https://regbot.example npm start     # another server, for one run
 ```
@@ -72,7 +76,8 @@ anywhere else), on that checkout's `regbot/.venv` and otherwise `python3`;
 Which server the app uses (`src/server-choice.js`): `config.json` names the
 public regbot site the build pairs with — set the real address there before
 `npm run dist`; empty means the app runs its own. Settings changes it on one
-machine: the site, Practice on this computer, or another server at an address.
+machine, in developer mode: the site, Practice on this computer, or another
+server at an address.
 `--server=<url>` (or `REGBOT_SERVER_URL`) uses another for one run and
 `--practice` (or `REGBOT_SERVER_MODE=builtin`) the app's own, without saving
 either. A device token is kept with the server that issued it and offered to no
@@ -83,6 +88,32 @@ chosen one — and is readable by this user only.
 On Ubuntu 24.04 and later an unpackaged `npm start` needs `--no-sandbox` (or
 `ELECTRON_DISABLE_SANDBOX=1`) because the checkout's sandbox helper is not
 setuid; packed builds decide that for themselves (see Installers).
+
+## Developer mode
+
+Everybody else's app is the public one: it pairs with the site `config.json`
+names and lists the sites there that are real. Developer mode
+(`src/developer.js`) adds what only the people who work on LineRight Regbot
+need, and the top bar says **Developer mode** while it is on:
+
+* **Test sites.** A development or practice server lists made-up sites beside
+  the real ones — for demos, practice and tests — and says which (`mock` on a
+  site, a line and a position, from the server's simulated connectors). Off,
+  the app lists none of them and will not open one's page; on, each is marked
+  **Test site** on its card, its page, its line and in the Sites menu. A server
+  from before it said so is taken at its connectors: there, a site on a booking
+  system the robots do not work (anything but `dmv.ca.gov.qmatic`) is a test
+  site.
+* **Other servers.** Settings → Server offers *Practice on this computer* and
+  *Another LineRight Regbot server*; off, it offers the public site only (an app
+  left on another server says so, with the way back). Settings → Updates takes
+  an update feed of the app's own, which is followed only in developer mode.
+* **Chromium's developer tools**, in the View menu.
+
+**View → Developer mode** turns it on or off, and the app remembers
+(`developerMode` in `regbot.json`). `--developer`, or `REGBOT_DEVELOPER=1`,
+turns it on for one run, and practising holds it on: in either case the menu
+says so and cannot turn it off.
 
 ## Practice on this computer
 
@@ -121,9 +152,9 @@ topology as the server's `run.sh`; the app is the supervisor that script was.
   named after your login, with the practice credits every practice account starts with, and a device token
   for the app; nothing asks for a password. The token is kept beside the
   database, and if it is ever lost the next start gives the app a new one for
-  the same account rather than a stranger's. **View → The regbot website** and
-  **View → Control room** open the server's own pages in a tab, already signed
-  in or unlocked, through a key that changes every launch.
+  the same account rather than a stranger's. **View → Control room** opens the
+  server's control room in a tab, unlocked through a key that changes every
+  launch.
 * **Its data is yours.** Under the app's user data, in `server/`: the
   database, `desktop.json` (the token, the session secret, the control room's
   key, the ports), `regbot.env` (read at start: set `RQP_ALLOW_BOOKING`,
@@ -158,9 +189,10 @@ environment cannot switch that on. Where the stand-in should be
 running and is not — a server checkout from before it had one, say — the
 robots are pointed at an address that answers nothing, never at the real site.
 
-The simulated rival bidders, the five simulated booking sites and the
-simulated checkout are what they are on any regbot server: a demo that moves.
-The control room turns the crowd down or off.
+The simulated rival bidders, the five made-up booking sites (each marked as a
+test site here) and the simulated checkout are what they are on any regbot
+server but the public one: a demo that moves. The control room turns the crowd
+down or off.
 
 ## Your account on the regbot site
 
@@ -522,8 +554,9 @@ each:
 | `src/chromium.js` | Where the Chromium browsers keep their data on each system, and which profiles each has |
 | `src/oscrypt.js` | The key each system gives a browser (DPAPI, the macOS keychain, a Linux keyring) and what it decrypts |
 | `src/sqlite.js` | Enough of the SQLite file format to read a browser's tables, write-ahead log and all |
-| `src/store.js` | The one file of settings: which server (and the token it issued), which DMV, update feed, device name — choices only, never defaults |
+| `src/store.js` | The one file of settings: which server (and the token it issued), which DMV, update feed, developer mode, device name — choices only, never defaults |
 | `src/server-choice.js` | Which server a run talks to, and with what token: `--practice`, `--server`, Settings, `config.json` |
+| `src/developer.js` | Developer mode: whether it is on and what holds it on, and which sites are made-up test sites |
 | `src/robots.js` | Runs the DMV robots (`../dmq`'s scout and booking handler) for the regbot site, on the app's own binary, and decides where they may go |
 | `src/reader.js` | Looking for openings when the site hands this device a read, and answering it |
 | `src/booker.js` | Booking the person's own slot with the robot when the site hands it over, and what comes of it |
@@ -578,7 +611,9 @@ Linux; on Windows the session's own desktop, which a session over SSH has
 too). Against a stub of a remote server and a stub of a booking site it checks
 end to end that a hand-off opened its page in a tab (once), that the window is
 in browser mode with the bar grown for it, that the application menu lists the
-server's sites, and that the profile on that machine was typed into the booking
+server's real sites — its made-up one only once developer mode is switched on
+from the menu, marked as a test site, and gone again when it is switched off —
+and that the profile on that machine was typed into the booking
 form — four fields, by label, nothing already filled touched — or, for a line
 the profile is not ready for, that the profile opened instead. A first run asks
 for an account and pairs by code, and *Start over* asks again. A read the stub
@@ -715,19 +750,20 @@ Two things about updates that are not this app's to fix:
 |---|---|
 | `REGBOT_SERVER_URL` | Another regbot server, for one run. Otherwise Settings, then `config.json`; none named is the app's own |
 | `REGBOT_SERVER_MODE` | `builtin` to practise on this computer for one run (`--practice`) |
+| `REGBOT_DEVELOPER` | `1` for developer mode, for one run (`--developer`) |
 | `REGBOT_CLIENT_TOKEN` | A device token for the server named for the run, instead of signing in (tests use this) |
 | `REGBOT_NO_EXTERNAL` | `1` to log the pages the app would open in your browser instead of opening them (tests) |
 | `LINERIGHT_SERVER_DIR` | A lineright-server checkout for practice mode, instead of one beside this repository |
 | `REGBOT_PYTHON` | The Python to run practice mode's server with, instead of that checkout's `regbot/.venv` |
 | `REGBOT_VENDOR_DIR` | Where `scripts/bundle.js` stages (`vendor/`) |
-| `REGBOT_UPDATE_URL` | A generic update feed instead of the embedded one |
+| `REGBOT_UPDATE_URL` | A generic update feed instead of the embedded one, for one run |
 | `REGBOT_CLIENT_NAME` | What this device calls itself when it signs in (default: the hostname) |
 | `REGBOT_FORCE_UPDATES` | `1` to run update checks unpackaged |
 | `REGBOT_TRACE` | A file to append a synchronous trace of the main process to |
 | `REGBOT_NO_NOTIFY` / `REGBOT_NO_FLASH` | `1` to skip desktop notifications / frame flashing |
 
 Flags: `--server=<url>` uses that server for one run without saving it, and
-`--practice` the app's own;
+`--practice` the app's own; `--developer` turns developer mode on for the run;
 `--user-data=<dir>` keeps this run's state apart — the built-in server's
 database and logs included; `--page=<screen>` and
 `--open=<url>` start somewhere in particular; `--smoke --exit-after=<ms>`

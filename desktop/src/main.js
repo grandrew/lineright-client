@@ -12,10 +12,16 @@
  * The line itself is kept on the regbot site config.json names, which the app
  * signs in to with a code approved on that site — it never sees a password.
  * Its robots look for openings when the site asks (reader.js) and book the
- * person's own slot when it is theirs (booker.js). Settings → Practice on this
- * computer runs the whole of regbot here instead — the website, the queue
- * processor, the DMV robots and the stand-in they practise on (stack.js) —
- * signed in to as the person with no sign-in at all. See ../README.md.
+ * person's own slot when it is theirs (booker.js).
+ *
+ * Developer mode (developer.js; View → Developer mode, or --developer) adds
+ * what only the people who work on regbot need: the test sites a development
+ * server lists, marked as test sites; Chromium's developer tools; and the
+ * servers that are not the public site — another one at an address, or
+ * Practice on this computer, which runs the whole of regbot here instead (the
+ * website, the queue processor, and the stand-in the robots practise on, from
+ * a lineright-server checkout: stack.js), signed in to as the person with no
+ * sign-in at all. See ../README.md.
  */
 const os = require('node:os');
 const path = require('node:path');
@@ -26,6 +32,7 @@ const {
 
 const { Store, bundled } = require('./store');
 const serverChoice = require('./server-choice');
+const developerMode = require('./developer');
 const { SyncClient, SyncLoop, NotPaired, diffHandoffs, describeHandoff, clock } = require('./sync');
 const { Shell } = require('./shell');
 const { Profile, KEYS } = require('./profile');
@@ -109,6 +116,7 @@ let hasBrowsers = null;           // whether this machine has a browser to impor
 let lastNavigate = null;   // where the app last sent the person itself, for --smoke
 let serverMode = 'builtin';       // 'builtin': the server this app runs; 'remote': a regbot site
 let forcedRun = false;            // --server / --practice decided where this run goes
+let developer = { on: false, forced: null }; // developer mode (developer.js), and what holds it on
 let stack = null;                 // the built-in server, while that is the one in use
 let reregistering = false;        // the built-in site is being restarted to learn the app's token again
 let closing = false;              // shutdown() has begun
@@ -304,6 +312,7 @@ async function useRemote(url) {
     await was.stop();
   }
   send('stack:state', null);
+  noteDeveloper();
   loop.poke();
   refreshSites('server changed');
 }
@@ -316,8 +325,44 @@ async function useBuiltin() {
   makeStack();
   client.token = stack.token;
   setPair({ paired: true, user: stack.owner ? { nickname: stack.owner.nickname } : null, pending: null, message: '' });
+  noteDeveloper();
   loop.poke();
   startStack();
+}
+
+// ----------------------------------------------------------- developer mode
+/**
+ * Developer mode as it stands now (developer.js), told to the menu and the
+ * screens when it changed: which sites are listed, what Settings offers.
+ */
+function noteDeveloper() {
+  const was = developer;
+  developer = developerMode.resolve({ argv, env: process.env, store, practice: builtin() });
+  if (was.on === developer.on && was.forced === developer.forced) return;
+  log(`developer mode ${developer.on ? 'on' : 'off'}${developer.forced === 'practice' ? ' (practising)' : developer.forced ? ' (--developer)' : ''}`);
+  if (!developer.on) sitesCache = sitesCache.filter((s) => !s.mock);
+  rebuildMenu();
+  send('developer:state', developer);
+  // Turned on, the test sites are listed again; the server is asked.
+  if (developer.on) refreshSites('developer mode');
+}
+
+/** View → Developer mode: on or off, and remembered. Not while a run or practice holds it on. */
+function setDeveloper(on) {
+  if (developer.forced) {
+    send('toast', { kind: 'warn', text: developer.forced === 'practice'
+      ? 'Developer mode stays on while the app practises on this computer: Settings → Server leaves practice.'
+      : 'This run was started with --developer, so developer mode stays on until the app starts again.' });
+    rebuildMenu();
+    return;
+  }
+  if (on) store.set('developerMode', true);
+  else if (store.chosen('developerMode')) store.delete('developerMode');
+  noteDeveloper();
+  const elsewhere = !on && !builtin() && client.serverUrl !== siteUrl();
+  send('toast', { kind: 'ok', ms: 9000, text: on
+    ? 'Developer mode is on: test sites are listed, each marked as one, and Settings offers practice and other servers.'
+    : `Developer mode is off: the app shows what everybody else sees.${elsewhere ? ` It stays on ${client.serverUrl} until you choose LineRight Regbot in Settings.` : ''}` });
 }
 
 /**
@@ -510,7 +555,8 @@ function rebuildMenu() {
     builtin: builtin(),
     paired: client.paired,
     user: pairState.user || (lastDoc && lastDoc.user) || null,
-    sites: sitesCache.map((s) => ({ name: s.name, slug: s.slug })),
+    sites: sitesCache.map((s) => ({ name: s.name, slug: s.slug, mock: s.mock })),
+    developer,
     version: app.getVersion(),
     importRecommended: importWorthOffering(),
     importAgain: (() => {
@@ -538,6 +584,7 @@ function rebuildMenu() {
       checkUpdates: () => updates.check(),
       about: () => showAbout(),
       quit: () => shutdown(0),
+      developer: () => setDeveloper(!developer.on),
       controlRoom: () => openServerPage('admin').catch((err) => send('toast', { kind: 'bad', text: err.message })),
       serverLogs: () => openServerPage('logs').catch((err) => send('toast', { kind: 'bad', text: err.message })),
     },
@@ -551,8 +598,9 @@ function showAbout() {
     `Electron ${process.versions.electron} · Chromium ${process.versions.chrome} · ${process.platform}`,
     builtin() ? `Server: this computer${stack && stack.url ? ` (${stack.url})` : ' (starting)'}` : `Server: ${client.serverUrl}`,
     pairState.user ? `Signed in as ${pairState.user.nickname}` : 'Not signed in',
+    ...(developer.on ? ['Developer mode: on'] : []),
     '',
-    'A place in a booking queue, bought and kept. This app shows your lines, tells you when a slot is yours, and opens the booking page so you can take it. It keeps your personal details on this machine and never sees your password.',
+    'Your place in line for appointments that are hard to get. This app shows your lines, looks for openings, and books your slot when it is your turn — or opens the booking page for you to finish. It keeps your personal details on this machine and never sees your password.',
   ];
   dialog.showMessageBox({ type: 'info', title: 'About LineRight Regbot', message: lines[0], detail: lines.slice(1).join('\n'), buttons: ['OK'] })
     .catch(() => {});
@@ -564,7 +612,7 @@ async function refreshSites(reason = 'timer') {
   if (builtin() && !(stack && stack.url)) return;
   try {
     const doc = await client.sites();
-    sitesCache = doc.sites || [];
+    sitesCache = developerMode.sitesFor(doc.sites, developer.on);
     for (const s of sitesCache) if (s.portal_url) rememberBookingOrigin(s.portal_url);
     rebuildMenu();
     trace(`sites: ${sitesCache.length} (${reason})`);
@@ -1036,6 +1084,9 @@ function settingsView() {
     // A run told where to go (--server, --practice): Settings still saves, but
     // this run stays where it was told.
     forced: forcedRun,
+    // Developer mode, and what holds it on: practice, --developer, or nothing
+    // (View → Developer mode). Off, Settings offers the public site only.
+    developer,
     // What the address field shows for somebody else's server, even while another is in use.
     remoteUrl: store.get('serverUrl', '') === siteUrl() ? '' : store.get('serverUrl', ''),
     dmvTarget: store.get('dmvTarget', 'standin'),
@@ -1096,25 +1147,36 @@ function wireIpc() {
   handle('chrome:height', ({ px }) => tabs.setChromeHeight(px));
 
   // -- the application half
+  // Test sites, made up for demos and tests, only in developer mode — and
+  // marked, so a screen never shows one without saying so (developer.js).
   handle('server:sites', async ({ q }) => {
     await serverReady();
     const doc = await client.sites(q || '');
+    const sites = developerMode.sitesFor(doc.sites, developer.on);
     if (!q) {
-      sitesCache = doc.sites || [];
+      sitesCache = sites;
       for (const s of sitesCache) if (s.portal_url) rememberBookingOrigin(s.portal_url);
       rebuildMenu();
     }
-    return doc;
+    return { ...doc, sites };
   });
   handle('server:site', async ({ slug }) => {
     await serverReady();
     const doc = await client.site(slug);
-    if (doc.site && doc.site.portal_url) rememberBookingOrigin(doc.site.portal_url);
+    if (doc.site) {
+      doc.site.mock = developerMode.isMock(doc.site);
+      if (doc.site.mock && !developer.on) throw new Error(developerMode.TEST_ONLY);
+      if (doc.site.portal_url) rememberBookingOrigin(doc.site.portal_url);
+    }
     return withNeeds(doc);
   });
   handle('server:board', async ({ id }) => {
     await serverReady();
     const doc = await client.board(id);
+    if (doc.queue) {
+      doc.queue.mock = developerMode.isMock(doc.queue);
+      if (doc.queue.mock && !developer.on) throw new Error(developerMode.TEST_ONLY);
+    }
     if (doc.portal_url) rememberBookingOrigin(doc.portal_url);
     return withNeeds(doc);
   });
@@ -1323,6 +1385,13 @@ function wireIpc() {
   handle('settings:get', () => settingsView());
   handle('settings:set', async ({ serverMode: mode, serverUrl, updateUrl, clientName, readerEnabled, realDmvRobots,
     checking, realDmvChecks, reimportRemind }) => {
+    // Another server, practice and an update feed of the app's own are for the
+    // people who work on regbot: developer mode's, wherever the asking came from.
+    const elsewhere = mode === 'builtin' || mode === 'remote'
+      || (mode === undefined && typeof serverUrl === 'string' && !builtin());
+    if ((elsewhere || typeof updateUrl === 'string') && !developer.on) {
+      throw new Error('That is part of developer mode: turn it on first (View → Developer mode).');
+    }
     if (typeof updateUrl === 'string') store.set('updateUrl', updateUrl.trim().replace(/\/+$/, ''));
     if (typeof readerEnabled === 'boolean') {
       store.set('readerEnabled', readerEnabled);
@@ -1407,7 +1476,9 @@ function wireUpdates() {
     return;
   }
   updates = updater.wire(autoUpdater, {
-    feedUrl: store.get('updateUrl', ''),
+    // A feed chosen in Settings is a developer's, and followed only in developer
+    // mode: what an installed copy runs next is the published release's to say.
+    feedUrl: developer.on ? store.get('updateUrl', '') : (store.defaults.updateUrl || ''),
     isPackaged: app.isPackaged,
     force: process.env.REGBOT_FORCE_UPDATES === '1',
     log,
@@ -1574,6 +1645,8 @@ function smoke() {
       screen: lastNavigate,
       bookingOrigins: [...bookingOrigins],
       serverMode,
+      developer,
+      siteList: sitesCache.map((s) => ({ slug: s.slug, mock: s.mock })),
       stack: stack ? (({ url, dmv, dmvBase, owner, packaged, python, services }) => ({
         url, dmv, dmvBase, owner, packaged, python,
         services: Object.fromEntries(Object.entries(services).map(([name, s]) => [name, { state: s.state, port: s.port, pid: s.pid, message: s.message }])),
@@ -1609,6 +1682,7 @@ function loadState() {
   });
   if (builtin()) client.token = makeStack().token;
   pairState = { paired: client.paired, user: null, pending: null, message: '' };
+  developer = developerMode.resolve({ argv, env: process.env, store, practice: builtin() });
 }
 
 async function main() {
@@ -1701,7 +1775,7 @@ async function main() {
     event.preventDefault();
     shutdown(0);
   });
-  log(`LineRight Regbot ${app.getVersion()} — server ${builtin() ? `on this computer (${stack.paths.packaged ? 'bundled' : `python ${stack.paths.python}`})` : client.serverUrl} — ${client.paired ? 'signed in' : 'not signed in'} — profile ${profile.view().filled ? (profile.encrypted ? 'encrypted' : 'plain') : 'empty'} (keychain: ${profile.backend})`);
+  log(`LineRight Regbot ${app.getVersion()} — server ${builtin() ? `on this computer (${stack.paths.packaged ? 'bundled' : `python ${stack.paths.python}`})` : client.serverUrl} — ${client.paired ? 'signed in' : 'not signed in'} — profile ${profile.view().filled ? (profile.encrypted ? 'encrypted' : 'plain') : 'empty'} (keychain: ${profile.backend})${developer.on ? ' — developer mode' : ''}`);
   // The Linux launcher adds this where the system allows Chromium no sandbox
   // (scripts/linux-launcher.js); say so, since tabs show the open web.
   if (app.commandLine.hasSwitch('no-sandbox')) log("pages run without Chromium's sandbox (--no-sandbox)");

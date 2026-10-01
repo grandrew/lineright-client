@@ -29,10 +29,16 @@ The maintainers keep two more things with the server: a stand-in of the DMV
 appointment site, which the robots' browser flows are tested against end to end
 so that no test ever consumes a real appointment, and the long-running tests
 that run real apps against it. With a checkout of the server beside this one
-(`../lineright-server`, or `LINERIGHT_SERVER_DIR`), the app also offers
+(`../lineright-server`, or `LINERIGHT_SERVER_DIR`), the app in **developer
+mode** (View → Developer mode, or `npm start -- --developer`) also offers
 **Practice on this computer**, which runs that server and the stand-in locally,
 and a few tests that hold the two halves to one contract stop skipping. Nothing
 of the server is ever built into an installer.
+
+Developer mode is also where the made-up sites a development server lists are
+shown — marked as test sites — and where the app can be pointed at another
+server; everybody else's app pairs with lineright.org and lists only what is
+real there.
 
 ## Running it
 

@@ -5,14 +5,14 @@
 #                         CI — see .github/workflows/desktop-release.yml)
 #   npm run release       build and publish to the feed below
 #
-# Every installer carries what the app runs itself: the DMV robots and their
-# stand-in (../dmq) and the Chromium the robots drive. scripts/bundle.js puts
-# them in vendor/ — the browser for the platform and CPU being packed — and the
-# extraResources below copy them beside the app, where src/robots.js and
-# src/stack.js find them. It runs by itself before each pack (beforePack), so a
-# build needs nothing installed beyond npm ci. The lineright server is not part
-# of this app and never goes in an installer (practice mode finds a checkout of
-# it: src/stack.js).
+# Every installer carries what the app runs itself: the DMV robots (../dmq)
+# and the Chromium they drive. scripts/bundle.js puts them in vendor/ — the
+# browser for the platform and CPU being packed — and the extraResources below
+# copy them beside the app, where src/robots.js and src/stack.js find them. It
+# runs by itself before each pack (beforePack), so a build needs nothing
+# installed beyond npm ci. The lineright server and its DMV stand-in are not
+# part of this app and never go in an installer (practice mode, in developer
+# mode, finds a checkout of them: src/stack.js).
 #
 # The `publish` block is embedded in the app as app-update.yml, which is what
 # electron-updater reads at runtime. GitHub Releases needs GH_TOKEN at publish

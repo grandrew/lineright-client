@@ -54,15 +54,32 @@ async function dmvStub() {
   return { server, seen, base: `http://127.0.0.1:${port}` };
 }
 
-/** The regbot server: one signed-in user, one position, one hand-off. */
+/**
+ * The regbot server: one signed-in user, one position, one hand-off — and two
+ * sites, the California DMV and a made-up one, as a development server lists
+ * them. The app shows the made-up one only in developer mode.
+ */
 async function regbotStub(dmvBase, { needs = [] } = {}) {
   const seen = { syncs: [], sites: 0 };
+  const sites = [
+    { slug: 'ca-dmv', name: 'California DMV', category: 'Government', tagline: 'Drive tests and REAL ID.', description: '', image_url: 'x', accent: '#0b63d6', connector: 'dmv.ca.gov.qmatic', mock: false, portal_url: `${dmvBase}/portal/appointments/select-appointment-type?option=RID`, open_queues: 1, live_bids: 7, top_bid: 200, queues: [] },
+    { slug: 'helios-arena', name: 'Helios Arena', category: 'Events', tagline: 'Made up.', description: '', image_url: 'x', accent: '#f43f5e', connector: 'helios.arena.boxoffice', mock: true, portal_url: `${dmvBase}/helios`, open_queues: 1, live_bids: 3, top_bid: 90, queues: [] },
+  ];
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
     if (url.pathname === '/api/client/sites') {
       seen.sites += 1;
-      return json(200, { protocol: 'RQP/1', sites: [{ slug: 'ca-dmv', name: 'California DMV', category: 'Government', tagline: 'The real one.', description: '', image_url: 'x', accent: '#0b63d6', portal_url: `${dmvBase}/portal/appointments/select-appointment-type?option=RID`, open_queues: 1, live_bids: 7, top_bid: 200, queues: [] }] });
+      return json(200, { protocol: 'RQP/1', sites });
+    }
+    const one = url.pathname.match(/^\/api\/client\/sites\/([a-z-]+)$/);
+    if (one) {
+      const site = sites.find((s) => s.slug === one[1]);
+      if (!site) return json(404, { error: 'No such site.' });
+      return json(200, { protocol: 'RQP/1', kind: 'client.site', site, fields: [], kept_on_device: [], places: 0,
+        queues: [{ id: 31, slug: 'q', name: 'A line', description: '', status: 'open', window: ['2026-10-01', '2026-12-31'],
+          hours: ['09:00', '17:00'], weekdays: 'Mon–Fri', timezone: 'America/Los_Angeles', min_bid: 50,
+          slots_per_cycle: 1, cycle_seconds: 90, dispatch: 'cycle', live_bids: 3, top_bid: 90, mine: null }] });
     }
     if (url.pathname === '/api/client/sync') {
       seen.syncs.push({ auth: req.headers.authorization });
@@ -262,7 +279,9 @@ test('the app opens the booking page when a hand-off arrives, and fills the form
   assert.equal(result.positions, 1);
   assert.equal(seen.syncs[0].auth, 'Bearer smoke-token');
   assert.ok(seen.sites >= 1, 'the sites were asked for (for the menu)');
+  // The server lists two; the made-up one is for developer mode only.
   assert.equal(result.sites, 1);
+  assert.deepEqual(result.developer, { on: false, forced: null });
 
   // Browser mode, one tab: the hand-off's page, opened once across many syncs.
   assert.equal(result.mode, 'tab');
@@ -285,6 +304,10 @@ test('the app opens the booking page when a hand-off arrives, and fills the form
   assert.ok(!file.items.some((i) => /recommended/.test(i)), `nor pressed in the menu: ${file.items}`);
   const sites = result.menu.find((m) => /Sites/.test(m.label));
   assert.ok(sites.items.includes('California DMV'), `the server's sites are in the menu: ${sites.items}`);
+  assert.ok(!sites.items.some((i) => /Helios/.test(i)), `but not the made-up one: ${sites.items}`);
+  const view = result.menu.find((m) => /View/.test(m.label));
+  assert.ok(view.items.includes('Developer mode'), `View switches developer mode: ${view.items}`);
+  assert.ok(!view.items.some((i) => /Developer Tools/i.test(i)), `and has no developer tools without it: ${view.items}`);
 
   // Whatever this machine has, looking for browsers on it answered without
   // throwing — a build machine with none is as valid an answer as five.
@@ -303,6 +326,92 @@ test('the app opens the booking page when a hand-off arrives, and fills the form
   assert.deepEqual(result.autofill.fields.map((f) => f.key).sort(), ['email', 'first_name', 'last_name', 'phone']);
   assert.ok(result.bookingOrigins.includes(dmv.base), `the DMV stub is a booking origin: ${result.bookingOrigins}`);
   assert.ok(!result.bookingOrigins.includes(`http://127.0.0.1:${port}`), 'the regbot server itself never is');
+});
+
+test('test sites are shown only in developer mode, marked as test sites, and View switches it',
+  { timeout: 150000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+  const dmv = await dmvStub();
+  const { server, port } = await regbotStub(dmv.base);
+  t.after(() => { server.close(); dmv.server.close(); });
+
+  // Started with it off and asked for the made-up site's page; then switched
+  // on and off from the menu, through the main process's own inspector, as a
+  // click on View → Developer mode would.
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-developer-'));
+  seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
+  const run = startApp({ electron, display, port, userData, exitAfter: 45000,
+    extra: ['--remote-debugging-port=0', '--inspect=0', '--page=site:helios-arena'] });
+  const pages = [];
+  try {
+    const devPort = Number(await until(() => fs.readFileSync(path.join(userData, 'DevToolsActivePort'), 'utf8').split('\n')[0], 30000, 'DevTools'));
+    const ui = await pageWhere(devPort, (u) => u.endsWith('/ui/index.html'), 'the app page');
+    pages.push(ui);
+    const inspector = await until(() => (`${run.stdout()}\n${run.stderr()}`.match(/Debugger listening on (ws:\/\/\S+)/) || [])[1], 30000, 'the main process inspector');
+    const main = await devtools(inspector);
+    pages.push(main);
+    const mainJs = JSON.stringify(path.join(__dirname, '..', 'src', 'main.js'));
+    const switchDeveloper = () => main.evaluate(`(() => {
+      const { Menu } = process.getBuiltinModule('module').createRequire(${mainJs})('electron');
+      const view = Menu.getApplicationMenu().items.find((i) => /View/.test(i.label));
+      view.submenu.items.find((i) => /^Developer mode/.test(i.label)).click();
+      return true;
+    })()`);
+    const text = () => ui.evaluate("document.getElementById('page').innerText");
+    const cards = () => ui.evaluate("[...document.querySelectorAll('.site-card')].map((c) => [c.dataset.slug, c.classList.contains('site-test'), Boolean(c.querySelector('.test-badge'))])");
+    const flagged = () => ui.evaluate("!document.getElementById('devmode').classList.contains('hidden')");
+    const listed = (n, what) => until(async () => { const c = await cards(); return c.length === n && c; }, 15000, what);
+
+    // Off: the made-up site's page does not open, and it is not listed.
+    let said = '';
+    assert.match(await until(async () => { said = await text(); return /developer mode/.test(said) && said; }, 20000, 'the test site turned away')
+      .catch((err) => { throw new Error(`${err.message}; the page said: ${said.slice(0, 400)}`); }),
+      /test site, made up for demos and tests\. The app shows test sites only in developer mode/);
+    await ui.evaluate("window.regbot.call('tabs:home').then(() => document.querySelector('#topnav [data-page=sites]').click())");
+    assert.deepEqual(await listed(1, 'the sites'), [['ca-dmv', false, false]]);
+    assert.equal(await flagged(), false);
+
+    // On: listed, and marked as a test site wherever it shows.
+    await switchDeveloper();
+    assert.deepEqual(await listed(2, 'the test site listed'), [['ca-dmv', false, false], ['helios-arena', true, true]]);
+    assert.equal(await flagged(), true, 'the top bar says developer mode is on');
+    assert.match(await text(), /1 test site is listed too/);
+    await ui.evaluate("document.querySelector('.site-card[data-slug=helios-arena]').click()");
+    assert.match(await until(async () => { const s = await text(); return /Helios Arena/.test(s) && s; }, 15000, 'its page'),
+      /Test site\. Made up for demos and tests: nothing booked here is real/);
+    assert.deepEqual((await ui.evaluate("window.regbot.call('settings:get')")).developer, { on: true, forced: null });
+
+    // Off again: the page it was on goes, and so does the site.
+    await switchDeveloper();
+    assert.deepEqual(await listed(1, 'the test site gone'), [['ca-dmv', false, false]]);
+    assert.equal(await flagged(), false);
+    // Nor does Settings take another server, or an update feed of the app's own.
+    for (const ask of ["{ serverMode: 'remote', serverUrl: 'http://127.0.0.1:9' }", "{ serverMode: 'builtin' }", "{ updateUrl: 'http://127.0.0.1:9/feed' }"]) {
+      assert.match((await ui.evaluate(`window.regbot.call('settings:set', ${ask})`)).error || '', /part of developer mode/, ask);
+    }
+  } finally {
+    for (const p of pages) p.close();
+  }
+  const result = await run.result;
+  assert.deepEqual(result.developer, { on: false, forced: null });
+  assert.equal(result.server, `http://127.0.0.1:${port}`, 'still where it was told to go');
+  assert.equal(result.sites, 1);
+  const saved = JSON.parse(fs.readFileSync(path.join(userData, 'regbot.json'), 'utf8'));
+  assert.equal(saved.developerMode, undefined, 'turned on and off again, the settings say nothing of it');
+  assert.equal(saved.updateUrl, undefined);
+
+  // --developer: on for the run, says so in the menu, and has the developer tools there.
+  const forced = await runApp({ electron, display, port, extra: ['--developer'],
+    userData: fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-developer-')) });
+  assert.deepEqual(forced.developer, { on: true, forced: 'flag' });
+  assert.deepEqual(forced.siteList, [{ slug: 'ca-dmv', mock: false }, { slug: 'helios-arena', mock: true }]);
+  const menuOf = (name) => forced.menu.find((m) => new RegExp(name).test(m.label)).items;
+  assert.ok(menuOf('Sites').includes('Helios Arena — test site'), `${menuOf('Sites')}`);
+  assert.ok(menuOf('View').includes('Developer mode (on for this run)'), `${menuOf('View')}`);
+  assert.ok(menuOf('View').some((i) => /Developer Tools/i.test(i)), `${menuOf('View')}`);
 });
 
 test('a hand-off for a line the profile is not ready for opens the profile, not the form',
@@ -375,12 +484,19 @@ test('in practice mode the app runs its own — site, processor and stand-in —
   assert.equal(result.paired, true, 'signed in with no sign-in');
   assert.ok(result.stack.owner && result.stack.owner.nickname, 'as an account made for this person');
   assert.equal(result.synced, true);
+  // Practising is developer mode, so the seeded catalogue is all there: the
+  // California DMV, and the made-up sites, each marked as one by the server.
+  assert.deepEqual(result.developer, { on: true, forced: 'practice' });
   assert.equal(result.sites, 6, 'the seeded catalogue');
+  assert.deepEqual(result.siteList.filter((s) => !s.mock).map((s) => s.slug), ['ca-dmv']);
 
   const file = result.menu.find((m) => /File/.test(m.label));
   assert.ok(!file.items.some((i) => /Sign (in|out)/.test(i)), `nobody to sign in to: ${file.items}`);
   const view = result.menu.find((m) => /View/.test(m.label));
   assert.ok(view.items.includes('Control room') && !view.items.includes('The LineRight Regbot website'), `${view.items}`);
+  assert.ok(view.items.includes('Developer mode (on while practising)'), `${view.items}`);
+  const sites = result.menu.find((m) => /Sites/.test(m.label)).items;
+  assert.equal(sites.filter((i) => / — test site$/.test(i)).length, 5, `${sites}`);
 
   // Its data is under the app's own user data, beside its credentials.
   for (const f of ['regbot.db', 'desktop.json', 'regbot.env', 'logs/web.log', 'logs/worker.log']) {

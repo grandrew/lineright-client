@@ -44,6 +44,10 @@
   const left = (h) => (h.seconds_left || 0) - (Date.now() - state.docAt) / 1000;
   const paired = () => Boolean(state.pair && state.pair.paired);
   const builtin = () => Boolean(state.settings ? state.settings.serverMode === 'builtin' : state.stack);
+  // Developer mode (src/developer.js): test sites, practice, other servers.
+  const dev = () => Boolean(state.settings && state.settings.developer && state.settings.developer.on);
+  // What a test site says about itself, wherever one is shown.
+  const TEST_NOTE = '<b>Test site.</b> Made up for demos and tests: nothing booked here is real. It is listed because developer mode is on.';
   function ago(ts) {
     if (!ts) return '—';
     const secs = Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 1000));
@@ -170,6 +174,12 @@
       el.textContent = down ? 'the server on this computer is not running — see Settings' : 'starting the server on this computer…';
     }
     else { el.className = 'muted'; el.textContent = ''; }
+  }
+
+  // Said in the top bar while developer mode is on, so a test site is never
+  // taken for what everybody else sees.
+  function renderDev() {
+    $('devmode').classList.toggle('hidden', !dev());
   }
 
   function renderUpdate() {
@@ -432,7 +442,7 @@
         ? 'The LineRight Regbot app shows your lines, looks for openings, and books a slot for you from this computer when it is your turn. It keeps your personal details on this machine.'
         : `LineRight Regbot keeps the line on its website${host ? `, <b>${esc(host)}</b>` : ''}: who is waiting, in what order, and what a place is worth. Your account is there; this app is how you take part — it bids, looks for openings, and books for you from this computer, with your personal details never leaving it.`}</p>
       ${body}
-      <p class="small muted" style="margin:16px 0 0; text-align:center">Server: <span class="num">${esc((state.settings && state.settings.serverUrl) || '')}</span> · <a id="s-settings">change</a> · <a id="s-browse">browse the sites without signing in</a></p>
+      <p class="small muted" style="margin:16px 0 0; text-align:center">Server: <span class="num">${esc((state.settings && state.settings.serverUrl) || '')}</span>${dev() ? ' · <a id="s-settings">change</a>' : ''} · <a id="s-browse">browse the sites without signing in</a></p>
     </div></div>`;
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
     on('s-start', async () => { const reply = await api.call('pair:start'); state.pair = reply; renderSignin(); });
@@ -522,22 +532,26 @@
     function mineCount(slug) { return ((state.doc && state.doc.positions) || []).filter((p) => p.site_slug === slug).length; }
     const sites = state.sites;
     const shown = (sites || []).filter((s) => siteMatches(s, state.query));
+    // Only ever here in developer mode (main.js leaves them out otherwise), and said so.
+    const tests = (sites || []).filter((s) => s.mock).length;
     page.innerHTML = `<div class="wrap">
       ${checkingAsk()}
       <div class="search">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="q" type="text" value="${esc(state.query)}" autocomplete="off" spellcheck="false" placeholder="Search sites, categories or lines — try “DMV”, “clinic”, “permit”">
+        <input id="q" type="text" value="${esc(state.query)}" autocomplete="off" spellcheck="false" placeholder="Search sites or lines — try “DMV” or “REAL ID”">
       </div>
+      ${tests ? `<div class="note test-note" style="margin-bottom:14px"><b>Developer mode:</b> ${num(tests)} test site${tests === 1 ? ' is' : 's are'} listed too, marked <span class="test-badge">Test site</span>. They are made up for demos and tests, and nothing booked on them is real. <b>View → Developer mode</b> hides them.</div>` : ''}
       ${sites === null ? '<div class="empty">Loading the sites…</div>'
         : !sites.length ? (builtin() ? '<div class="empty">The server on this computer lists no sites yet. Settings → Server says how it is doing.</div>'
           : `<div class="empty">The server lists no sites. Is it running at <span class="num">${esc((state.settings && state.settings.serverUrl) || 'the configured address')}</span>?</div>`)
         : !shown.length ? `<div class="card empty">Nothing matches <strong>${esc(state.query)}</strong>. <a id="q-clear">Show all ${sites.length} sites</a></div>`
         : `<div class="site-grid">${shown.map((s) => `
-          <div class="card site-card" data-slug="${esc(s.slug)}" style="--accent-raw:${esc(s.accent)}">
-            <div class="site-img"><span class="site-cat">${esc(s.category)}</span><img src="${esc(s.image_url)}" alt="" loading="lazy"></div>
+          <div class="card site-card${s.mock ? ' site-test' : ''}" data-slug="${esc(s.slug)}" style="--accent-raw:${esc(s.accent)}">
+            <div class="site-img"><span class="site-cat">${esc(s.category)}</span>${s.mock ? '<span class="test-badge on-img">Test site</span>' : ''}<img src="${esc(s.image_url)}" alt="" loading="lazy"></div>
             <div class="site-body">
               <h3>${esc(s.name)}</h3>
               <p>${esc(s.tagline)}</p>
+              ${s.mock ? '<p class="tiny test-line">Made up for demos and tests — no real appointments.</p>' : ''}
               <div class="site-foot">
                 <span><b>${num(s.open_queues)}</b> line${s.open_queues === 1 ? '' : 's'}</span>
                 <span><b>${num(s.live_bids)}</b> bidding</span>
@@ -586,6 +600,16 @@
       <li><span class="req-dot" style="background:${dot[f.state]}"></span><span>${esc(f.label)} <span class="home">${says[f.state]}</span></span></li>`).join('')}</ul>`;
   }
 
+  /**
+   * How a line hands out its slots, as the server says (`dispatch`): each one
+   * as an app finds it, to the best-placed bidder it fits — or a turn for the
+   * top few every cycle, the only kind with a next hand-off to count down to.
+   * A server from before it said so has cycles everywhere.
+   */
+  const byOffers = (q) => Boolean(q && q.dispatch === 'offers');
+  const dispatchChip = (q) => (byOffers(q) ? 'each slot as an app finds it'
+    : `top ${num(q.slots_per_cycle)} get a turn every ${num(q.cycle_seconds)}s`);
+
   function renderSite() {
     const slug = state.route.slug;
     const page = $('page');
@@ -599,6 +623,7 @@
     }
     const s = d.site;
     page.innerHTML = `<div class="wrap" style="--accent-raw:${esc(s.accent)}">
+      ${s.mock ? `<div class="note test-note" style="margin-bottom:14px">${TEST_NOTE}</div>` : ''}
       <div class="sitehead">
         <img src="${esc(s.image_url)}" alt="">
         <div style="flex:1; min-width:0">
@@ -632,7 +657,7 @@
                   <span class="chip">🕐 <strong>${esc(q.hours[0])}–${esc(q.hours[1])}</strong> ${esc(q.timezone)}</span>
                   <span class="chip">${esc(q.weekdays)}</span>
                   <span class="chip">entry <strong>${coins(q.min_bid)}</strong></span>
-                  <span class="chip">${num(q.slots_per_cycle)} taken every ${num(q.cycle_seconds)}s</span>
+                  <span class="chip">${dispatchChip(q)}</span>
                 </div>
               </div>`).join('')}
             <p class="tiny muted" style="margin:10px 0 0">Need another kind of appointment on ${esc(s.name)}? <a id="site-ask">Ask for a line</a>.</p>
@@ -699,9 +724,11 @@
   }
 
   function boardRows(b) {
-    const slots = b.queue.slots_per_cycle;
+    // Who is in the window for the next turn: a line that hands each slot out
+    // as it is found has no such window — the slot goes to whoever it fits.
+    const slots = byOffers(b.queue) ? 0 : b.queue.slots_per_cycle;
     if (!b.bids.length) return '<div class="empty">Nobody is in this line yet. The first bid takes the lead outright.</div>';
-    return b.bids.map((r, i) => `${i === slots && b.bids.length > slots ? `<div class="slot-line">next ${slots} get handed over</div>` : ''}
+    return b.bids.map((r, i) => `${slots && i === slots && b.bids.length > slots ? `<div class="slot-line">next ${slots} get handed over</div>` : ''}
       <div class="bid-row r${i + 1}${r.mine ? ' mine' : ''}${i < slots ? ' in-slot' : ''}">
         <div class="bid-rank">${num(r.rank)}</div>
         <div class="bid-who"><span class="bid-nick">${esc(r.nickname)}${r.mine ? '<span class="tag tag-you">you</span>' : ''}${r.status === 'processing' ? '<span class="tag tag-processing">booking</span>' : ''}</span>
@@ -736,7 +763,9 @@
     }
     state.boardShape = shape;
     const side = b.mine ? youPanel(b) : joinPanel(b);
+    const offers = byOffers(q);
     page.innerHTML = `<div class="wrap" style="--accent-raw:${esc(q.accent)}">
+      ${q.mock ? `<div class="note test-note" style="margin-bottom:14px">${TEST_NOTE}</div>` : ''}
       <div class="board-head">
         <h1>${esc(q.name)}</h1>
         <p class="small muted" style="margin:0 0 10px">${esc(q.description)}</p>
@@ -752,9 +781,10 @@
         <div class="card">
           <div class="between" style="padding:14px 18px 12px; border-bottom:1px solid var(--line-soft)">
             <div><div class="panel-title" style="margin:0">Live order book</div><div class="tiny muted" style="margin-top:3px">Highest bid first · ties go to whoever bid earliest</div></div>
-            <div style="text-align:right"><div class="countdown" id="countdown">—</div><div class="tiny muted">until next hand-off</div></div>
+            ${offers ? '<div class="tiny muted" style="text-align:right; max-width:260px">Each opening an app finds goes at once to the best-placed bidder whose offices it fits.</div>'
+              : '<div style="text-align:right"><div class="countdown" id="countdown">—</div><div class="tiny muted">until next hand-off</div></div>'}
           </div>
-          <div class="dispatch-bar"><div class="dispatch-fill" id="dispatchFill" style="width:0%"></div></div>
+          ${offers ? '' : '<div class="dispatch-bar"><div class="dispatch-fill" id="dispatchFill" style="width:0%"></div></div>'}
           <div class="board-header-row"><span>#</span><span>Bidder</span><span>Bid</span><span>Preferred slot</span></div>
           <div id="boardRows">${boardRows(b)}</div>
         </div>
@@ -763,8 +793,9 @@
           <div class="panel">
             <div class="panel-title">The line</div>
             <dl>
-              <div class="kv"><dt>Taken per cycle</dt><dd>${num(q.slots_per_cycle)}</dd></div>
-              <div class="kv"><dt>Cycle length</dt><dd>${num(q.cycle_seconds)}s</dd></div>
+              ${offers ? '<div class="kv"><dt>Slots</dt><dd style="font-family:var(--sans)">as apps find them</dd></div>'
+                : `<div class="kv"><dt>Turns per cycle</dt><dd>${num(q.slots_per_cycle)}</dd></div>
+              <div class="kv"><dt>Cycle length</dt><dd>${num(q.cycle_seconds)}s</dd></div>`}
               <div class="kv"><dt>Booking system</dt><dd>${esc(q.connector)}</dd></div>
               <div class="kv"><dt>Status</dt><dd><span class="tag tag-${q.status === 'open' ? 'active' : esc(q.status)}">${esc(q.status)}</span></dd></div>
             </dl>
@@ -786,7 +817,7 @@
     if (b.handoff) {
       inner = `<div class="sep"></div><div class="note warn">☞ It is your turn on this line — see the bar at the top. Book it on the site, then click <b>I booked it</b>.</div>`;
     } else if (m.status === 'processing') {
-      inner = `<div class="sep"></div><p class="small warn" style="margin:0">Your bid is with ${esc(q.connector)} right now. It is frozen until the processor reports back.</p>`;
+      inner = '<div class="sep"></div><p class="small warn" style="margin:0">A slot is being booked for you right now. Your bid is held until that settles.</p>';
     } else {
       const lead = Math.max(b.to_lead - m.amount, b.min_raise);
       inner = `<div class="sep"></div>
@@ -803,7 +834,9 @@
     return `<div class="panel you-panel">
       <div class="panel-title">Your position</div>
       <div class="position-big"><span class="position-num" id="myRank">${num(m.rank)}</span><span class="position-of">of <span id="myField">${num(b.field_size)}</span> · <span id="myAmount">${coins(m.amount)}</span> staked</span></div>
-      ${m.rank <= q.slots_per_cycle ? '<p class="small ok" style="margin:4px 0 0">✓ In the hand-off window — your turn comes on the next cycle.</p>' : `<p class="small muted" style="margin:4px 0 0"><span id="toLead">${coins(b.to_lead)}</span> takes the lead right now.</p>`}
+      ${byOffers(q) && m.rank === 1 ? '<p class="small ok" style="margin:4px 0 0">✓ First in line: the next opening that fits your offices is yours.</p>'
+        : !byOffers(q) && m.rank <= q.slots_per_cycle ? '<p class="small ok" style="margin:4px 0 0">✓ In the hand-off window — your turn comes on the next cycle.</p>'
+        : `<p class="small muted" style="margin:4px 0 0"><span id="toLead">${coins(b.to_lead)}</span> takes the lead right now.</p>`}
       ${inner}
     </div>`;
   }
@@ -964,7 +997,7 @@
         <div class="pos-card" style="--accent-raw:${esc(p.accent)}">
           <div class="pos-rank ${p.rank === 1 ? 'lead' : ''}">${num(p.rank)}</div>
           <div style="min-width:0">
-            <div class="row" style="gap:8px; flex-wrap:wrap"><a data-board="${num(p.queue_id)}"><strong>${esc(p.queue_name)}</strong></a><span class="tag tag-${esc(p.status)}">${esc(p.status)}</span>${handoffs.has(p.bid_id) ? '<span class="tag tag-booking">your turn</span>' : ''}</div>
+            <div class="row" style="gap:8px; flex-wrap:wrap"><a data-board="${num(p.queue_id)}"><strong>${esc(p.queue_name)}</strong></a><span class="tag tag-${esc(p.status)}">${esc(p.status)}</span>${handoffs.has(p.bid_id) ? '<span class="tag tag-booking">your turn</span>' : ''}${p.mock ? '<span class="test-badge">Test site</span>' : ''}</div>
             <div class="small muted" style="margin-top:3px">${esc(p.site_name)} · position ${num(p.rank)} of ${num(p.field_size)} · asked for ${esc(prettyDate(p.preferred_date))} at ${esc(p.preferred_time)}</div>
             ${p.note ? `<div class="tiny muted" style="margin-top:3px">${esc(p.note)}</div>` : ''}
           </div>
@@ -1964,24 +1997,39 @@
     const picked = s.pendingRemote ? 'remote' : (s.serverChoice || (mode === 'builtin' ? 'builtin' : 'remote'));
     let siteHost = s.siteUrl || '';
     try { siteHost = new URL(s.siteUrl).host; } catch { /* no site named */ }
+    const signedIn = `<p class="small" style="margin:0">${s.user ? `Signed in as <b>${esc(s.user.nickname)}</b>. <a id="s-signout">Sign out</a>` : `Not signed in. <a id="s-signin">Create an account or sign in</a>`}</p>`;
+    const name = `<label class="field"><span class="field-label">This device's name</span><div class="row"><input id="s-name" value="${esc(s.clientName)}" style="flex:1"><button class="btn" id="s-name-save">Save</button></div>
+      <span class="field-help">How this app appears in the website's list of paired devices.</span></label>`;
+    if (!(s.developer && s.developer.on)) {
+      // The public app: the site the build names, and nothing else to choose.
+      // A server chosen in developer mode, or given on the command line, is
+      // said, with the way back.
+      if (picked === 'public') {
+        return `<div class="panel"><div class="panel-title">Server</div>
+          <p class="small" style="margin:0 0 12px"><b>LineRight Regbot</b> — ${esc(siteHost)}. The site that holds the line: everybody bidding is there, and this app pairs with your account on it, looks for openings for everyone, and books yours from this computer.</p>
+          ${name}${signedIn}</div>`;
+      }
+      return `<div class="panel"><div class="panel-title">Server</div>
+        <p class="small" style="margin:0 0 12px">This app is using <span class="num">${esc(s.serverUrl)}</span>${s.forced ? ', as it was told when it started (<span class="num">--server</span>)' : ', chosen in developer mode'}.</p>
+        ${s.siteUrl && !s.forced ? `<button class="btn btn-sm" id="s-use-public" style="margin-bottom:12px">Use LineRight Regbot — ${esc(siteHost)}</button>` : ''}
+        ${name}${signedIn}</div>`;
+    }
     const choice = `
       ${s.siteUrl ? `<div class="check"><input type="radio" name="s-mode" id="s-mode-public" value="public" ${picked === 'public' ? 'checked' : ''}>
         <label for="s-mode-public"><span class="small"><b>LineRight Regbot</b> — ${esc(siteHost)}</span>
         <span class="field-help">The site that holds the line. Everybody bidding is there; this app pairs with your account on it, looks for openings for everyone, and books yours from this computer.</span></label></div>` : ''}
       <div class="check"><input type="radio" name="s-mode" id="s-mode-builtin" value="builtin" ${picked === 'builtin' ? 'checked' : ''} ${s.practiceAvailable || picked === 'builtin' ? '' : 'disabled'}>
-        <label for="s-mode-builtin"><span class="small"><b>Practice on this computer</b> — a private copy of LineRight Regbot</span>
-        <span class="field-help">The website, the queue processor, the DMV robots and a practice DMV run here, with simulated rivals. Nothing you do there reaches anybody else, and nobody signs in.${s.practiceAvailable ? '' : ' It runs the LineRight Regbot server, which does not come with this app: it is offered when a checkout of it (lineright-server) is beside lineright-client, or <span class="num">LINERIGHT_SERVER_DIR</span> names one.'}</span></label></div>
+        <label for="s-mode-builtin"><span class="small"><b>Practice on this computer</b> — a private copy of LineRight Regbot <span class="test-badge">Developer</span></span>
+        <span class="field-help">The website, the queue processor, the DMV robots and a practice DMV run here, with simulated rivals and the test sites. Nothing you do there reaches anybody else, and nobody signs in.${s.practiceAvailable ? '' : ' It runs the LineRight Regbot server, which does not come with this app: it is offered when a checkout of it (lineright-server) is beside lineright-client, or <span class="num">LINERIGHT_SERVER_DIR</span> names one.'}</span></label></div>
       <div class="check"><input type="radio" name="s-mode" id="s-mode-remote" value="remote" ${picked === 'remote' ? 'checked' : ''}>
-        <label for="s-mode-remote"><span class="small"><b>Another LineRight Regbot server</b></span>
-        <span class="field-help">Somebody else's, at an address. You sign in on its website with a code this app shows you.</span></label></div>
-      ${s.forced ? '<p class="tiny muted" style="margin:6px 0 0">This run was told where to go when it started (<span class="num">--server</span> or <span class="num">--practice</span>). A choice made here is saved for the next one.</p>' : ''}`;
+        <label for="s-mode-remote"><span class="small"><b>Another LineRight Regbot server</b> <span class="test-badge">Developer</span></span>
+        <span class="field-help">A development server at an address. You sign in on its website with a code this app shows you.</span></label></div>
+      ${s.forced ? '<p class="tiny muted" style="margin:6px 0 0">This run was told where to go when it started (<span class="num">--server</span> or <span class="num">--practice</span>). A choice made here is saved for the next one.</p>' : ''}
+      <p class="tiny muted" style="margin:6px 0 0">Practice and other servers are here because developer mode is on (<b>View → Developer mode</b>).</p>`;
     if (mode !== 'builtin' || s.pendingRemote) {
       // Chosen here but not saved yet: the app is still where it was, whose own
       // address is no answer to "which other server".
       const pending = Boolean(s.pendingRemote);
-      const signedIn = `<p class="small" style="margin:0">${s.user ? `Signed in as <b>${esc(s.user.nickname)}</b>. <a id="s-signout">Sign out</a>` : `Not signed in. <a id="s-signin">Create an account or sign in</a>`}</p>`;
-      const name = `<label class="field"><span class="field-label">This device's name</span><div class="row"><input id="s-name" value="${esc(s.clientName)}" style="flex:1"><button class="btn" id="s-name-save">Save</button></div>
-        <span class="field-help">How this app appears in the website's list of paired devices.</span></label>`;
       if (picked === 'public') {
         return `<div class="panel"><div class="panel-title">Server</div>${choice}${name}${signedIn}</div>`;
       }
@@ -2054,7 +2102,7 @@
         <span class="field-help">Now and then the site asks this app to look at a line's offices and report what it sees, from this computer, with a browser the app runs out of sight. What it finds goes to whoever is first — which may be you.${s.publicSite ? ' On the real DMV it is automated traffic from your own internet address, a few pages at a time, so it waits for your yes.' : ''}${perHour ? ` The site adds ${perHour} to your credits for every hour this app is checking.` : ''}</span></label></div>
       <div class="check"><input type="checkbox" id="s-realdmv" ${s.realDmvRobots ? 'checked' : ''}>
         <label for="s-realdmv"><span class="small"><b>Let the app book for me on the real DMV</b> (dmv.ca.gov)</span>
-        <span class="field-help">Off until you say so. A booking it makes is a real appointment in your name, with the details in your profile. Off, the app opens the booking page for you to finish when a slot is yours. On a practice DMV the app books without asking.</span></label></div>
+        <span class="field-help">Off until you say so. A booking it makes is a real appointment in your name, with the details in your profile. Off, the app opens the booking page for you to finish when a slot is yours.${dev() ? ' On a practice DMV the app books without asking.' : ''}</span></label></div>
       <p class="tiny muted" style="margin:8px 0 0" id="s-robots-now">${r.booking ? `Booking ${esc(r.booking.where)} now.` : r.reading ? `Looking at ${esc(r.reading.queue_name)} now — ${num(r.reading.offices)} office${r.reading.offices === 1 ? '' : 's'}.` : lastLine}</p>
       ${bookedLine && !r.booking ? `<p class="tiny muted" style="margin:4px 0 0">${bookedLine}</p>` : ''}
     </div>`;
@@ -2100,11 +2148,11 @@
       <div class="panel-title">Start over</div>
       <p class="small" style="margin:0 0 6px"><b>This deletes from this computer, for good:</b></p>
       <ul class="small" style="margin:0 0 10px; padding-left:20px">
-        <li>the server on this computer and everything on it: your account there, your lines, bids, practice credits and their history, its settings file and its logs</li>
+        ${dev() ? '<li>the practice server on this computer, if there is one, and everything on it: your account there, your lines, bids, practice credits and their history, its settings file and its logs</li>' : ''}
         <li>this app's telemetry — what the Advanced screen plots</li>
         <li>your profile, every personal detail kept for booking forms</li>
         <li>sign-ins and anything else booking sites stored in this app's tabs</li>
-        <li>these settings: which server, which DMV the robots use, the update feed, this device's name</li>
+        <li>these settings: ${dev() ? 'which server, which DMV the robots use, the update feed, developer mode, ' : ''}this device's name, and what you said about checking lines and booking</li>
         ${s.serverMode !== 'builtin' && s.paired ? `<li>this device's sign-in to <span class="num">${esc(s.serverUrl)}</span>, which signs it out there too; your account on that server stays as it is</li>` : ''}
       </ul>
       <p class="small muted" style="margin:0 0 12px">Your other browsers and the app itself are not touched. The app then starts again as it did the first time.</p>
@@ -2130,7 +2178,8 @@
         ${serverPanel(s)}
         <div class="panel"><div class="panel-title">Updates</div>
           <p class="small" style="margin:0 0 10px"><span id="s-update-text">${esc(updateText(s.updates))}</span> <button class="btn btn-sm" id="s-check" ${s.updates && s.updates.phase === 'disabled' ? 'disabled' : ''} style="margin-left:8px">Check now</button></p>
-          <label class="field"><span class="field-label">Update feed</span><div class="row"><input id="s-feed" value="${esc(s.updateUrl || '')}" placeholder="blank = the feed this build was published to (GitHub Releases)" style="flex:1"><button class="btn" id="s-feed-save">Save</button></div></label>
+          ${dev() ? `<label class="field"><span class="field-label">Update feed <span class="test-badge">Developer</span></span><div class="row"><input id="s-feed" value="${esc(s.updateUrl || '')}" placeholder="blank = the feed this build was published to (GitHub Releases)" style="flex:1"><button class="btn" id="s-feed-save">Save</button></div>
+            <span class="field-help">Followed only in developer mode, from the next start.</span></label>` : ''}
         </div>
         ${robotsPanel(s)}
         ${againPanel(s)}
@@ -2165,7 +2214,8 @@
     }
     on('s-server-save', guarded(async () => { settle(await call('settings:set', { serverMode: 'remote', serverUrl: $('s-server').value })); toast('ok', 'Server saved. Sign in on it next.'); }));
     on('s-name-save', async () => { state.settings = await api.call('settings:set', { clientName: $('s-name').value }); toast('ok', 'Name saved — it shows on the next sign-in.'); renderSettings(false); });
-    on('s-feed-save', async () => { state.settings = await api.call('settings:set', { updateUrl: $('s-feed').value }); toast('ok', 'Update feed saved — takes effect on the next check.'); renderSettings(false); });
+    on('s-feed-save', guarded(async () => { settle(await call('settings:set', { updateUrl: $('s-feed').value })); toast('ok', 'Update feed saved — it is followed from the next start.'); }));
+    on('s-use-public', guarded(async () => { settle(await call('settings:set', { serverMode: 'public' })); toast('ok', 'Using the LineRight Regbot site. Create your account or sign in next.'); }));
     on('s-check', () => api.call('update:check'));
     on('s-signout', () => api.call('pair:forget'));
     on('s-signin', () => go('signin'));
@@ -2241,10 +2291,16 @@
       <p>The line itself — who is waiting, in what order, and what a place is worth — is kept on the LineRight Regbot website, and your account is there. The first time the app opens it asks you to create that account, or sign in if you have one: it opens the website in your usual browser on a page showing this app's code, you create the account (or sign in, with a password or with Google when the site offers it) and approve the code, and the app is signed in within a few seconds. It never sees your password. <b>File → Sign out</b> revokes this device; your positions keep their rank. Other devices of yours are listed under <b>Console → Account</b>, where any of them can be unpaired.</p>
       <h2>This app looks, and books, for you</h2>
       <p>While it is open the app checks lines for everybody in line: now and then the site asks it to look at a line's offices for openings, and the app's robot does, from this computer, and reports what it saw — and the site adds credits to your account for every hour of it. On the real DMV that is automated traffic from your own internet address, so the app asks once before it starts (<b>Check lines and earn credits</b>), and <b>Settings</b> turns it off again. The site decides who is first — finding a slot gives nobody a claim on it — and tells that person's app. When it is you, your app's robot books it with the details in your profile, on this computer; if the booking site asks for a human check, or anything else stops the robot, the booking page opens for you to finish before the clock runs out. On the real DMV the robot books only once you have said it may, in <b>Settings</b> — a separate yes from checking lines.</p>
-      <h2>Practice on this computer</h2>
-      <p><b>Settings → Server → Practice on this computer</b> runs a private copy of LineRight Regbot inside the app instead — the website, the queue processor, the DMV robots and a stand-in DMV, with simulated rival bidders — so you can see the whole thing move without anybody else in the line. Nobody signs in. <b>Settings → Server</b> shows each part running, restarts them and opens their logs, and <b>View → Control room</b> opens its operator's panel. To use somebody else's LineRight Regbot server, choose <b>Another LineRight Regbot server</b> there and give its address.</p>
+      ${dev() ? `<h2>Developer mode</h2>
+      <p>Developer mode is for the people who work on LineRight Regbot, and it is on: <b>View → Developer mode</b> turns it off (or on again), and <span class="num">--developer</span> on the command line turns it on for one run. It adds:</p>
+      <ul>
+        <li><b>Test sites.</b> A development or practice server lists made-up sites beside the real ones, for demos and tests. They are listed here only in developer mode, each marked <span class="test-badge">Test site</span>, and nothing booked on them is real.</li>
+        <li><b>Practice on this computer</b> (<b>Settings → Server</b>): a private copy of LineRight Regbot inside the app — the website, the queue processor, the DMV robots and a stand-in DMV, with simulated rival bidders — run from a checkout of the server (lineright-server) beside this app's. Nobody signs in. <b>Settings → Server</b> shows each part running, restarts them and opens their logs, and <b>View → Control room</b> opens its operator's panel. Developer mode stays on while the app practises.</li>
+        <li><b>Another LineRight Regbot server</b> (<b>Settings → Server</b>), at an address, such as a development one; and an <b>update feed</b> of the app's own (<b>Settings → Updates</b>).</li>
+        <li>Chromium's developer tools, in the <b>View</b> menu.</li>
+      </ul>` : ''}
       <h2>Sites and lines</h2>
-      <p><b>Sites</b> lists every booking system on the server; search by name, category or line. A site has one or more <em>lines</em> — one per appointment type — and each line is a live order book. Open a line to see who is ahead of you and to join it: your bid, the date and time you would like, and for some sites which office (or how far you will travel). Raise from the same panel; withdraw and the whole escrow comes back.</p>
+      <p><b>Sites</b> lists the booking systems LineRight Regbot keeps lines for; search by name or line. A site has one or more <em>lines</em> — one per appointment type — and each line is a live order book. Open a line to see who is ahead of you and to join it: your bid, the date and time you would like, and for some sites which office (or how far you will travel). Raise from the same panel; withdraw and the whole escrow comes back.</p>
       <h2>Your turn</h2>
       <p>When the board hands you a slot, a bar appears at the top with a countdown and your desktop gets a notification. Your app's robot books it for you when it can, and says so; otherwise the app opens the booking page in a tab — book it there, then click <b>I booked it</b> (a reference is optional) and the processor captures your escrow. Click <b>Pass</b> and it goes to the next bidder; you keep your place. Let the clock run out and the same happens.</p>
       <h2>Found a slot yourself?</h2>
@@ -2262,7 +2318,7 @@
         <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>Sites</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>2</kbd></td><td>Console</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>0</kbd></td><td>Back to the application from a tab</td></tr>
-        <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>Sign in (to another server)</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>Sign in</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Profile</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td><td>Sync now</td></tr>
         <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>Fill the form on this page from your profile</td></tr>
@@ -2285,6 +2341,7 @@
   $('found2').addEventListener('click', openFound);
   $('gear').addEventListener('click', () => go('settings'));
   $('buy').addEventListener('click', () => go('credits'));
+  $('devmode').addEventListener('click', () => go('help'));
   for (const b of document.querySelectorAll('#topnav button')) b.addEventListener('click', () => go(b.dataset.page));
   const address = $('address');
   address.addEventListener('focus', () => address.select());
@@ -2332,6 +2389,17 @@
     renderStatus();
     if (state.route.page === 'settings' && state.settings) renderSettings(false);
   });
+  // View → Developer mode, switched: the sites are listed again with or without
+  // the test ones, and a test site's page is not one to stay on.
+  api.on('developer:state', (d) => {
+    const onTest = (state.route.page === 'site' && state.siteDocs[state.route.slug] && state.siteDocs[state.route.slug].site.mock)
+      || (state.route.page === 'board' && state.board && state.board.queue.mock);
+    if (state.settings) state.settings.developer = d;
+    state.sites = null; state.siteDocs = {}; state.board = null;
+    renderDev();
+    if (onTest && !d.on) go('sites');
+    else render();
+  });
   api.on('toast', (t) => toast(t.kind || 'ok', t.text, t.ms));
   api.on('app:navigate', ({ page, params }) => go(page, params || {}));
   api.on('autofill:done', () => {});
@@ -2352,7 +2420,11 @@
     const again = await api.call('import:again-state');
     if (again && again.due) { state.again = again; renderAgain(); }
   });
-  api.call('settings:get').then((s) => { state.settings = s; state.stack = s.stack; renderStatus(); });
+  api.call('settings:get').then((s) => {
+    state.settings = s; state.stack = s.stack; renderStatus(); renderDev();
+    // The help and the sign-in screen say more in developer mode.
+    if (s.developer && s.developer.on && ['help', 'signin'].includes(state.route.page)) render();
+  });
   api.call('profile:get').then((p) => { state.profile = p; });
   api.call('robots:status').then((r) => { state.robots = r; renderStatus(); });
   applyMode(); renderUpdate();
