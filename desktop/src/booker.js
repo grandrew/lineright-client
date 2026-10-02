@@ -62,6 +62,9 @@ class Booker {
     onOutcome = () => {} }) {
     Object.assign(this, { runner, getClient, getStore, getProfile, reader, log, onState, onOutcome });
     this.current = null;
+    // Two hand-offs can arrive in one sync (one person, two lines), and each is
+    // booked at once: busy, and the booking on show, last until both are done.
+    this.running = new Map();   // job id -> the booking under way
     this.last = null;
     this.tried = new Set();
     this.pending = new Map();   // job id -> a booking the site has not heard about yet
@@ -157,7 +160,8 @@ class Booker {
     this.tried.add(h.job_id);
     const client = this.getClient();
     const where = h.slot ? `${h.slot.office_name} on ${h.slot.date} at ${h.slot.time}` : h.queue_name;
-    this.current = { job_id: h.job_id, queue_name: h.queue_name, where };
+    this.running.set(h.job_id, { job_id: h.job_id, queue_name: h.queue_name, where });
+    this.current = this.running.get(h.job_id);
     if (this.reader) this.reader.setBusy(true);
     this.onState(this.state());
     let outcome;
@@ -225,8 +229,9 @@ class Booker {
       this.log(`booking ${where}: ${outcome ? outcome.kind : 'stopped'}`);
       try { this.onOutcome({ kind: outcome ? outcome.kind : 'stopped', ms: Date.now() - started }); } catch { /* never the problem */ }
       this.last = outcome ? { job_id: h.job_id, queue_name: h.queue_name, where, ...outcome, at: Date.now() } : this.last;
-      this.current = null;
-      if (this.reader) this.reader.setBusy(false);
+      this.running.delete(h.job_id);
+      this.current = [...this.running.values()].at(-1) || null;
+      if (this.reader) this.reader.setBusy(this.running.size > 0);
       this.onState(this.state());
     }
   }

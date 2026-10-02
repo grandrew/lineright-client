@@ -217,3 +217,25 @@ test('the robot gets the hand-off\'s time, less a margin for the page, within bo
   assert.equal(budgetMs(50), 30000);
   assert.equal(budgetMs(undefined), 240000);
 });
+
+test('two bookings at once keep the app busy until both are done', async () => {
+  // One person in two lines can be handed two slots in one sync; the app books
+  // both at once, and must not offer to read until the second is done too.
+  const { booker, calls } = world();
+  const finish = {};
+  booker.runner.run = (kind, envelope) => new Promise((resolve) => {
+    finish[envelope.job_id] = () => resolve({ status: 'confirmed', confirmation: `TS-${envelope.job_id}` });
+  });
+  const first = booker.book(handoff());
+  const second = booker.book(handoff({ job_id: 78, robot: { ...handoff().robot,
+    request: { ...handoff().robot.request, job_id: 78, idempotency_key: 'rqp1-job-78-20260926' } } }));
+  await new Promise((r) => setImmediate(r));
+  finish[77]();
+  assert.equal((await first).kind, 'booked');
+  assert.equal(calls.busy.at(-1), true, 'still booking the second');
+  assert.equal(booker.state().booking.job_id, 78);
+  finish[78]();
+  assert.equal((await second).kind, 'booked');
+  assert.equal(calls.busy.at(-1), false);
+  assert.equal(booker.state().booking, null);
+});
