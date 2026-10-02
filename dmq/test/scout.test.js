@@ -5,7 +5,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -96,4 +96,26 @@ test('the scout carries nothing it could book with', async () => {
     assert.deepEqual(Object.keys(offer).sort(),
       ['office_code', 'office_lat', 'office_lng', 'office_name', 'slot_date', 'slot_time']);
   }
+});
+
+test('a scout whose app is gone stops, rather than read on for nobody', async () => {
+  // The app starts the scout in a process group of its own, as the desktop app
+  // does, and dies without stopping it — a crash, or being killed.
+  const launcher = `
+    const { spawn } = require('child_process');
+    const child = spawn(process.execPath, [${JSON.stringify(SCOUT)}], {
+      detached: true, stdio: ['pipe', 'ignore', 'ignore'],
+      env: { ...process.env, RQP_MODE: 'simulate', RQP_SIMULATE_DELAY_MS: '30000' },
+    });
+    child.stdin.end(${JSON.stringify(JSON.stringify(request()))});
+    console.log(child.pid);
+    // Long enough for the scout to be under way, as it is when an app dies.
+    setTimeout(() => process.exit(0), 2000);`;
+  const pid = Number(execFileSync(process.execPath, ['-e', launcher], { encoding: 'utf8' }).trim());
+  const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  const deadline = Date.now() + 8000;
+  while (alive() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 200));
+  const stillThere = alive();
+  if (stillThere) process.kill(pid, 'SIGKILL');
+  assert.equal(stillThere, false, 'it should stop within seconds of its app, not run out its 30 s');
 });

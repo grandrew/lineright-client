@@ -171,6 +171,22 @@ disk (`RQP_STATE_PATH`): confirmed bookings are recorded, and so are unconfirmed
 ones, which replay as the same refusal instead of running again. Any other failed
 attempt is not recorded, so it cannot block its own retry.
 
+It can also be asked for twice at once. An app closed or crashed mid-booking
+leaves its robot running, and started again it sends a second one for the same
+slot. Racing the first, the second would lose the slot to it and report it gone
+while the person held the appointment. So a run marks its booking as under way
+beside the store, with its process id, and says when it sends the form:
+
+- a second run waits for a first that is still going, up to `RQP_WAIT_MS`
+  (3 minutes), and answers with what it got;
+- if the first is gone and had sent the form, the booking may exist: the second
+  answers `unconfirmed` and records it, and nothing books it again;
+- if the first is gone and had not, nothing was booked, and the second books it.
+
+The booking robot goes on when nobody reads its output any more, so that it can
+finish and record what it made; the scout stops within seconds of the process
+that started it.
+
 ## A note on booking
 
 A confirmed slot is a real appointment at a government agency, under a real
@@ -189,9 +205,11 @@ the rest.
 | Variable | Meaning |
 |---|---|
 | `RQP_ALLOW_BOOKING` | Must be exactly `true` before a run will book. Anything else is a dry probe |
-| `RQP_STATE_PATH` | The replay store, default `./data/rqp-bookings.json` |
+| `RQP_STATE_PATH` | The replay store, default `./data/rqp-bookings.json`; the marks of runs under way, and its lock, sit beside it |
+| `RQP_WAIT_MS` | How long a booking waits for another run of the same booking still going, default 180000 |
 | `RQP_MODE` | `simulate`: answer without a browser or a network, to test both sides of the pipe |
 | `RQP_SIMULATE_OUTCOME` | What a simulated booking ends with: `BOOKED_SUCCESS`, `BOOKING_UNCONFIRMED`, `FOUND_AND_STOPPED`, `SLOT_GONE`, or `NO_AVAILABILITY` (the default) |
+| `RQP_SIMULATE_DELAY_MS` | How long a simulated run takes; a booking sends its form half way |
 | `DMV_BASE_URL` | The site to drive, default `https://www.dmv.ca.gov` |
 | `DATE_START`, `DATE_END` | Inclusive window, `YYYY-MM-DD` |
 | `DMV_SERVICE`, `DMV_OFFICES` | The appointment type and the offices, from the envelope |

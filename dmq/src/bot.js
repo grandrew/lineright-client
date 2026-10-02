@@ -308,7 +308,7 @@ async function describeUnconfirmed(page) {
   return message ? `still on ${where}, which said "${message}"` : `still on ${where}, no confirmation shown`;
 }
 
-async function bookAt(context, config, office, log) {
+async function bookAt(context, config, office, log, hooks = {}) {
   const page = await context.newPage();
   try {
     await applyCaptchaToken(page, config.captchaToken);
@@ -383,6 +383,9 @@ async function bookAt(context, config, office, log) {
     await page.getByRole('textbox', { name: /email address/i }).fill(config.email);
     await page.getByRole('textbox', { name: /phone number/i }).fill(config.phone);
     await press(page, /^continue$/i);
+    // Said before the form goes, so a run that dies after it is known to have
+    // perhaps booked (bin/rqp-handler.js, idempotency.js).
+    await hooks.onSubmit?.();
     // The last step: the confirmation is waited for below, not a fixed while.
     await press(page, /schedule appointment/i, { settle: false });
 
@@ -405,7 +408,11 @@ async function bookAt(context, config, office, log) {
   }
 }
 
-export async function run(env = process.env) {
+/**
+ * One run of the bot. `hooks.onSubmit` is called just before the booking form
+ * is sent, the one step that may leave an appointment behind.
+ */
+export async function run(env = process.env, hooks = {}) {
   const config = loadConfig(env);
   const log = makeRunLogger(config.runLogPath);
 
@@ -437,7 +444,7 @@ export async function run(env = process.env) {
       const office = config.target.office || config.offices[0]?.term;
       const date = new Date(`${config.target.date}T00:00:00`);
       log('TARGETED', `${office} ${config.target.date}${config.target.time ? ` ${config.target.time}` : ''}: booking the allocated slot directly`);
-      const booking = await bookAt(context, config, { office, term: office, date, time: config.target.time }, log);
+      const booking = await bookAt(context, config, { office, term: office, date, time: config.target.time }, log, hooks);
       return { ...booking, results: [] };
     }
 
@@ -464,7 +471,7 @@ export async function run(env = process.env) {
       return { status: 'FOUND_AND_STOPPED', best, results };
     }
 
-    const booking = await bookAt(context, config, best, log);
+    const booking = await bookAt(context, config, best, log, hooks);
     return { ...booking, best, results };
   } catch (error) {
     log('ERROR_OR_STUCK', error.message || 'Unknown error');
