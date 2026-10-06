@@ -21,7 +21,10 @@
  *                  Not after taking over from a quiet device, which most likely
  *                  booked it before it went quiet: the hand-off runs out its time
  *                  instead, for that device's "I booked it" to arrive.
- *   claimed        another of the person's devices has it; this one stands back.
+ *   claimed        another of the person's devices has it; this one stands back —
+ *                  unless this computer's robot booked it already, left running
+ *                  when the app crashed or was closed mid-booking: that booking
+ *                  is the appointment, and the app, started again, says so.
  *   too late       the slot is no longer held for them; nothing to open.
  *   anything else  a human check, a timeout, a booking the DMV did not confirm —
  *                  the booking page opens for the person to finish, as a hand-off
@@ -123,6 +126,10 @@ class Booker {
     // Offered to several, and somebody else booked it or found it gone already.
     if (h.over) return { ok: false, why: 'over' };
     if (this.tried.has(h.job_id)) return { ok: false, why: 'tried' };
+    // This computer's robot booked it already — before the app crashed, say —
+    // and the site never heard: that is the appointment, whichever of the
+    // person's devices holds the slot now. book() says so.
+    if (this.recorded(h)) return { ok: true, recorded: true };
     if (h.booker && !h.booker.you && !h.booker.silent) return { ok: false, why: 'elsewhere', device: h.booker.name };
     if (!this.runner.available()) return { ok: false, why: 'no-robot' };
     if (!targetAllowed(h.robot.base_url, this.getClient().serverUrl)) return { ok: false, why: 'target' };
@@ -141,17 +148,33 @@ class Booker {
     const values = this.getProfile();
     for (const key of h.robot.requires || []) personal[key] = String(values[key] || '').trim();
     envelope.personal_data = personal;
-    // The robot's replay store is this machine's, and outlives any one site or
-    // database; a key is only unique within the site that issued it.
-    let host = '';
-    try { host = new URL(this.getClient().serverUrl).host; } catch { /* no site: keep the key as it is */ }
-    if (host && envelope.idempotency_key) envelope.idempotency_key = `${host}/${envelope.idempotency_key}`;
+    if (envelope.idempotency_key) envelope.idempotency_key = this.keyFor(h);
     return envelope;
   }
 
   /**
+   * The key the robot books this hand-off under. Its replay store is this
+   * machine's, and outlives any one site or database; a key is only unique
+   * within the site that issued it, so the site's host goes in front.
+   */
+  keyFor(h) {
+    const key = h && h.robot && h.robot.request && h.robot.request.idempotency_key;
+    if (!key) return null;
+    let host = '';
+    try { host = new URL(this.getClient().serverUrl).host; } catch { /* no site: keep the key as it is */ }
+    return host ? `${host}/${key}` : key;
+  }
+
+  /** The booking this computer's robot made for this hand-off, if it made one: `{ confirmation, … }`. */
+  recorded(h) {
+    if (!h || !h.robot || typeof this.runner.recorded !== 'function') return null;
+    const record = this.runner.recorded(this.keyFor(h));
+    return record && record.confirmation ? record : null;
+  }
+
+  /**
    * Book it. Resolves to what happened:
-   *   { kind: 'booked', confirmation, unreported? } | { kind: 'gone', quiet?, device? } |
+   *   { kind: 'booked', confirmation, unreported?, recorded? } | { kind: 'gone', quiet?, device? } |
    *   { kind: 'elsewhere', device } | { kind: 'late', why } |
    *   { kind: 'page', why, unconfirmed? }
    */
@@ -166,6 +189,24 @@ class Booker {
     this.onState(this.state());
     let outcome;
     try {
+      const made = this.recorded(h);
+      if (made) {
+        // Booked by this computer's robot while the app was not there to say so
+        // (it crashed, or was closed, mid-booking). Say it now — no claim, and no
+        // second robot: another device may hold the slot by now, and its robot
+        // will have found it gone.
+        this.log(`${where} was booked by this computer's robot before the app stopped (${made.confirmation})`);
+        outcome = { kind: 'booked', confirmation: made.confirmation, recorded: true };
+        try {
+          await client.booked(h.job_id, made.confirmation, { robot: true });
+        } catch (err) {
+          outcome.unreported = err.message;
+          if (!definitive(err)) {
+            this.pending.set(h.job_id, { confirmation: made.confirmation, where, since: Date.now() });
+          }
+        }
+        return outcome;
+      }
       let claim;
       try {
         claim = await client.claim(h.job_id);

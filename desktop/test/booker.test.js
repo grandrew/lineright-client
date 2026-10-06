@@ -26,11 +26,13 @@ function handoff(extra = {}) {
 const refused = (status, message, body = { error: message }) => Object.assign(new Error(message), { status, body });
 
 function world({ result = { status: 'confirmed', confirmation: 'TS-12345678' }, claim = null, report = null,
-  claimed = { ok: true, claimed: true }, settings = {}, available = true, serverUrl = SITE, profile = PROFILE } = {}) {
+  claimed = { ok: true, claimed: true }, settings = {}, available = true, serverUrl = SITE, profile = PROFILE,
+  records = {} } = {}) {
   const calls = { runs: [], claims: [], booked: [], gone: [], busy: [] };
   const runner = {
     available: () => available,
     run: async (kind, envelope, opts) => { calls.runs.push({ kind, envelope, opts }); return result; },
+    recorded: (key) => records[key] ?? null,
   };
   const client = {
     serverUrl,
@@ -172,6 +174,35 @@ test('after taking over, a slot found gone is not reported gone: the quiet one m
   const outcome = await booker.book(handoff({ booker: { name: 'desktop-box', you: false, silent: true } }));
   assert.deepEqual(outcome, { kind: 'gone', quiet: true, device: 'desktop-box' });
   assert.deepEqual(calls.gone, [], 'the hand-off runs out its time instead');
+});
+
+test('a booking this computer\'s robot made before the app stopped is said, whoever holds the slot now', async () => {
+  // The laptop crashed a second into booking; its robot booked the slot anyway and
+  // recorded it. Meanwhile the desktop took the slot over and found it gone. The
+  // laptop, started again, finds the desktop holding it: its own booking is the
+  // appointment all the same.
+  const key = '127.0.0.1:5000/rqp1-job-77-20260926';
+  const made = { [key]: { confirmation: 'TS-AAA3150A', booked_date: '2026-10-06' } };
+  const elsewhere = handoff({ booker: { name: 'desktop-box', you: false } });
+  const { booker, calls } = world({ records: made });
+  assert.deepEqual(booker.wants(elsewhere), { ok: true, recorded: true });
+  assert.deepEqual(await booker.book(elsewhere), { kind: 'booked', confirmation: 'TS-AAA3150A', recorded: true });
+  assert.deepEqual(calls.claims, [], 'no claim: the other device holds it');
+  assert.deepEqual(calls.runs, [], 'and no second robot');
+  assert.deepEqual(calls.booked, [{ id: 77, ref: 'TS-AAA3150A', robot: true }]);
+  assert.equal(booker.wants(elsewhere).why, 'tried', 'said once');
+
+  // Said again later if the site could not be reached.
+  const offline = world({ records: made, report: refused(0, 'Could not reach http://127.0.0.1:5000: fetch failed') });
+  const outcome = await offline.booker.book(elsewhere);
+  assert.equal(outcome.kind, 'booked');
+  assert.equal(outcome.unreported, 'Could not reach http://127.0.0.1:5000: fetch failed');
+  assert.equal(offline.booker.pending.size, 1);
+
+  // Only a booking it made, on this site: one sent with no answer, or another site's, is not one.
+  assert.equal(world({ records: { [key]: { unconfirmed: true, message: 'no answer' } } }).booker.wants(elsewhere).why, 'elsewhere');
+  assert.equal(world({ records: { 'regbot.example/rqp1-job-77-20260926': { confirmation: 'TS-1' } } }).booker.wants(elsewhere).why, 'elsewhere');
+  assert.equal(world().booker.wants(elsewhere).why, 'elsewhere', 'nothing recorded: it stands back, as before');
 });
 
 test('a booking the site did not hear about is said again until it answers, yes or no', async () => {

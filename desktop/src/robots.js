@@ -174,6 +174,21 @@ class RobotRunner {
     });
   }
 
+  /**
+   * What the booking robot recorded on this computer for one booking (its
+   * replay store, dmq's BookingStore): `{ confirmation, booked_date }` for one it
+   * made, `{ unconfirmed: true, … }` for one it sent without an answer, or null.
+   * A robot left running by an app that crashed records there too.
+   */
+  recorded(key) {
+    try {
+      const all = JSON.parse(fs.readFileSync(path.join(this.stateDir, 'rqp-bookings.json'), 'utf8'));
+      return (key && all[key]) || null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Stop every robot this app started. On quit, and on a full reset. */
   stopAll() {
     for (const child of this.running) killTree(child, { platform: this.platform, force: true });

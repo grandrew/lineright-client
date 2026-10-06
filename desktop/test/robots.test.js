@@ -127,6 +127,19 @@ test('a robot that says nothing, or runs too long, is an answer too', async () =
   assert.equal(missing.status, 'unavailable');
 });
 
+test('the runner reads what its booking robot recorded on this computer', () => {
+  const dir = tmpdir();
+  const run = runner(DMQ, { stateDir: dir });
+  assert.equal(run.recorded('127.0.0.1:5000/rqp1-job-1'), null, 'nothing recorded yet');
+  fs.writeFileSync(path.join(dir, 'rqp-bookings.json'), JSON.stringify({
+    '127.0.0.1:5000/rqp1-job-1': { confirmation: 'TS-AAA3150A', booked_date: '2026-10-19' } }));
+  assert.deepEqual(run.recorded('127.0.0.1:5000/rqp1-job-1'), { confirmation: 'TS-AAA3150A', booked_date: '2026-10-19' });
+  assert.equal(run.recorded('127.0.0.1:5000/rqp1-job-2'), null);
+  assert.equal(run.recorded(null), null);
+  fs.writeFileSync(path.join(dir, 'rqp-bookings.json'), '{ half written');
+  assert.equal(run.recorded('127.0.0.1:5000/rqp1-job-1'), null, 'a store it cannot read is no answer');
+});
+
 test('stopping stops every robot still running', async () => {
   const stuck = runner(fakeDmq('setInterval(() => {}, 1000);'));
   const pending = stuck.run('scout', {}, { timeoutMs: 60000 });

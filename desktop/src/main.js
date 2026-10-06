@@ -749,6 +749,11 @@ function handleDoc(doc) {
         && h.booker.silent) {
       standingBack.delete(h.job_id);
       takeHandoff(h, `${h.booker.name} stopped answering while booking it`);
+    } else if (standingBack.has(h.job_id) && booker && booker.recorded(h)) {
+      // A robot this app left running when it stopped has booked it since:
+      // that is the appointment, whoever holds the slot now.
+      standingBack.delete(h.job_id);
+      takeHandoff(h, 'this computer\'s robot booked it before the app stopped');
     }
   }
   for (const h of arrived) {
