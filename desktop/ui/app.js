@@ -24,6 +24,8 @@
     prompt: null,      // job id whose booking reference is being typed
     bannerKey: '',
     consoleTab: 'positions',
+    nickEdit: null,    // the new nickname being typed on the account tab, if any
+
     boardTimer: null, boardShape: '',
     pairTimer: null,
     credits: null,     // the balance, packs and purchases, from the site
@@ -1017,13 +1019,14 @@
     } else {
       body = `<div class="split">
         <div class="panel"><div class="panel-title">Account</div><dl>
-          <div class="kv"><dt>Nickname</dt><dd>${esc(a.user.nickname)}</dd></div>
+          <div class="kv"><dt>Nickname</dt><dd>${esc(user.nickname)}${state.nickEdit ? '' : ` <a id="acct-nick-edit" class="tiny" style="font-family:var(--sans)">Change</a>`}</dd></div>
           <div class="kv"><dt>Email</dt><dd>${esc(a.user.email || '—')}</dd></div>
           <div class="kv"><dt>Joined</dt><dd>${esc((a.user.created_at || '').slice(0, 10))}</dd></div>
           <div class="kv"><dt>Bids placed</dt><dd>${num(a.stats.total)}</dd></div>
           <div class="kv"><dt>Won / lost</dt><dd>${num(a.stats.won)} / ${num(a.stats.lost)}</dd></div>
         </dl>
-        <p class="tiny muted" style="margin:12px 0 0">Nickname, password and sign-in providers are changed on <a data-external="${esc(a.account_url)}">your account page</a> on the website.</p></div>
+        ${nicknameForm()}
+        <p class="tiny muted" style="margin:12px 0 0">Your password and sign-in providers are changed on <a data-external="${esc(a.account_url)}">your account page</a> on the website.</p></div>
         <div class="panel"><div class="panel-title">This device</div>
           ${builtin()
             ? `<p class="small muted" style="margin:0 0 12px">Signed in as <b>${esc(a.user.nickname)}</b> on the LineRight Regbot server this app runs on this computer — your lines, bids and practice credits are kept in its database here.</p>
@@ -1040,6 +1043,8 @@
         <p class="tiny muted" style="margin:10px 0 0">Unpair a device you no longer use, or one that went missing with its computer: its next request is refused.</p>
       </div>`;
     }
+    const typing = document.activeElement && document.activeElement.id === 'acct-nick-input'
+      ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
     page.innerHTML = `<div class="wrap">
       <div class="wallet-hero">
         <div class="wallet-cell"><div class="v">${coins(user.balance)}</div><div class="k">Credits to spend</div></div>
@@ -1070,9 +1075,52 @@
         catch (err) { toast('bad', err.message, 9000); b.disabled = false; }
       });
     }
+    wireNickname(user, typing);
     const out = $('acct-signout'); if (out) out.addEventListener('click', () => api.call('pair:forget'));
     const prof = $('acct-profile'); if (prof) prof.addEventListener('click', () => go('profile'));
     const srv = $('acct-server'); if (srv) srv.addEventListener('click', () => go('settings'));
+  }
+
+  // The name other bidders see, changed here rather than on the website. What
+  // is being typed lives in state.nickEdit, because every sync redraws the page.
+  function nicknameForm() {
+    const ne = state.nickEdit;
+    if (!ne) return '';
+    return `<form id="acct-nick-form" style="margin-top:10px">
+      <div class="row"><input id="acct-nick-input" maxlength="24" value="${esc(ne.value)}" spellcheck="false" autocomplete="off" aria-label="New nickname" style="flex:1; min-width:0">
+        <button class="btn btn-sm btn-accent" type="submit" ${ne.busy ? 'disabled' : ''}>Save</button><button class="btn btn-sm btn-ghost" type="button" id="acct-nick-cancel">Cancel</button></div>
+      <p class="tiny ${ne.bad ? 'bad' : 'muted'}" style="margin:6px 0 0">${esc(ne.note || 'The only thing other bidders see next to your bids — never your name or email.')}</p>
+    </form>`;
+  }
+
+  function wireNickname(user, typing) {
+    const edit = $('acct-nick-edit');
+    if (edit) edit.addEventListener('click', () => { state.nickEdit = { value: user.nickname }; renderConsole(); $('acct-nick-input').select(); });
+    const form = $('acct-nick-form');
+    if (!form) return;
+    const input = $('acct-nick-input');
+    if (typing) { input.focus(); input.setSelectionRange(typing[0], typing[1]); }
+    input.addEventListener('input', () => { state.nickEdit.value = input.value; });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { state.nickEdit = null; renderConsole(); } });
+    $('acct-nick-cancel').addEventListener('click', () => { state.nickEdit = null; renderConsole(); });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const wanted = input.value.trim();
+      if (!wanted || wanted === user.nickname) { state.nickEdit = null; renderConsole(); return; }
+      state.nickEdit = { value: wanted, busy: true, note: 'Saving…' };
+      renderConsole();
+      try {
+        const r = await call('server:nickname', { nickname: wanted });
+        state.nickEdit = null;
+        toast('ok', `You now appear on every board as ${r.user.nickname}.`);
+        await loadAccount();
+      } catch (err) {
+        state.nickEdit = { value: wanted, bad: true,
+          note: err.status === 404 ? 'This server cannot change it from the app. Use your account page on the website.' : err.message };
+      }
+      if (state.route.page === 'console') renderConsole();
+      const again = $('acct-nick-input'); if (again) again.focus();
+    });
   }
 
   // -------------------------------------------------------------- credits

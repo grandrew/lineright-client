@@ -131,6 +131,17 @@ test('a read is answered, and a hand-off claimed or reported gone, by id', async
   assert.ok(fetch.calls.every((c) => c.init.method === 'POST' && c.headers.authorization === 'Bearer tok'));
 });
 
+test('a new nickname is sent as typed, and a refusal carries the site\'s reason', async () => {
+  const fetch = fakeFetch({ '/api/client/account/nickname': (call) => (call.body.nickname === 'taken'
+    ? { status: 400, body: { error: 'That nickname is taken.', rule: '3 to 24 letters' } }
+    : { body: { ok: true, user: { id: 3, nickname: call.body.nickname } } }) });
+  const client = new SyncClient({ serverUrl: 'http://srv', token: 'tok', fetch });
+  assert.deepEqual(await client.setNickname('night_owl'), { ok: true, user: { id: 3, nickname: 'night_owl' } });
+  assert.equal(fetch.calls[0].init.method, 'POST');
+  assert.equal(fetch.calls[0].headers.authorization, 'Bearer tok');
+  await assert.rejects(client.setNickname('taken'), (err) => err.status === 400 && err.message === 'That nickname is taken.');
+});
+
 test('another device of the account is unpaired by id, and this one stays signed in', async () => {
   const fetch = fakeFetch({ '/api/client/devices/7/revoke': { body: { ok: true } } });
   const client = new SyncClient({ serverUrl: 'http://srv', token: 'tok', fetch });

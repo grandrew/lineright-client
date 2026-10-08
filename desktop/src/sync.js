@@ -184,6 +184,11 @@ class SyncClient {
     return reply.places || [];
   }
 
+  /** Change the name other bidders see. The site answers with the account's user block. */
+  async setNickname(nickname) {
+    return this.request('/api/client/account/nickname', { body: { nickname } });
+  }
+
   /** Unpair another device of this account. */
   async revokeDevice(clientId) {
     return this.request(`/api/client/devices/${Number(clientId)}/revoke`, { body: {} });

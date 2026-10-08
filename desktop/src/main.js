@@ -1205,6 +1205,13 @@ function wireIpc() {
   handle('server:withdraw', async ({ bid_id }) => { const r = await client.withdrawBid(bid_id); loop.poke(); return r; });
   handle('server:account', async () => { await serverReady(); return client.account(); });
   handle('server:revoke', ({ client_id }) => client.revokeDevice(client_id));
+  handle('server:nickname', async ({ nickname }) => {
+    const r = await client.setNickname(nickname);
+    // The menu and the bar show the new name now, not on the next sync.
+    if (r.user && pairState.user) setPair({ user: { ...pairState.user, nickname: r.user.nickname } });
+    loop.poke();
+    return r;
+  });
   handle('server:topup', async ({ pack }) => {
     const r = await client.topup(pack);
     // Stripe's page, in the person's own browser: the card is typed there, never here.
