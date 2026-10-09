@@ -101,6 +101,17 @@ test('a redelivered job replays the original confirmation instead of booking twi
   assert.equal(second.replayed, true);
 });
 
+test('a replay says where the confirmation page was, as the booking did', async () => {
+  const state = tmpState();
+  const env = { RQP_STATE_PATH: state, RQP_ALLOW_BOOKING: 'true', RQP_SIMULATE_OUTCOME: 'BOOKED_SUCCESS',
+    DMV_BASE_URL: 'http://127.0.0.1:8787' };
+  const first = await call(REQUEST, env);
+  assert.equal(first.confirmation_url, `http://127.0.0.1:8787/portal/appointments/confirmation?ref=${first.confirmation}`);
+  const second = await call(REQUEST, env);
+  assert.equal(second.replayed, true);
+  assert.equal(second.confirmation_url, first.confirmation_url);
+});
+
 test('the replay store survives a restart', async () => {
   const state = tmpState();
   const env = { RQP_STATE_PATH: state, RQP_ALLOW_BOOKING: 'true', RQP_SIMULATE_OUTCOME: 'BOOKED_SUCCESS' };

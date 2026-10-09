@@ -110,6 +110,9 @@ body.has-tabs #tabbar{display:flex}
 .banner-row .clock{font-family:var(--mono); font-weight:700; color:var(--gold)}
 .banner-row .actions{display:flex; gap:6px; align-items:center}
 .banner-row input{width:170px; height:28px; padding:3px 8px}
+.banner-row .steps{display:inline-block; margin-top:2px}
+.banner-row.ended-ok .mark, .banner-row.ended-ok .text b{color:var(--ok)}
+.banner-row.ended-bad .mark, .banner-row.ended-bad .text b{color:var(--bad)}
 
 /* ------------------------------------------------------- found form */
 .section{padding:10px 14px; background:var(--surface); border-bottom:1px solid var(--line)}

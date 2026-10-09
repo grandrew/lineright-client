@@ -23,8 +23,10 @@
  * a lineright-server checkout: stack.js), signed in to as the person with no
  * sign-in at all. See ../README.md.
  */
+const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const {
   app, BaseWindow, WebContentsView, ipcMain, Menu, Notification, dialog, safeStorage, session,
   shell: osShell,
@@ -48,8 +50,9 @@ const { Stack, locate, NO_SERVER } = require('./stack');
 const reset = require('./reset');
 const { RobotRunner, isLoopback } = require('./robots');
 const { Reader } = require('./reader');
-const { Booker } = require('./booker');
+const { Booker, mayBook, definitive } = require('./booker');
 const { Pinger } = require('./pinger');
+const confirmations = require('./confirmations');
 const { Telemetry } = require('./telemetry');
 
 const CHROME_BASE = 98;          // tab strip + address bar + the line, in browser mode
@@ -90,7 +93,7 @@ function log(...parts) {
 function trace(text) {
   if (!process.env.REGBOT_TRACE) return;
   try {
-    require('node:fs').appendFileSync(process.env.REGBOT_TRACE, `${Date.now() % 100000} ${text}\n`);
+    fs.appendFileSync(process.env.REGBOT_TRACE, `${Date.now() % 100000} ${text}\n`);
   } catch { /* tracing must never be the problem */ }
 }
 
@@ -291,6 +294,8 @@ function resetSession(message) {
   asked = null;
   opened.clear();
   if (booker) booker.forget();
+  bookedInTab.clear();
+  turnCards.clear();
   standingBack.clear();
   sitesCache = [];
   send('sync:doc', null);
@@ -702,6 +707,8 @@ async function signOut() {
   asked = null;
   opened.clear();
   if (booker) booker.forget();
+  bookedInTab.clear();
+  turnCards.clear();
   standingBack.clear();
   setPair({ paired: false, user: null, pending: null, message: 'Signed out.' });
   send('sync:doc', null);
@@ -741,6 +748,11 @@ function handleDoc(doc) {
   noteConnection(doc.latency);
   const current = new Set(doc.handoffs.map((h) => h.job_id));
   for (const id of [...standingBack]) if (!current.has(id)) standingBack.delete(id);
+  // A turn that ended while its page was covered — another device booked it,
+  // or its time ran out — is uncovered; one this computer's robot booked says so.
+  for (const [id, card] of [...turnCards]) {
+    if (card.kind === 'booking' && !current.has(id) && !(booker && booker.running.has(id))) setCard(id, null);
+  }
   for (const h of doc.handoffs) {
     // The device of this person's that was booking it has gone quiet — closed,
     // crashed, off the network: this one takes it over rather than let it wait
@@ -781,6 +793,15 @@ function takeHandoff(h, note = '') {
   if (robot.ok) {
     log(`your turn: ${describeHandoff(h)} — ${note ? `${note}; ` : ''}booking it with this computer's robot`);
     notify(`Your turn — ${h.queue_name}`, `Booking ${describeHandoff(h)} for you now…`, h);
+    // The page opens all the same, for the person to see where they are being
+    // booked: covered while the robot is at the DMV's form, so that a booking by
+    // hand cannot be made beside it.
+    setCard(h.job_id, { kind: 'booking', title: 'Your app is booking this for you', where: describeHandoff(h),
+      text: 'Its robot is filling in the DMV\'s form out of sight, with the details in your profile. '
+        + 'Nothing to do here — please do not book it on this page as well. If the robot cannot finish, '
+        + 'this page is yours to book it on.' });
+    turnTab(h);
+    if (!win.isVisible()) win.show();
     const mine = generation;
     booker.book(h).then((outcome) => { if (mine === generation) afterBooking(h, outcome); });
     return;
@@ -789,6 +810,8 @@ function takeHandoff(h, note = '') {
     standingBack.add(h.job_id);
     log(`your turn: ${describeHandoff(h)} — ${robot.device} is booking it`);
     notify(`Your turn — ${h.queue_name}`, `${robot.device} is booking ${describeHandoff(h)}.`, h);
+    setCard(h.job_id, elsewhereCard(h, robot.device));
+    turnTab(h);
     return;
   }
   offerHandoff(h, note ? `${note}. Book it here.` : '');
@@ -810,9 +833,7 @@ function offerHandoff(h, why = '') {
     });
     trace(`handoff gated: profile missing ${gap.map((f) => f.profileKey).join(', ')}`);
   } else {
-    const existing = tabs.tabFor(h.job_id);
-    if (existing) tabs.select(existing.id);
-    else if (h.open_url) tabs.open(h.open_url, { kind: 'handoff', jobId: h.job_id, title: `Your turn — ${h.queue_name}` });
+    turnTab(h);
     trace('handoff tab opened');
   }
   log(`your turn: ${describeHandoff(h)} — ${clock(h.seconds_left)} to book`
@@ -870,13 +891,21 @@ function noteConnection(latency) {
 function afterBooking(h, outcome) {
   if (closing) return;
   const where = describeHandoff(h);
+  // Whatever came of it, the page is the person's again; booked, it says so;
+  // another device of theirs at it, it says that.
+  if (outcome.kind !== 'booked' && outcome.kind !== 'elsewhere') setCard(h.job_id, null);
   if (outcome.kind === 'booked') {
     log(`booked ${where} — DMV confirmation ${outcome.confirmation}`
         + (outcome.unreported ? ` (the site did not record it: ${outcome.unreported})` : ''));
     notify(`Booked — ${h.queue_name}`, `${where}. Confirmation ${outcome.confirmation}.`, h);
     send('toast', outcome.unreported
       ? { kind: 'warn', ms: 20000, text: `Booked ${where} — confirmation ${outcome.confirmation}. The LineRight Regbot site did not record it: ${outcome.unreported}` }
-      : { kind: 'ok', text: `Booked ${where} — confirmation ${outcome.confirmation}.` });
+      : { kind: 'ok', ms: 15000, text: `Booked ${where} — confirmation ${outcome.confirmation}.` });
+    const shown = showConfirmation(h, outcome);
+    setCard(h.job_id, { kind: 'booked', title: '✓ Booked', where, reference: `Confirmation ${outcome.confirmation}`,
+      text: (shown ? 'The DMV\'s confirmation is open in the next tab. ' : 'Keep this number: it is what the DMV knows the appointment by. ')
+        + (outcome.unreported ? `LineRight Regbot has not recorded it yet: ${outcome.unreported}`
+          : 'LineRight Regbot has it recorded, and your bid is settled.') });
   } else if (outcome.kind === 'gone' && outcome.quiet) {
     log(`${where} was gone when the robot got there — ${outcome.device} may have booked it before it stopped answering`);
     send('toast', { kind: 'warn', ms: 20000, text: `${where} was no longer listed. ${outcome.device} was booking it before it stopped answering and may have got it — check your email for a confirmation.` });
@@ -885,14 +914,18 @@ function afterBooking(h, outcome) {
     send('toast', { kind: 'warn', text: `${where} was gone by the time the app got there. You keep your place in line.` });
   } else if (outcome.kind === 'elsewhere') {
     standingBack.add(h.job_id);
+    setCard(h.job_id, elsewhereCard(h, outcome.device));
     send('toast', { kind: 'ok', text: `${outcome.device} is booking ${where}.` });
   } else if (outcome.kind === 'late') {
     log(`${where}: ${outcome.why}`);
     send('toast', { kind: 'warn', text: `${where} is no longer held for you: ${outcome.why}` });
   } else {
-    // The page, for the person to finish: while the slot is still theirs.
+    // The page, for the person to finish: while the slot is still theirs —
+    // loaded afresh, the calendar under the cover being minutes old by now.
     const now = lastDoc && lastDoc.handoffs.find((x) => x.job_id === h.job_id);
     if (now) {
+      const tab = tabs.tabFor(h.job_id);
+      if (tab && now.open_url && !tab.view.webContents.isDestroyed()) tab.view.webContents.loadURL(now.open_url).catch(() => {});
       offerHandoff(now, outcome.why);
     } else {
       log(`${where}: ${outcome.why} — and it is no longer held for you`);
@@ -988,11 +1021,184 @@ function fillActive(force) {
 }
 
 function wireAutofill() {
-  tabs.on('loaded', ({ id, url }) => {
+  tabs.on('loaded', ({ id, url, jobId }) => {
+    // The cover goes back over every page while the robot books; "booked" is
+    // said once, and stays gone once the person has looked underneath.
+    if (jobId && turnCards.has(jobId) && turnCards.get(jobId).kind === 'booking') paintCard(jobId);
+    checkHandoffTab(id);
     if (!profile.autofill) return;
     if (!isBookingPage(url, bookingOrigins)) return;
     fill(id, false);
   });
+  // A booking site that draws its pages itself changes them without loading
+  // one, so the confirmation is looked for every few seconds as well.
+  setInterval(() => {
+    for (const tab of tabs.tabs.values()) if (tab.kind === 'handoff') checkHandoffTab(tab.id);
+  }, 2000).unref();
+}
+
+// ------------------------------------------------------------ the turn's tab
+/** The turn's booking page, in a tab of its own: opened, or brought forward. */
+function turnTab(h) {
+  const existing = tabs.tabFor(h.job_id);
+  if (existing) {
+    tabs.select(existing.id);
+    return existing.id;
+  }
+  if (!h.open_url) return null;
+  return tabs.open(h.open_url, { kind: 'handoff', jobId: h.job_id, title: `Your turn — ${h.queue_name}` });
+}
+
+/**
+ * What is laid over a turn's booking page, by job: while this computer's robot
+ * books it ("booking": the page is covered, so nothing is booked by hand beside
+ * it — painted again on every load of the page), and once it has ("booked": the
+ * number, and where the confirmation is — painted once). Taken off when the
+ * page is the person's to book on.
+ */
+const turnCards = new Map();
+
+function elsewhereCard(h, device) {
+  return { kind: 'booking', title: `${device} is booking this for you`, where: describeHandoff(h),
+    text: `Another of your computers has this one, and its robot is at the DMV's form. Nothing to do here — `
+      + 'please do not book it on this page as well. Should it stop answering, this computer takes it over.' };
+}
+
+function setCard(jobId, card) {
+  if (card) turnCards.set(jobId, card);
+  else if (!turnCards.delete(jobId)) return;
+  paintCard(jobId);
+}
+
+function paintCard(jobId) {
+  const tab = tabs && tabs.tabFor(jobId);
+  if (!tab || tab.view.webContents.isDestroyed()) return;
+  const card = turnCards.get(jobId) || null;
+  tab.view.webContents.executeJavaScript(`(${drawCard.toString()})(${JSON.stringify(card)})`).catch(() => {});
+}
+
+/** Run in the booking page: lay the card over it, or take it off (null). Text only, never markup. */
+function drawCard(card) {
+  const ID = '__lineright_turn_card';
+  const old = document.getElementById(ID);
+  if (old) old.remove();
+  if (!card) return;
+  const booked = card.kind === 'booked';
+  const veil = document.createElement('div');
+  veil.id = ID;
+  Object.assign(veil.style, {
+    position: 'fixed', inset: '0', zIndex: '2147483647', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', background: 'rgba(15, 23, 42, 0.5)', font: '15px/1.5 system-ui, sans-serif',
+  });
+  const box = document.createElement('div');
+  Object.assign(box.style, {
+    background: '#fff', color: '#0b1020', borderRadius: '14px', padding: '24px 28px', maxWidth: '480px',
+    margin: '16px', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)', textAlign: 'left',
+    borderTop: `6px solid ${booked ? '#047857' : '#6366f1'}`,
+  });
+  const line = (text, style) => {
+    const el = document.createElement('div');
+    el.textContent = text;
+    Object.assign(el.style, style || {});
+    box.appendChild(el);
+  };
+  line(card.title, { fontSize: '22px', fontWeight: '700', marginBottom: '6px', color: booked ? '#047857' : '#0b1020' });
+  line(card.where, { fontWeight: '600', marginBottom: '8px' });
+  if (card.reference) line(card.reference, { font: '700 22px/1.3 ui-monospace, monospace', margin: '4px 0 10px' });
+  line(card.text, { color: '#475569' });
+  if (booked) {
+    const hide = document.createElement('button');
+    hide.textContent = 'Show the page underneath';
+    Object.assign(hide.style, {
+      marginTop: '16px', padding: '8px 14px', borderRadius: '999px', border: '1px solid #cbd5e1',
+      background: '#fff', color: '#0b1020', font: 'inherit', cursor: 'pointer',
+    });
+    hide.addEventListener('click', () => veil.remove());
+    box.appendChild(hide);
+  }
+  veil.appendChild(box);
+  document.documentElement.appendChild(veil);
+}
+
+/**
+ * The confirmation, as the DMV showed it, in a tab of its own: its page, when
+ * the address carries the number and so opens anywhere (the stand-in's does);
+ * otherwise the picture the robot kept of it (booker.js `shotsDir`). Returns
+ * the tab, or null when there is neither.
+ */
+function showConfirmation(h, outcome) {
+  const ref = String(outcome.confirmation || '');
+  const title = `Confirmation ${ref}`;
+  if (ref && outcome.url && webPage(outcome.url) && outcome.url.includes(ref)) {
+    return tabs.open(outcome.url, { kind: 'confirmation', title });
+  }
+  let page = null;
+  try {
+    page = outcome.shot ? confirmations.page({ ...outcome, where: describeHandoff(h) }) : null;
+  } catch (err) {
+    log(`could not show the confirmation picture: ${err.message}`);
+  }
+  return page ? tabs.open(pathToFileURL(page).href, { kind: 'confirmation', title }) : null;
+}
+
+// ------------------------------------------------------- booked in the tab
+/**
+ * A booking the person made by hand in a hand-off's tab, said for them: when
+ * the tab shows the booking site's confirmation number — read the way the
+ * robot reads it (dmq's parseConfirmation) — the app says "I booked it" with
+ * that number. Somebody who booked and never pressed the button would
+ * otherwise have their turn run out on them, and leave the line.
+ */
+let confirmationParser = null;
+const bookedInTab = new Set();    // job ids said booked from their tab, or being said
+const lookingAt = new Set();      // tab ids being read right now
+
+function parseConfirmation() {
+  if (!confirmationParser) {
+    const dmq = robots && robots.paths ? robots.paths.dmq : null;
+    const file = dmq ? path.join(dmq, 'src', 'selectors.js') : '';
+    confirmationParser = file && fs.existsSync(file)
+      ? import(pathToFileURL(file).href).then((m) => m.parseConfirmation, (err) => {
+        log(`cannot read booking confirmations: ${err.message}`);
+        return null;
+      })
+      : Promise.resolve(null);
+  }
+  return confirmationParser;
+}
+
+async function checkHandoffTab(id) {
+  const tab = tabs.tabs.get(id);
+  if (!tab || tab.kind !== 'handoff' || !tab.jobId || bookedInTab.has(tab.jobId) || lookingAt.has(id)) return;
+  // The robot's to say, while it is booking this one or once it has.
+  if (turnCards.has(tab.jobId)) return;
+  const h = lastDoc && lastDoc.handoffs.find((x) => x.job_id === tab.jobId && x.phase === 'booking');
+  if (!h) return;
+  lookingAt.add(id);
+  try {
+    const parse = await parseConfirmation();
+    const wc = tab.view.webContents;
+    if (!parse || wc.isDestroyed()) return;
+    const text = await wc.executeJavaScript('document.body ? document.body.innerText : ""').catch(() => '');
+    const ref = parse({ url: wc.getURL(), text: String(text || '').slice(0, 100000) });
+    if (!ref || bookedInTab.has(h.job_id)) return;
+    bookedInTab.add(h.job_id);
+    const where = describeHandoff(h);
+    try {
+      await client.booked(h.job_id, ref);
+      log(`booked ${where} in its tab — confirmation ${ref}, said to the site`);
+      notify(`Booked — ${h.queue_name}`, `${where}. Confirmation ${ref}.`, h);
+      send('toast', { kind: 'ok', ms: 12000, text: `Booked ${where} — confirmation ${ref}. The app told LineRight Regbot for you.` });
+    } catch (err) {
+      // Not reached: looked for again in a moment. Refused: said once.
+      if (!definitive(err)) { bookedInTab.delete(h.job_id); return; }
+      log(`booked ${where} in its tab — confirmation ${ref} — and the site would not take it: ${err.message}`);
+      send('toast', { kind: 'warn', ms: 20000, text: `You booked ${where} — confirmation ${ref} — but LineRight Regbot would not record it: ${err.message}` });
+    }
+    if (loop) loop.poke();
+  } finally {
+    lookingAt.delete(id);
+  }
 }
 
 // ---------------------------------------------------------------- telemetry
@@ -1107,9 +1313,10 @@ function settingsView() {
     updates: updateState,
     profileFile: profile.file,
     // This computer's robots, for the regbot site: whether it looks for
-    // openings when asked, and whether it may look (and book) at the real DMV.
+    // openings when asked, whether it may look at the real DMV, and whether it
+    // may book a slot that is the person's (booker.js) — anywhere.
     readerEnabled: store.get('readerEnabled', true) !== false,
-    realDmvRobots: Boolean(store.get('realDmvRobots', false)),
+    robotBooking: mayBook(store),
     realDmvChecks: reader ? reader.mayLookAtRealDmv() : false,
     // Checking lines for everybody, which earns credits on the site.
     checking: reader ? reader.enabled() : false,
@@ -1395,7 +1602,7 @@ function wireIpc() {
 
   // -- the rest
   handle('settings:get', () => settingsView());
-  handle('settings:set', async ({ serverMode: mode, serverUrl, updateUrl, clientName, readerEnabled, realDmvRobots,
+  handle('settings:set', async ({ serverMode: mode, serverUrl, updateUrl, clientName, readerEnabled, robotBooking,
     checking, realDmvChecks, reimportRemind }) => {
     // Another server, practice and an update feed of the app's own are for the
     // people who work on regbot: developer mode's, wherever the asking came from.
@@ -1425,11 +1632,11 @@ function wireIpc() {
       if (loop) loop.poke();
     }
     if (typeof reimportRemind === 'boolean') store.set('reimportRemind', reimportRemind);
-    if (typeof realDmvRobots === 'boolean') {
+    if (typeof robotBooking === 'boolean') {
       // A yes is kept with when it was said: it is the person agreeing to
       // automated traffic from their own address, and to real appointments.
-      store.set('realDmvRobots', realDmvRobots);
-      store.set('realDmvRobotsAt', realDmvRobots ? new Date().toISOString() : null);
+      store.set('robotBooking', robotBooking);
+      store.set('robotBookingAt', robotBooking ? new Date().toISOString() : null);
       reader.reconsider();
     }
     if (typeof clientName === 'string' && clientName.trim()) {
@@ -1563,6 +1770,8 @@ async function resetEverything() {
     sitesCache = [];
     opened.clear();
     if (booker) booker.forget();
+    bookedInTab.clear();
+    turnCards.clear();
     standingBack.clear();
     bookingOrigins.clear();
     offered = null;
@@ -1655,6 +1864,7 @@ function smoke() {
       connection,
       autofill: lastFill,
       screen: lastNavigate,
+      cards: [...turnCards].map(([jobId, c]) => ({ jobId, kind: c.kind })),
       bookingOrigins: [...bookingOrigins],
       serverMode,
       developer,
@@ -1714,9 +1924,11 @@ async function main() {
     onState: () => send('robots:state', robotsState()),
     onRead: (r) => telemetry.read(r),
   });
+  const shotsDir = path.join(app.getPath('userData'), 'robots', 'confirmations');
+  confirmations.prune(shotsDir);
   booker = new Booker({
     runner: robots, reader, getClient: () => client, getStore: () => store,
-    getProfile: () => profile.values(),
+    getProfile: () => profile.values(), shotsDir,
     log: (message) => log(`booker: ${message}`),
     onState: () => send('robots:state', robotsState()),
     onOutcome: (r) => telemetry.booking(r),

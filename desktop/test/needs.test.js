@@ -41,6 +41,16 @@ test('a filled profile is ready, whatever the site called the fields', () => {
     'licence_no, date_of_birth and mobile are the same three fields under other names');
 });
 
+test('a field the line says its form does not need never blocks anything', () => {
+  // A REAL ID appointment: the DMV asks the drive tests for a licence number and a date of birth.
+  const realId = DMV.map((f) => (['dl_number', 'dob'].includes(f.key) ? { ...f, required: false } : f));
+  const values = { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' };
+  assert.equal(needs.ready(realId, values), true);
+  assert.deepEqual(needs.status(realId, values).filter((f) => f.state === 'optional').map((f) => f.key), ['dl_number', 'dob']);
+  assert.deepEqual(needs.missing(realId, {}).map((f) => f.key), ['first_name', 'last_name', 'email', 'phone']);
+  assert.equal(needs.ready(DMV, values), false, 'said nothing about it: still asked for');
+});
+
 test('a field nothing here could hold never blocks anything', () => {
   // Helios asks for a fan club member number and Meridian for an insurance id.
   // The person types those on the site's own form; the app has nowhere to keep

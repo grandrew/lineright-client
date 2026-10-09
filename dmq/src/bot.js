@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { chromium } from 'playwright';
 import { loadConfig } from './config.js';
 import { makeRunLogger } from './runlog.js';
@@ -290,6 +292,22 @@ async function waitForConfirmation(page, timeoutMs) {
 }
 
 /**
+ * A picture of the confirmation page, kept where `file` says, for the person to
+ * see what the robot saw: the number, and the page around it. Returns the file,
+ * or null. Never throws — the booking is made by now, whatever comes of this.
+ */
+async function keepConfirmation(page, file) {
+  if (!file) return null;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    await page.screenshot({ path: file, fullPage: true, timeout: 10000 });
+    return file;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Where a booking that never confirmed was left, for the log and the person.
  * The page's own error text if it shows any, which is the part worth reading.
  */
@@ -402,7 +420,10 @@ async function bookAt(context, config, office, log, hooks = {}) {
     }
 
     log('BOOKED_SUCCESS', `${where} ref=${reference}`);
-    return { status: 'BOOKED_SUCCESS', date: office.date, time: booked, office: office.office, reference };
+    // Where the confirmation is, and what it looked like, for the person.
+    const url = page.url();
+    const shot = await keepConfirmation(page, config.confirmationShotPath);
+    return { status: 'BOOKED_SUCCESS', date: office.date, time: booked, office: office.office, reference, url, shot };
   } finally {
     await page.close().catch(() => {});
   }

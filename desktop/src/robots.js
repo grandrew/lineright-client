@@ -56,7 +56,7 @@ function isRealDmv(base) {
  * and from here.
  */
 function robotEnv({ env = process.env, paths, platform = process.platform, stateDir, dmvBase = '',
-  solverUrl = '', allowBooking = false }) {
+  solverUrl = '', allowBooking = false, confirmationShot = '' }) {
   // Tests only: an unpackaged app may be told to run the robots in their own
   // simulate mode, which answers without a browser. An installed one never is.
   const simulate = !paths.packaged && env.REGBOT_ROBOT_SIMULATE === '1';
@@ -76,6 +76,8 @@ function robotEnv({ env = process.env, paths, platform = process.platform, state
   // A practice farm only, and only for a practice DMV: the robot checks the same.
   if (solverUrl && isLoopback(solverUrl) && isLoopback(dmvBase)) out.CAPTCHA_SOLVER_URL = solverUrl;
   if (allowBooking) out.RQP_ALLOW_BOOKING = 'true';
+  // Where a booking keeps its picture of the confirmation page, for the person.
+  if (allowBooking && confirmationShot) out.RQP_CONFIRMATION_SHOT = confirmationShot;
   if (simulate) {
     out.RQP_MODE = 'simulate';
     if (env.REGBOT_ROBOT_OUTCOME) out.RQP_SIMULATE_OUTCOME = env.REGBOT_ROBOT_OUTCOME;
@@ -119,11 +121,12 @@ class RobotRunner {
    * Run one robot on one envelope. Always resolves, with the robot's envelope or
    * one saying why there is none — a robot that could not run is an answer too.
    */
-  run(kind, envelope, { dmvBase = '', solverUrl = '', allowBooking = false, timeoutMs = 600000 } = {}) {
+  run(kind, envelope, { dmvBase = '', solverUrl = '', allowBooking = false, timeoutMs = 600000,
+    confirmationShot = '' } = {}) {
     const script = path.join(this.paths.dmq, 'bin', SCRIPTS[kind]);
     fs.mkdirSync(this.stateDir, { recursive: true });
     const env = robotEnv({ env: this.env, paths: this.paths, platform: this.platform, stateDir: this.stateDir,
-      dmvBase, solverUrl, allowBooking: kind === 'book' && allowBooking });
+      dmvBase, solverUrl, allowBooking: kind === 'book' && allowBooking, confirmationShot });
     const failed = (message) => ({ protocol: 'RQP/1', kind: kind === 'scout' ? 'discovery.result' : 'booking.result',
       status: 'unavailable', message, offers: [], checked: [] });
     const started = Date.now();

@@ -16,7 +16,9 @@
  * What happens then:
  *   confirmed      "I booked it", with the DMV's own confirmation number. Booked
  *                  is booked: if the site will not take the report, the person
- *                  still hears that they have the appointment.
+ *                  still hears that they have the appointment — and is shown
+ *                  the confirmation page: where it was, and the robot's picture
+ *                  of it (`shotsDir`), for when that page opens nowhere else.
  *   slot gone      "gone": it comes off the board, and the person keeps their place.
  *                  Not after taking over from a quiet device, which most likely
  *                  booked it before it went quiet: the hand-off runs out its time
@@ -32,9 +34,19 @@
  * A booking the DMV did not confirm is never tried again: the appointment may
  * exist, and a second try could make two.
  *
- * On the real DMV none of this happens until the person has said yes.
+ * None of this happens until the person has said yes ("Let the app book for
+ * me", `robotBooking`), on the real DMV or a practice one alike: until then a
+ * slot that is theirs opens on the booking page for them to book, which is what
+ * they expect when they have not asked for anything else. A yes given before
+ * there was one switch — to booking on the real DMV, `realDmvRobots` — counts.
  */
-const { targetAllowed, isRealDmv } = require('./robots');
+const path = require('node:path');
+const { targetAllowed } = require('./robots');
+
+/** Whether the person has let the app's robot book for them. */
+function mayBook(store) {
+  return Boolean(store.get('robotBooking', store.get('realDmvRobots', false)));
+}
 
 /** How long a booking the site has not heard about is reported again. */
 const REPORT_FOR_MS = 30 * 60 * 1000;
@@ -60,10 +72,11 @@ class Booker {
    * @param {function} opts.getProfile the profile's values now ({key: value})
    * @param {object} [opts.reader]     told it is busy while a booking runs
    * @param {function} [opts.onOutcome] ({kind, ms}) after each booking attempt, for telemetry.js
+   * @param {string} [opts.shotsDir]   where the robot keeps its pictures of confirmation pages; none without
    */
   constructor({ runner, getClient, getStore, getProfile, reader = null, log = () => {}, onState = () => {},
-    onOutcome = () => {} }) {
-    Object.assign(this, { runner, getClient, getStore, getProfile, reader, log, onState, onOutcome });
+    onOutcome = () => {}, shotsDir = '' }) {
+    Object.assign(this, { runner, getClient, getStore, getProfile, reader, log, onState, onOutcome, shotsDir });
     this.current = null;
     // Two hand-offs can arrive in one sync (one person, two lines), and each is
     // booked at once: busy, and the booking on show, last until both are done.
@@ -133,7 +146,7 @@ class Booker {
     if (h.booker && !h.booker.you && !h.booker.silent) return { ok: false, why: 'elsewhere', device: h.booker.name };
     if (!this.runner.available()) return { ok: false, why: 'no-robot' };
     if (!targetAllowed(h.robot.base_url, this.getClient().serverUrl)) return { ok: false, why: 'target' };
-    if (isRealDmv(h.robot.base_url) && !store.get('realDmvRobots', false)) return { ok: false, why: 'not-agreed' };
+    if (!mayBook(store)) return { ok: false, why: 'not-agreed' };
     const values = this.getProfile();
     const missing = (h.robot.requires || []).filter((key) => !String(values[key] || '').trim());
     if (missing.length) return { ok: false, why: 'profile', missing };
@@ -165,6 +178,12 @@ class Booker {
     return host ? `${host}/${key}` : key;
   }
 
+  /** Where the picture of this hand-off's confirmation page goes, if pictures are kept. */
+  shotFor(h) {
+    const key = this.keyFor(h);
+    return this.shotsDir && key ? path.join(this.shotsDir, `${key.replace(/[^A-Za-z0-9._-]+/g, '_')}.png`) : '';
+  }
+
   /** The booking this computer's robot made for this hand-off, if it made one: `{ confirmation, … }`. */
   recorded(h) {
     if (!h || !h.robot || typeof this.runner.recorded !== 'function') return null;
@@ -174,7 +193,7 @@ class Booker {
 
   /**
    * Book it. Resolves to what happened:
-   *   { kind: 'booked', confirmation, unreported?, recorded? } | { kind: 'gone', quiet?, device? } |
+   *   { kind: 'booked', confirmation, url, shot, unreported?, recorded? } | { kind: 'gone', quiet?, device? } |
    *   { kind: 'elsewhere', device } | { kind: 'late', why } |
    *   { kind: 'page', why, unconfirmed? }
    */
@@ -196,7 +215,8 @@ class Booker {
         // second robot: another device may hold the slot by now, and its robot
         // will have found it gone.
         this.log(`${where} was booked by this computer's robot before the app stopped (${made.confirmation})`);
-        outcome = { kind: 'booked', confirmation: made.confirmation, recorded: true };
+        outcome = { kind: 'booked', confirmation: made.confirmation, recorded: true,
+          url: made.confirmation_url || null, shot: made.confirmation_shot || null };
         try {
           await client.booked(h.job_id, made.confirmation, { robot: true });
         } catch (err) {
@@ -230,10 +250,11 @@ class Booker {
         + (tookOver ? `, taking it over from ${tookOver}, which stopped answering` : ''));
       const result = await this.runner.run('book', this.request(h), {
         dmvBase: h.robot.base_url, solverUrl: h.robot.captcha_solver_url || '', allowBooking: true,
-        timeoutMs: budgetMs(h.seconds_left),
+        timeoutMs: budgetMs(h.seconds_left), confirmationShot: this.shotFor(h),
       });
       if (result.status === 'confirmed' && result.confirmation) {
-        outcome = { kind: 'booked', confirmation: result.confirmation };
+        outcome = { kind: 'booked', confirmation: result.confirmation,
+          url: result.confirmation_url || null, shot: result.confirmation_shot || null };
         try {
           await client.booked(h.job_id, result.confirmation, { robot: true });
         } catch (err) {
@@ -278,4 +299,4 @@ class Booker {
   }
 }
 
-module.exports = { Booker, budgetMs, definitive };
+module.exports = { mayBook, Booker, budgetMs, definitive };

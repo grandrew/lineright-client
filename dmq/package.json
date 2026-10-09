@@ -9,7 +9,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test test/*.test.js",
     "test:live": "LIVE=1 node --test test/live.test.js"
   },
   "dependencies": {

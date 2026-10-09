@@ -18,9 +18,9 @@
  *
  * The yes is its own: checking lines (`realDmvChecks`) is looking, and earns
  * the person credits on the site for every hour of it (the server's
- * allowance.py); booking for them (`realDmvRobots`, booker.js) is a separate
- * yes. Somebody who said yes to booking before there were two said yes to
- * looking with it. A site elsewhere than this machine has its lines on the real
+ * allowance.py); booking for them (`robotBooking`, booker.js) is a separate
+ * yes. Somebody who said yes to booking on the real DMV (`realDmvRobots`)
+ * before there were two said yes to looking with it. A site elsewhere than this machine has its lines on the real
  * DMV, so without the yes this app does not offer to read for it at all — and
  * every sync says whether it has one (`agreed`), which is what the site pays for.
  */

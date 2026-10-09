@@ -26,7 +26,7 @@ function handoff(extra = {}) {
 const refused = (status, message, body = { error: message }) => Object.assign(new Error(message), { status, body });
 
 function world({ result = { status: 'confirmed', confirmation: 'TS-12345678' }, claim = null, report = null,
-  claimed = { ok: true, claimed: true }, settings = {}, available = true, serverUrl = SITE, profile = PROFILE,
+  claimed = { ok: true, claimed: true }, settings = { robotBooking: true }, available = true, serverUrl = SITE, profile = PROFILE,
   records = {} } = {}) {
   const calls = { runs: [], claims: [], booked: [], gone: [], busy: [] };
   const runner = {
@@ -58,22 +58,34 @@ test('the app books a hand-off itself only when it has everything it needs', () 
   assert.equal(world({ available: false }).booker.wants(handoff()).why, 'no-robot');
   assert.equal(booker.wants(handoff({ robot: { ...handoff().robot, base_url: 'https://dmv.example' } })).why, 'target');
   const real = handoff({ robot: { ...handoff().robot, base_url: 'https://www.dmv.ca.gov', captcha_solver_url: null } });
-  assert.equal(world({ serverUrl: 'https://regbot.example' }).booker.wants(real).why, 'not-agreed');
-  assert.equal(world({ serverUrl: 'https://regbot.example', settings: { realDmvRobots: true } }).booker.wants(real).ok, true);
+  assert.equal(world({ serverUrl: 'https://regbot.example', settings: {} }).booker.wants(real).why, 'not-agreed');
+  assert.equal(world({ serverUrl: 'https://regbot.example' }).booker.wants(real).ok, true);
+  assert.equal(world({ serverUrl: 'https://regbot.example', settings: { realDmvRobots: true } }).booker.wants(real).ok, true,
+    'a yes to booking on the real DMV from before there was one switch');
   assert.deepEqual(world({ profile: { first_name: 'Ada' } }).booker.wants(handoff()),
     { ok: false, why: 'profile', missing: ['last_name', 'email', 'phone'] });
+});
+
+test('without the person\'s yes the page opens instead, on a practice DMV as on the real one', () => {
+  assert.equal(world({ settings: {} }).booker.wants(handoff()).why, 'not-agreed');
+  assert.equal(world({ settings: { robotBooking: false, realDmvRobots: true } }).booker.wants(handoff()).why, 'not-agreed',
+    'the one switch, turned off, is off');
+  // A booking this computer's robot already made is still said, yes or no.
+  const key = '127.0.0.1:5000/rqp1-job-77-20260926';
+  const done = world({ settings: {}, records: { [key]: { kind: 'booking.result', status: 'confirmed', confirmation: 'TS-1' } } });
+  assert.equal(done.booker.wants(handoff()).ok, true);
 });
 
 test('it books with the stored request, adding only what the form wants from the profile', async () => {
   const { booker, calls } = world();
   const h = handoff();
   const outcome = await booker.book(h);
-  assert.deepEqual(outcome, { kind: 'booked', confirmation: 'TS-12345678' });
+  assert.deepEqual(outcome, { kind: 'booked', confirmation: 'TS-12345678', url: null, shot: null });
   assert.deepEqual(calls.claims, [77], 'claimed first');
   const [run] = calls.runs;
   assert.equal(run.kind, 'book');
   assert.deepEqual(run.opts, { dmvBase: PRACTICE, solverUrl: `${PRACTICE}/__captcha/solve`, allowBooking: true,
-    timeoutMs: 235000 });
+    timeoutMs: 235000, confirmationShot: '' });
   assert.deepEqual(run.envelope.personal_data, { office_mode: 'specific', office: 'Poway', booked_by: 'applicant',
     first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.invalid', phone: '5555550100' },
   'never the SSN, the passport or the address');
@@ -95,10 +107,22 @@ test('a slot the robot found gone is reported gone', async () => {
   assert.deepEqual(await unheard.booker.book(handoff()), { kind: 'gone' }, 'gone whether or not the site hears it');
 });
 
+test('a booking brings back where its confirmation page was, and the picture the robot kept of it', async () => {
+  const shown = { status: 'confirmed', confirmation: 'TS-12345678',
+    confirmation_url: `${PRACTICE}/portal/appointments/confirmation?ref=TS-12345678`, confirmation_shot: '/shots/x.png' };
+  const { booker, calls } = world({ result: shown });
+  booker.shotsDir = '/shots';
+  const outcome = await booker.book(handoff());
+  assert.equal(calls.runs[0].opts.confirmationShot, '/shots/127.0.0.1_5000_rqp1-job-77-20260926.png',
+    'one picture per booking, named for it');
+  assert.equal(outcome.url, `${PRACTICE}/portal/appointments/confirmation?ref=TS-12345678`);
+  assert.equal(outcome.shot, '/shots/x.png');
+});
+
 test('booked is booked, even when the site will not take the report', async () => {
   const late = 'That slot is no longer held for you — its deadline may have passed and the slot cascaded.';
   const { booker, calls } = world({ report: refused(409, late) });
-  assert.deepEqual(await booker.book(handoff()), { kind: 'booked', confirmation: 'TS-12345678', unreported: late });
+  assert.deepEqual(await booker.book(handoff()), { kind: 'booked', confirmation: 'TS-12345678', url: null, shot: null, unreported: late });
   assert.equal(calls.booked.length, 1);
 });
 
@@ -157,7 +181,7 @@ test('a device of the person that went quiet mid-booking is taken over', async (
   const quiet = handoff({ booker: { name: 'desktop-box', you: false, silent: true } });
   const { booker, calls } = world({ claimed: { ok: true, claimed: true, took_over_from: 'desktop-box' } });
   assert.deepEqual(booker.wants(quiet), { ok: true }, 'a quiet device holds nothing');
-  assert.deepEqual(await booker.book(quiet), { kind: 'booked', confirmation: 'TS-12345678' });
+  assert.deepEqual(await booker.book(quiet), { kind: 'booked', confirmation: 'TS-12345678', url: null, shot: null });
   assert.equal(calls.runs.length, 1);
 
   // Stood back when another device claimed first; that one goes quiet later: not "tried".
@@ -186,7 +210,7 @@ test('a booking this computer\'s robot made before the app stopped is said, whoe
   const elsewhere = handoff({ booker: { name: 'desktop-box', you: false } });
   const { booker, calls } = world({ records: made });
   assert.deepEqual(booker.wants(elsewhere), { ok: true, recorded: true });
-  assert.deepEqual(await booker.book(elsewhere), { kind: 'booked', confirmation: 'TS-AAA3150A', recorded: true });
+  assert.deepEqual(await booker.book(elsewhere), { kind: 'booked', confirmation: 'TS-AAA3150A', recorded: true, url: null, shot: null });
   assert.deepEqual(calls.claims, [], 'no claim: the other device holds it');
   assert.deepEqual(calls.runs, [], 'and no second robot');
   assert.deepEqual(calls.booked, [{ id: 77, ref: 'TS-AAA3150A', robot: true }]);

@@ -23,6 +23,7 @@
     form: null,        // the found-slot form
     prompt: null,      // job id whose booking reference is being typed
     bannerKey: '',
+    ended: [],         // turns that ended lately, and how: [{job_id, at, kind, text}] (endedTurns)
     consoleTab: 'positions',
     nickEdit: null,    // the new nickname being typed on the account tab, if any
 
@@ -215,17 +216,73 @@
   }
 
   // -------------------------------------------------------- your turn
+  /**
+   * Turns that were in the last sync and are not in this one: how each ended,
+   * from what the site says of the bid now — booked, run out (and what came
+   * back), or gone on to somebody else with the place kept. Said in the banner
+   * over the booking page, which stays open, until dismissed or a while later.
+   */
+  function endedTurns(before, doc) {
+    if (!before || !doc) return;
+    const now = new Set((doc.handoffs || []).map((h) => h.job_id));
+    for (const h of before.handoffs || []) {
+      if (now.has(h.job_id) || state.ended.some((e) => e.job_id === h.job_id)) continue;
+      const where = h.slot ? `${h.queue_name} — ${h.slot.office_name}, ${h.slot.date} at ${h.slot.time}` : h.queue_name;
+      const settled = (doc.settled || []).find((x) => x.bid_id === h.bid_id);
+      const still = (doc.positions || []).find((x) => x.bid_id === h.bid_id);
+      let kind = 'muted';
+      let text = `Your turn on ${where} has ended.`;
+      if (settled && settled.status === 'fulfilled') {
+        kind = 'ok';
+        text = `Booked: ${where}${settled.confirmation ? ` — confirmation ${settled.confirmation}` : ''}.`;
+      } else if (settled && !['active', 'processing'].includes(settled.status)) {
+        kind = 'bad';
+        text = `${where}: ${settled.note || `your bid ended ${settled.status}.`}`;
+      } else if (still) {
+        text = `${where} went on to the next person.${still.note ? ` ${still.note}` : ' You keep your place in line.'}`;
+      }
+      state.ended.unshift({ job_id: h.job_id, at: Date.now(), kind, text });
+    }
+    state.ended = state.ended.filter((e) => Date.now() - e.at < 15 * 60000).slice(0, 3);
+  }
+
+  /** What the person does now, and what letting it run out costs (the site's `missed`). */
+  function turnSteps(h) {
+    const what = h.slot
+      ? `Book it on the booking page: choose <b>${esc(h.slot.office_name)}</b> on ${esc(h.slot.date)} at ${esc(h.slot.time)} and confirm`
+      : 'Book the first time that suits you on the booking page';
+    const m = h.missed;
+    const cost = !m ? 'then it passes to the next bidder. You keep your place either way.'
+      : `Can't take it? Pass, and you keep your place. Let the time run out and you leave the line${m.kept ? ` with ${coins(m.refund)} of your ${coins(m.refund + m.kept)} back (${num(m.refund_percent)}%)` : ', your bid refunded'}.`;
+    return `${what} — your details fill in from your profile, and the app sees the confirmation. ${cost}`;
+  }
+
   function renderBanner(force) {
     const box = $('banner');
     const handoffs = (state.doc && state.doc.handoffs) || [];
     const robotOn = (state.robots && state.robots.booking && state.robots.booking.job_id) || null;
+    state.ended = state.ended.filter((e) => Date.now() - e.at < 15 * 60000);
+    // The hand-off whose booking page is the one on screen: no button to open it.
+    const showing = (state.shell.tabs.find((t) => t.active) || {}).jobId || null;
     const key = handoffs.map((h) => `${h.job_id}:${h.phase}:${h.booker ? `${h.booker.name}:${h.booker.silent}` : ''}:${h.over ? h.over.kind : ''}`).join(',')
-      + `|${state.prompt}|${robotOn}`;
+      + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}`;
     if (!force && key === state.bannerKey) { tickClocks(); return; }
     state.bannerKey = key;
     box.innerHTML = '';
-    if (!handoffs.length) { box.classList.add('hidden'); fit(); return; }
+    if (!handoffs.length && !state.ended.length) { box.classList.add('hidden'); fit(); return; }
     box.classList.remove('hidden');
+    for (const e of state.ended) {
+      const row = document.createElement('div');
+      row.className = `banner-row ended-${e.kind}`;
+      row.innerHTML = `<span class="mark">${e.kind === 'ok' ? '✓' : e.kind === 'bad' ? '✗' : '☞'}</span>
+        <span class="text"><b>Your turn ended</b> · ${esc(e.text)}</span>
+        <span class="actions"><button class="pill" data-act="dismiss" title="Dismiss">×</button></span>`;
+      row.querySelector('[data-act=dismiss]').addEventListener('click', () => {
+        state.ended = state.ended.filter((x) => x.job_id !== e.job_id);
+        renderBanner(true);
+      });
+      box.appendChild(row);
+    }
     for (const h of handoffs) {
       const row = document.createElement('div');
       row.className = 'banner-row';
@@ -246,7 +303,7 @@
             : robot ? `this computer's robot is booking it for you now · <span class="clock" data-job="${num(h.job_id)}">${clock(left(h))}</span> left`
             : quiet ? `${esc(elsewhere)} was booking it and stopped answering · <span class="clock" data-job="${num(h.job_id)}">${clock(left(h))}</span> left`
             : elsewhere ? `${esc(elsewhere)} is booking it · <span class="clock" data-job="${num(h.job_id)}">${clock(left(h))}</span> left`
-            : `<span class="clock" data-job="${num(h.job_id)}">${clock(left(h))}</span> left to book it yourself, then it passes to the next bidder. You keep your place either way.`}
+            : `<span class="clock" data-job="${num(h.job_id)}">${clock(left(h))}</span> left.<br><span class="steps">${turnSteps(h)}</span>`}
           ${gap.length && !settling ? `<br><span class="tiny">Your profile has no ${esc(tellNames(gap))} — the app asks for them before it opens the form.</span>` : ''}
         </span>
         <span class="actions"></span>`;
@@ -266,8 +323,9 @@
           });
           actions.querySelector('[data-act=cancel]').addEventListener('click', () => { state.prompt = null; renderBanner(true); });
         } else {
-          actions.innerHTML = `<button class="pill" data-act="open">${gap.length ? 'Add your details' : 'Open the booking page ↗'}</button><button class="pill primary" data-act="booked">I booked it</button><button class="pill" data-act="pass" title="Hand it to the next bidder; you keep your place">Pass</button>`;
-          actions.querySelector('[data-act=open]').addEventListener('click', () => api.call('handoff:open', { job_id: h.job_id }));
+          const open = gap.length || showing !== h.job_id;
+          actions.innerHTML = `${open ? `<button class="pill" data-act="open">${gap.length ? 'Add your details' : 'Open the booking page ↗'}</button>` : ''}<button class="pill primary" data-act="booked">I booked it</button><button class="pill" data-act="pass" title="Hand it to the next bidder; you keep your place">Pass</button>`;
+          if (open) actions.querySelector('[data-act=open]').addEventListener('click', () => api.call('handoff:open', { job_id: h.job_id }));
           actions.querySelector('[data-act=booked]').addEventListener('click', () => { state.prompt = h.job_id; renderBanner(true); });
           actions.querySelector('[data-act=pass]').addEventListener('click', async () => {
             try { const reply = await call('handoff:pass', { job_id: h.job_id, reason: '' }); toast('ok', reply.message || 'Passed.'); }
@@ -596,8 +654,8 @@
   };
 
   function keptList(d) {
-    const dot = { held: 'var(--ok)', missing: 'var(--gold)', 'on-form': 'var(--faint)' };
-    const says = { held: '· in your profile', missing: '· missing from your profile', 'on-form': '· typed on the form' };
+    const dot = { held: 'var(--ok)', missing: 'var(--gold)', 'on-form': 'var(--faint)', optional: 'var(--faint)' };
+    const says = { held: '· in your profile', missing: '· missing from your profile', 'on-form': '· typed on the form', optional: '· not needed for this line' };
     return `<ul class="req-list">${statusOf(d).map((f) => `
       <li><span class="req-dot" style="background:${dot[f.state]}"></span><span>${esc(f.label)} <span class="home">${says[f.state]}</span></span></li>`).join('')}</ul>`;
   }
@@ -2148,9 +2206,9 @@
       <div class="check"><input type="checkbox" id="s-reader" ${s.checking ? 'checked' : ''}>
         <label for="s-reader"><span class="small"><b>Check lines for everybody in line</b>${s.publicSite ? ' — on the real DMV (dmv.ca.gov)' : ''}${perHour ? ` · earns ${perHour} an hour` : ''}</span>
         <span class="field-help">Now and then the site asks this app to look at a line's offices and report what it sees, from this computer, with a browser the app runs out of sight. What it finds goes to whoever is first — which may be you.${s.publicSite ? ' On the real DMV it is automated traffic from your own internet address, a few pages at a time, so it waits for your yes.' : ''}${perHour ? ` The site adds ${perHour} to your credits for every hour this app is checking.` : ''}</span></label></div>
-      <div class="check"><input type="checkbox" id="s-realdmv" ${s.realDmvRobots ? 'checked' : ''}>
-        <label for="s-realdmv"><span class="small"><b>Let the app book for me on the real DMV</b> (dmv.ca.gov)</span>
-        <span class="field-help">Off until you say so. A booking it makes is a real appointment in your name, with the details in your profile. Off, the app opens the booking page for you to finish when a slot is yours.${dev() ? ' On a practice DMV the app books without asking.' : ''}</span></label></div>
+      <div class="check"><input type="checkbox" id="s-bookforme" ${s.robotBooking ? 'checked' : ''}>
+        <label for="s-bookforme"><span class="small"><b>Let the app book for me</b>${s.publicSite ? ' — on the real DMV (dmv.ca.gov)' : ''}</span>
+        <span class="field-help">Off until you say so: when a slot is yours, the booking page opens in a tab with your details filled in, and you book it. On, the app's robot books it out of sight with the details in your profile, and opens the page for you only if it cannot finish.${s.publicSite ? ' A booking it makes is a real appointment in your name.' : ''}</span></label></div>
       <p class="tiny muted" style="margin:8px 0 0" id="s-robots-now">${r.booking ? `Booking ${esc(r.booking.where)} now.` : r.reading ? `Looking at ${esc(r.reading.queue_name)} now — ${num(r.reading.offices)} office${r.reading.offices === 1 ? '' : 's'}.` : lastLine}</p>
       ${bookedLine && !r.booking ? `<p class="tiny muted" style="margin:4px 0 0">${bookedLine}</p>` : ''}
     </div>`;
@@ -2283,14 +2341,15 @@
         settle(await call('settings:set', { checking: reading.checked }));
       }));
     }
-    const realDmv = $('s-realdmv');
-    if (realDmv) {
-      realDmv.addEventListener('change', guarded(async () => {
-        if (realDmv.checked && !window.confirm('Let this app book appointments for you on dmv.ca.gov, from this computer, with the details in your profile?')) {
-          realDmv.checked = false;
+    const bookForMe = $('s-bookforme');
+    if (bookForMe) {
+      bookForMe.addEventListener('change', guarded(async () => {
+        const where = state.settings && state.settings.publicSite ? ' on dmv.ca.gov' : '';
+        if (bookForMe.checked && !window.confirm(`Let this app book appointments for you${where}, from this computer, with the details in your profile?`)) {
+          bookForMe.checked = false;
           return;
         }
-        settle(await call('settings:set', { realDmvRobots: realDmv.checked }));
+        settle(await call('settings:set', { robotBooking: bookForMe.checked }));
       }));
     }
     const remind = $('s-again-remind');
@@ -2398,7 +2457,7 @@
     if (e.key === 'Escape') { address.blur(); renderTabs(); }
   });
 
-  api.on('shell:state', (shell) => { const was = state.shell.mode; state.shell = shell; applyMode(); if (was !== shell.mode && shell.mode === 'app') { renderBanner(true); } renderAgain(); });
+  api.on('shell:state', (shell) => { const was = state.shell.mode; state.shell = shell; applyMode(); renderBanner(was !== shell.mode && shell.mode === 'app'); renderAgain(); });
   api.on('import:due', (view) => {
     if (state.again && (state.again.busy || state.again.result)) return;
     state.again = { ...view };
@@ -2409,6 +2468,7 @@
     const before = state.doc;
     state.doc = doc; state.docAt = Date.now();
     creditsLive(before, doc);
+    endedTurns(before, doc);
     renderWho(); renderBanner(false); renderAgain();
     if (state.form && !doc) { state.form = null; renderFound(); }
     if (state.route.page === 'console' && doc) renderConsole();

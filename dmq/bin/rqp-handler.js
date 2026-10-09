@@ -64,7 +64,9 @@ async function simulate(env, hooks = {}) {
   await sleep(100);
   if (mode === 'BOOKED_SUCCESS') {
     const reference = `SIM-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-    return { status: 'BOOKED_SUCCESS', date, time: '10:30 AM', office, reference, results: [] };
+    // Where the stand-in would show it; no picture, there being no page.
+    const url = env.DMV_BASE_URL ? `${env.DMV_BASE_URL}/portal/appointments/confirmation?ref=${reference}` : undefined;
+    return { status: 'BOOKED_SUCCESS', date, time: '10:30 AM', office, reference, url, results: [] };
   }
   if (mode === 'BOOKING_UNCONFIRMED') {
     return { status: 'BOOKING_UNCONFIRMED', date, time: '10:30 AM', office,
@@ -118,6 +120,8 @@ async function main() {
       if (prior) {
         answer(result(ACK, `Replayed existing booking ${prior.confirmation}.`, {
           confirmation: prior.confirmation,
+          ...(prior.confirmation_url ? { confirmation_url: prior.confirmation_url } : {}),
+          ...(prior.confirmation_shot ? { confirmation_shot: prior.confirmation_shot } : {}),
           replayed: true,
           booked_date: prior.booked_date ?? null,
           latency_ms: Date.now() - started,
@@ -164,7 +168,9 @@ async function main() {
   // that DMV never confirmed, since that may be a real booking too. Then the
   // mark comes off, so a run waiting on this one finds what it came to.
   if (key && envelope.status === ACK && envelope.confirmation) {
-    store.put(key, { confirmation: envelope.confirmation, booked_date: envelope.booked_date ?? null });
+    store.put(key, { confirmation: envelope.confirmation, booked_date: envelope.booked_date ?? null,
+      ...(envelope.confirmation_url ? { confirmation_url: envelope.confirmation_url } : {}),
+      ...(envelope.confirmation_shot ? { confirmation_shot: envelope.confirmation_shot } : {}) });
   } else if (key && envelope.unconfirmed) {
     store.put(key, { unconfirmed: true, message: envelope.message, attempted: envelope.attempted ?? null });
   }

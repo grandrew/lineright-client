@@ -121,6 +121,15 @@ test('a booking maps to confirmed with the confirmation number DMV showed', () =
   assert.match(env.message, /TS-1A2B3C4D/);
   assert.equal(env.booked_date, '2026-10-08');
   assert.equal(env.latency_ms, 812);
+  assert.equal(env.confirmation_url, undefined, 'none kept, none said');
+});
+
+test('a booking says where its confirmation page was, and where its picture is kept', () => {
+  const env = outcomeToResult({ status: 'BOOKED_SUCCESS', date: new Date(2026, 9, 8), time: '10:30 AM', office: 'Poway',
+    reference: 'TS-1A2B3C4D', url: 'https://dmv.example/portal/appointments/confirmation?ref=TS-1A2B3C4D',
+    shot: '/tmp/robots/confirmations/x.png' });
+  assert.equal(env.confirmation_url, 'https://dmv.example/portal/appointments/confirmation?ref=TS-1A2B3C4D');
+  assert.equal(env.confirmation_shot, '/tmp/robots/confirmations/x.png');
 });
 
 test('an allocated slot that is not there says so, apart from an empty calendar', () => {

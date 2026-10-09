@@ -19,6 +19,10 @@
  * can store one, so those stay what they always were — something the person
  * types on the site's own form — and they never block a bid. Demanding what
  * cannot be supplied would make five of the six seeded sites unbiddable.
+ *
+ * Nor what the line says its form does not need (`required: false`): the DMV
+ * asks a drive test for a licence number and a date of birth, and a REAL ID
+ * appointment for neither, so a REAL ID turn opens its page without them.
  */
 
 /**
@@ -78,7 +82,7 @@ function status(fields, values) {
       key: f.key,
       label: f.label || f.key,
       profileKey: key,
-      state: key === null ? 'on-form' : held(values, key) ? 'held' : 'missing',
+      state: key === null ? 'on-form' : held(values, key) ? 'held' : f.required === false ? 'optional' : 'missing',
     };
   });
 }

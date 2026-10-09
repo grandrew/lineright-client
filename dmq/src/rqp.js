@@ -231,6 +231,10 @@ export function outcomeToResult(outcome, { latencyMs, booking } = {}) {
     case 'BOOKED_SUCCESS': {
       const confirmation = booking ?? outcome.reference;
       if (!confirmation) return unconfirmed(outcome, extra, 'no confirmation number was read');
+      // The confirmation page's address and a picture of it, when the run kept
+      // them: for the person to see their confirmation as DMV showed it.
+      if (outcome.url) extra.confirmation_url = outcome.url;
+      if (outcome.shot) extra.confirmation_shot = outcome.shot;
       return result(
         ACK,
         `Booked ${toDateOnly(outcome.date)} at ${outcome.time} — ${outcome.office}. ` +

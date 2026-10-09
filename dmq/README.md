@@ -56,7 +56,11 @@ current behaviour, including that the widget is still v2 Invisible.
 7. A booking counts as booked only once the site shows a confirmation number,
    which comes back as the `reference`. If none appears within
    `CONFIRMATION_TIMEOUT_MS` the run ends `BOOKING_UNCONFIRMED`: the booking was
-   sent and may exist, so it is neither claimed nor retried.
+   sent and may exist, so it is neither claimed nor retried. A confirmed one
+   also says where its confirmation page was (`confirmation_url`) and, with
+   `RQP_CONFIRMATION_SHOT`, keeps a full-page picture of it there
+   (`confirmation_shot`), for the person to see their confirmation as the site
+   showed it; a replay says both again.
 
 ## Appointment types
 
@@ -207,6 +211,7 @@ the rest.
 | `RQP_ALLOW_BOOKING` | Must be exactly `true` before a run will book. Anything else is a dry probe |
 | `RQP_STATE_PATH` | The replay store, default `./data/rqp-bookings.json`; the marks of runs under way, and its lock, sit beside it |
 | `RQP_WAIT_MS` | How long a booking waits for another run of the same booking still going, default 180000 |
+| `RQP_CONFIRMATION_SHOT` | Where a confirmed booking keeps its picture of the confirmation page (a `.png`); none without it |
 | `RQP_MODE` | `simulate`: answer without a browser or a network, to test both sides of the pipe |
 | `RQP_SIMULATE_OUTCOME` | What a simulated booking ends with: `BOOKED_SUCCESS`, `BOOKING_UNCONFIRMED`, `FOUND_AND_STOPPED`, `SLOT_GONE`, or `NO_AVAILABILITY` (the default) |
 | `RQP_SIMULATE_DELAY_MS` | How long a simulated run takes; a booking sends its form half way |

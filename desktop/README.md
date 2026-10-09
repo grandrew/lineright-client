@@ -6,10 +6,11 @@ site (lineright.org, run by lineright-server), and the person's account is there
 account by code and does everything else from this computer: its screens show
 the sites, each line's live order book, your console and a profile, drawn from
 the site's JSON API over one device token; its robots look for openings when the
-site asks, for everybody in line; and when the site says a slot is yours, its
-robot books it with the details kept here — or the app opens the booking page
-for you, when the site asks for a human check. Your personal details never
-leave this machine, and the app never sees your password.
+site asks, for everybody in line; and when the site says a slot is yours, the
+app opens the booking page in a tab, with your details filled in and a bar over
+it saying what to do — or, once you let it, its robot books it with the details
+kept here. Your personal details never leave this machine, and the app never
+sees your password.
 
 The first time it opens it offers to bring your details across from a browser
 you already use, then asks you to create your account on the site — or sign in —
@@ -48,6 +49,7 @@ details into the booking form for you.
 │ [◉ regbot] [☞ Your turn — REAL ID ×] [+]                               │  browser mode:
 │ ‹ › ↻ ⌂  127.0.0.1:8787/portal/appointments/details  [✎ Fill form]     │  tabs, address
 │ ☞ Your turn · REAL ID — Poway … 4:12 left  [I booked it] [Pass]        │  the hand-off
+│   Book it on the booking page: choose Poway on 2026-10-06 at 10:00 …   │  what to do
 ├────────────────────────────────────────────────────────────────────────┤
 │                 the booking site, in a sandboxed tab                   │
 └────────────────────────────────────────────────────────────────────────┘
@@ -301,9 +303,35 @@ computer is booking, and the one in hand is given back as the app closes
 openings for everybody in line** turns it off: the read under way is finished,
 and no other is started (`src/reader.js`).
 
-**Booking, when it is yours.** A hand-off for a slot on a line the app has a
-robot for carries the booking request the site stored for it, the DMV to book
-it on, and which details the form wants. If the profile has them, the app
+**Booking, when it is yours.** By default you book it. The app opens the
+booking page in a tab — on the stand-in, the office's calendar; on the real
+DMV, the line's appointment page — raises the window, notifies you, and types
+your profile into the form when it loads. The bar over the page says which
+office, day and time, the clock, and what each way out costs: **I booked it**,
+**Pass** (the next person gets it at once and you keep your place), or letting
+the clock run out, which takes you out of the line with the share of your bid
+the site sets (`missed` in the hand-off; 70% unless its operator says
+otherwise). When the tab shows the booking site's confirmation number — read
+the way the robot reads it — the app says "I booked it" with that number for
+you, so a booking made and never reported does not run out. When a turn ends,
+however it ended, the bar says so over the page, which stays open: booked and
+its number, gone on to the next person with your place kept, or run out and
+what came back.
+
+**Letting the app book for you.** Settings → *This computer's robots* → **Let
+the app book for me** — off until you tick it, on the real DMV and a practice
+one alike. The turn's booking page opens all the same, covered by a card
+saying the app is booking it — so nothing is booked by hand beside it — and,
+once the robot has booked, the card says **✓ Booked** with the confirmation
+number, and the DMV's confirmation opens in a tab of its own: its page, when its
+address carries the number and opens anywhere (the stand-in's does), otherwise
+the full-page picture the robot kept of it (`robots/confirmations/` in the
+user-data directory, the newest 40; `src/confirmations.js`). Another of your
+devices booking it covers the page the same way, naming that device.
+
+A hand-off for a slot on a line the app has a robot for carries the
+booking request the site stored for it, the DMV to book it on, and which
+details the form wants. With that yes, and if the profile has them, the app
 claims the hand-off (`POST …/handoffs/<job>/claim`: the first of your devices to
 claim it books it, and the others say which one is — and take it over, should
 that one stop answering for half a minute), fills in only those
@@ -347,9 +375,10 @@ a yes, and there are two. **Checking lines** is looking: the Sites screen asks
 once — *Check lines and earn credits* is the button — since it is automated
 traffic from your own address, and Settings turns it off again. Without it the
 app does not offer the site to read at all, and gives back a read handed to it
-anyway. **Let the app book for me on the real DMV** is booking a real appointment
-in your name, off until you tick it. The time of each yes is kept, and a yes to
-booking given before there were two counts as a yes to looking too. Expect the
+anyway. **Let the app book for me** is booking appointments in your name, on
+the real DMV or a practice one, off until you tick it. The time of each yes is
+kept, and a yes to booking on the real DMV given before there were two counts as
+a yes to looking too. Expect the
 real DMV to ask headless browsers for a human check: then the reads come back
 blocked, and bookings open the page for you.
 
@@ -368,11 +397,12 @@ earned, and the weekly top-up back to ⧗35 that every account gets.
 | The site hands this computer a read | The scout looks, and `POST …/reads/<id>` answers it |
 | You open Sites, a site, a line | `GET /api/client/sites`, `…/sites/<slug>`, `…/queues/<id>` — the same numbers the website shows |
 | You join a line, bid up, withdraw | `POST …/queues/<id>/bids`, `…/bids/<id>/raise`, `…/bids/<id>/withdraw` |
-| A hand-off arrives | Desktop notification and the bar with the clock; the robot claims it and books it (`…/claim`, then `…/booked` or `…/gone`), or a tab opens on the booking page |
+| A hand-off arrives | Desktop notification, a tab on the booking page and the bar over it with the clock and what to do; or, when you let the app book for you, the same tab under a "booking it for you" card while the robot claims it and books it (`…/claim`, then `…/booked` or `…/gone`), then the confirmation in a tab beside it |
 | The tab's page loads | Your profile is typed into the form (see below) |
 | You click **I booked it** | `POST …/handoffs/<job>/booked` — the worker captures your escrow |
 | You click **Pass** | `POST …/handoffs/<job>/pass` — the slot cascades to the next bidder; you keep your place |
-| The clock runs out | Nothing to click: the server cascades it, and you keep your place |
+| The tab shows the booking site's confirmation number | `POST …/handoffs/<job>/booked` with it, for you |
+| The clock runs out | Nothing to click: the server cascades it, and you leave the line with the share of your bid the site sets (the hand-off's `missed`) — Pass instead to keep your place. A slot your app never picked up costs nothing |
 | You click **⌕ Found a slot** | `POST /api/client/found` — the board says who gets it, and it is passed to them if not you |
 
 The last row is the part that makes people respect each other's positions.

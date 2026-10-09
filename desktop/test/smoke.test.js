@@ -761,9 +761,9 @@ test('the app looks for openings when the site asks, with its own scout, and ans
  * request, the DMV to book it on, what the form needs. It records the claim and
  * what the app said came of it, and drops the hand-off once it has an answer.
  */
-async function bookingSite(dmvBase, { quietAfter = null } = {}) {
+async function bookingSite(dmvBase, { quietAfter = null, openUrl = null } = {}) {
   // quietAfter: another device of the person's holds the hand-off, and goes
-  // quiet after that many syncs of this app's.
+  // quiet after that many syncs of this app's. openUrl: where its page is.
   const seen = { syncs: 0, claims: [], booked: [], gone: [], claimedAtSync: null };
   const day = '2026-10-06';
   const server = http.createServer((req, res) => {
@@ -788,8 +788,9 @@ async function bookingSite(dmvBase, { quietAfter = null } = {}) {
         job_id: 77, bid_id: 5, queue_id: 9, queue_name: 'REAL ID', queue_slug: 'real-id', site_slug: 'ca-dmv',
         site_name: 'California DMV', connector: 'dmv.ca.gov.qmatic', phase: 'booking',
         slot: { office_code: 'POWAY', office_name: 'Poway', date: day, time: '10:00', miles: 3.1 },
-        open_url: `${dmvBase}/portal/appointments/select-date?branch=POWAY&service=RID`,
+        open_url: openUrl || `${dmvBase}/portal/appointments/select-date?branch=POWAY&service=RID`,
         deadline: null, seconds_left: 280, since: null, rank_at: 1, amount: 200, message: 'Your turn', needs: [],
+        missed: { refund_percent: 70, refund: 140, kept: 60 },
         booker: quietAfter === null || seen.claimedAtSync !== null ? null
           : { name: 'other-box', you: false, silent: seen.syncs > quietAfter },
         robot: {
@@ -814,7 +815,7 @@ async function bookingSite(dmvBase, { quietAfter = null } = {}) {
   return { server, seen, port };
 }
 
-test("the app's robot books the person's slot itself, and the page opens only when it cannot",
+test("the app's robot books the person's slot once they let it, and the page opens when it cannot",
   { timeout: 120000 }, async (t) => {
   const electron = electronPath();
   const display = xvfb();
@@ -823,10 +824,12 @@ test("the app's robot books the person's slot itself, and the page opens only wh
   if (!fs.existsSync(path.join(DMQ, 'bin', 'rqp-handler.js'))) return t.skip('no ../dmq checkout');
 
   const dmv = await dmvStub();
-  const book = async (outcome, options) => {
+  const book = async (outcome, options, { agreed = true } = {}) => {
     const site = await bookingSite(dmv.base, options);
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-book-'));
     seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
+    // Settings → Let the app book for me, ticked.
+    if (agreed) fs.writeFileSync(path.join(userData, 'regbot.json'), JSON.stringify({ v: 2, robotBooking: true }));
     try {
       const result = await runApp({ electron, display, port: site.port, userData, exitAfter: 10000,
         extraEnv: { REGBOT_ROBOT_SIMULATE: '1', REGBOT_ROBOT_OUTCOME: outcome } });
@@ -836,7 +839,24 @@ test("the app's robot books the person's slot itself, and the page opens only wh
     }
   };
   try {
-    // Booked: claimed, booked with the DMV's own number, and no page for the person.
+    // Not let to book for them: the page opens at once, and nothing is claimed or run.
+    const asked = await book('BOOKED_SUCCESS', {}, { agreed: false });
+    assert.deepEqual(asked.seen.claims, []);
+    assert.deepEqual(asked.seen.booked, []);
+    assert.equal(asked.result.robots.lastBooking, null);
+    assert.equal(asked.result.tabs.length, 1, JSON.stringify(asked.result.tabs));
+    assert.equal(asked.result.tabs[0].kind, 'handoff');
+    assert.equal(asked.result.tabs[0].jobId, 77);
+
+    // Booked by hand in that tab: the booking site's confirmation number is said for them.
+    const byHand = await book('BOOKED_SUCCESS',
+      { openUrl: `${dmv.base}/portal/appointments/confirmation?ref=TS-ABCD1234` }, { agreed: false });
+    assert.deepEqual(byHand.seen.claims, []);
+    assert.deepEqual(byHand.seen.booked, [{ confirmation: 'TS-ABCD1234' }]);
+    assert.equal(byHand.result.tabs.length, 1, 'the page stays open');
+
+    // Booked: claimed, booked with the DMV's own number — and the turn's page
+    // opened all the same, saying so, with the DMV's confirmation in a tab beside it.
     const booked = await book('BOOKED_SUCCESS');
     assert.deepEqual(booked.seen.claims, [77], 'claimed before the robot ran');
     assert.equal(booked.seen.booked.length, 1);
@@ -845,7 +865,11 @@ test("the app's robot books the person's slot itself, and the page opens only wh
     assert.equal(booked.result.robots.lastBooking.kind, 'booked');
     assert.equal(booked.result.robots.lastBooking.confirmation, booked.seen.booked[0].confirmation);
     assert.equal(booked.result.robots.booking, null);
-    assert.deepEqual(booked.result.tabs, [], 'nothing left for the person to do');
+    const ref = booked.seen.booked[0].confirmation;
+    assert.deepEqual(booked.result.tabs.map((t) => [t.kind, t.jobId]), [['handoff', 77], ['confirmation', null]],
+      JSON.stringify(booked.result.tabs));
+    assert.equal(booked.result.tabs[1].url, `http://127.0.0.1:9/portal/appointments/confirmation?ref=${ref}`);
+    assert.deepEqual(booked.result.cards, [{ jobId: 77, kind: 'booked' }], 'the page says it is booked');
     const replay = JSON.parse(fs.readFileSync(path.join(booked.userData, 'robots', 'rqp-bookings.json'), 'utf8'));
     assert.deepEqual(Object.keys(replay), [`127.0.0.1:${booked.port}/rqp1-job-77-20260926101500`],
       'the replay key names the site it came from');
@@ -856,6 +880,7 @@ test("the app's robot books the person's slot itself, and the page opens only wh
     assert.deepEqual(stopped.seen.booked, []);
     assert.equal(stopped.result.robots.lastBooking.kind, 'page');
     assert.equal(stopped.result.tabs.length, 1, JSON.stringify(stopped.result.tabs));
+    assert.deepEqual(stopped.result.cards, [], 'uncovered: the page is theirs to book on');
     assert.equal(stopped.result.tabs[0].kind, 'handoff');
     assert.equal(stopped.result.tabs[0].jobId, 77);
 
@@ -865,7 +890,7 @@ test("the app's robot books the person's slot itself, and the page opens only wh
     assert.deepEqual(quiet.seen.claims, [77]);
     assert.ok(quiet.seen.claimedAtSync > 2, `not claimed while the other device was on it (sync ${quiet.seen.claimedAtSync})`);
     assert.equal(quiet.seen.booked.length, 1);
-    assert.deepEqual(quiet.result.tabs, []);
+    assert.deepEqual(quiet.result.tabs.map((t) => t.kind), ['handoff', 'confirmation']);
 
     // Gone by the time the robot got there: the site hears so, and no page opens.
     const gone = await book('SLOT_GONE');
@@ -873,7 +898,8 @@ test("the app's robot books the person's slot itself, and the page opens only wh
     assert.match(gone.seen.gone[0].reason, /no longer listed/);
     assert.deepEqual(gone.seen.booked, []);
     assert.equal(gone.result.robots.lastBooking.kind, 'gone');
-    assert.deepEqual(gone.result.tabs, []);
+    assert.deepEqual(gone.result.tabs.map((t) => t.kind), ['handoff'], 'the page stays, uncovered');
+    assert.deepEqual(gone.result.cards, []);
   } finally {
     dmv.server.close();
   }

@@ -101,6 +101,9 @@ export function loadConfig(env = process.env) {
     // How long to wait, after "Schedule appointment", for a confirmation
     // number. Past it the booking is reported as unconfirmed, never as booked.
     confirmationTimeoutMs: Number(env.CONFIRMATION_TIMEOUT_MS || 30000),
+    // Where to keep a picture of the confirmation page, for the person to see
+    // what the robot saw (the desktop app's booker). None by default.
+    confirmationShotPath: env.RQP_CONFIRMATION_SHOT ? path.resolve(env.RQP_CONFIRMATION_SHOT) : null,
     // A token the applicant obtained themselves, passed down from regbot when a
     // parked job resumes. Null on a plain run, which is the common case.
     captchaToken: env.CAPTCHA_TOKEN ? String(env.CAPTCHA_TOKEN).trim() : null,
