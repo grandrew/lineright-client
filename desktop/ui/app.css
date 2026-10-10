@@ -89,7 +89,6 @@ input[type=date],input[type=time]{color-scheme:light}
 #crumbs .here{color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis}
 #right{display:flex; align-items:center; gap:10px; white-space:nowrap}
 #who b{font-family:var(--mono)}
-#status{font-size:12px}
 #gear{width:30px; height:30px; padding:0; font-size:17px; color:var(--muted)}
 #gear:hover{background:var(--surface-2)}
 #update{background:var(--ok-soft); border-color:#a7f3d0; color:var(--ok)}
@@ -285,7 +284,13 @@ label.field input,label.field select,label.field textarea{width:100%}
 .help table.data{margin:8px 0}
 
 /* ------------------------------------------------------------ toasts */
-#toasts{position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:50; width:min(420px,calc(100vw - 32px))}
+/* The app's status, in the bottom-right corner: never in the way, never moving the bar. */
+#statusline{position:fixed; right:0; bottom:0; z-index:40; max-width:min(560px,70vw); padding:3px 10px 3px 12px;
+  font-size:12px; line-height:18px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none;
+  background:var(--surface); border:1px solid var(--line); border-right:0; border-bottom:0; border-top-left-radius:8px;
+  box-shadow:0 -4px 14px -8px rgba(16,26,45,.25)}
+body.mode-tab #statusline{display:none}
+#toasts{position:fixed; right:16px; bottom:34px; display:flex; flex-direction:column; gap:8px; z-index:50; width:min(420px,calc(100vw - 32px))}
 .toast{padding:10px 14px; border-radius:var(--r-sm); background:var(--surface); box-shadow:0 10px 30px -12px rgba(16,26,45,.4), inset 0 0 0 1px var(--line); font-size:13px;
   border-left:3px solid var(--line); animation:rise .2s ease}
 .toast.ok{border-left-color:var(--ok)} .toast.bad{border-left-color:var(--bad)} .toast.warn{border-left-color:var(--gold)}

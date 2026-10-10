@@ -148,9 +148,15 @@
     renderStatus();
   }
 
+  // The status line in the bottom-right corner (#statusline): empty, it is not there.
   function renderStatus() {
-    const el = $('status');
+    const el = $('statusline');
     const s = state.status || {};
+    paintStatus(el, s);
+    el.classList.toggle('hidden', !el.textContent);
+  }
+
+  function paintStatus(el, s) {
     if (!paired()) { el.className = 'muted'; el.textContent = ''; return; }
     if (s.state === 'synced') {
       // What this computer's robots are doing for the site, ahead of the sync time.
