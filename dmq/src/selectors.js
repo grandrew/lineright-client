@@ -50,10 +50,11 @@ export function locationSearchBox(page) {
 /**
  * Office result cards.
  *
- * Scoping to the results list matters: each office also gets a Google Maps
- * marker popup containing a second, identical "Select Location" button, so an
- * unscoped search returns two hits per office and the map one carries no
- * address text to match against.
+ * Scoping to the results list matters: once the map has drawn, each office
+ * also gets a marker popup (div.dmv-marker-popup: name, address and an
+ * a.dmv-marker-popup__link "Select Location", seen 2026-10-13), so an unscoped
+ * search returns two hits per office, and the map's is a link with no href in
+ * a popup hidden until its pin is clicked.
  */
 export function officeCards(page) {
   return page.locator('li.location-results__list-item, li.search-card');
