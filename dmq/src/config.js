@@ -104,6 +104,11 @@ export function loadConfig(env = process.env) {
     // Where to keep a picture of the confirmation page, for the person to see
     // what the robot saw (the desktop app's booker). None by default.
     confirmationShotPath: env.RQP_CONFIRMATION_SHOT ? path.resolve(env.RQP_CONFIRMATION_SHOT) : null,
+    // Where to keep everything the run did on the site (instrument.js): its
+    // network, console, steps and Playwright trace. None by default.
+    traceDir: env.RQP_TRACE_DIR ? path.resolve(env.RQP_TRACE_DIR) : null,
+    // Pictures in the trace too: worth their size for a booking, less so for a look.
+    traceScreenshots: env.RQP_TRACE_SCREENSHOTS === '1',
     // A token the applicant obtained themselves, passed down from regbot when a
     // parked job resumes. Null on a plain run, which is the common case.
     captchaToken: env.CAPTCHA_TOKEN ? String(env.CAPTCHA_TOKEN).trim() : null,

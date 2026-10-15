@@ -2237,6 +2237,25 @@
     </div>`;
   }
 
+  // What the app keeps of what it did, and for how long (logbook.js, pagelog.js).
+  function logsPanel(s) {
+    const l = s.logs;
+    if (!l) return '';
+    const size = l.bytes === null || l.bytes === undefined ? ''
+      : ` They take ${l.bytes < 1048576 ? `${Math.max(1, Math.round(l.bytes / 1024))} KB` : `${Math.round(l.bytes / 1048576)} MB`} now.`;
+    return `<div class="panel"><div class="panel-title">Logs</div>
+      <p class="small" style="margin:0 0 10px">Everything the app does is written down on this computer, so that what happened on a booking site can be told exactly afterwards: each page in its tabs, what the page asked the site and what came back, what was clicked and filled in, a copy of the page after each step; what the robots did, with a trace of every step; and each exchange with the LineRight Regbot site. Nothing in them is sent anywhere.</p>
+      <p class="tiny muted" style="margin:0 0 10px">Passwords, tokens, cookies and captcha answers are never written, nor licence or Social Security numbers or dates of birth; a name, email or phone you typed is kept as its length. Pages you booked on, copied, show what they showed you. Start over deletes the logs too.${size}</p>
+      <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap">
+        <label class="small" for="s-logdays">Keep them for</label>
+        <input id="s-logdays" type="number" min="1" max="30" step="1" value="${esc(String(l.keepDays))}" style="width:72px">
+        <span class="small">days</span>
+        <button class="btn btn-sm" id="s-logdays-save">Save</button>
+        <button class="btn btn-sm" id="s-logs-open">Open the logs folder</button>
+      </div>
+      <p class="tiny muted" style="margin:8px 0 0">In <span class="num">${esc(l.dir)}</span></p></div>`;
+  }
+
   // This app's telemetry: the Advanced screen, and whether it is shared.
   function advancedPanel(s) {
     const t = s.telemetry || {};
@@ -2262,6 +2281,7 @@
       <ul class="small" style="margin:0 0 10px; padding-left:20px">
         ${dev() ? '<li>the practice server on this computer, if there is one, and everything on it: your account there, your lines, bids, practice credits and their history, its settings file and its logs</li>' : ''}
         <li>this app's telemetry — what the Advanced screen plots</li>
+        <li>this app's logs — what it did on booking sites, and the copies of those pages</li>
         <li>your profile, every personal detail kept for booking forms</li>
         <li>sign-ins and anything else booking sites stored in this app's tabs</li>
         <li>these settings: ${dev() ? 'which server, which DMV the robots use, the update feed, developer mode, ' : ''}this device's name, and what you said about checking lines and booking</li>
@@ -2281,7 +2301,7 @@
       api.call('settings:get').then((v) => { state.settings = v; state.stack = v.stack; if (state.route.page === 'settings') renderSettings(false); });
       if (!s) return;
     }
-    const editing = document.activeElement && document.activeElement.closest('#settingsForm') && document.activeElement.tagName === 'INPUT' && document.activeElement.type === 'text';
+    const editing = document.activeElement && document.activeElement.closest('#settingsForm') && document.activeElement.tagName === 'INPUT' && ['text', 'number'].includes(document.activeElement.type);
     if (editing) return;
     s.stack = state.stack || s.stack;
     page.innerHTML = `<div class="wrap" style="max-width:760px">
@@ -2295,6 +2315,7 @@
         </div>
         ${robotsPanel(s)}
         ${againPanel(s)}
+        ${logsPanel(s)}
         ${advancedPanel(s)}
         ${resetPanel(s)}
         <p class="tiny muted">LineRight Regbot ${esc(s.version)} · Electron ${esc(s.electron)} · ${esc(s.platform)}${s.packaged ? '' : ' · unpackaged'} · profile at ${esc(s.profileFile)}</p>
@@ -2332,6 +2353,12 @@
     on('s-signout', () => api.call('pair:forget'));
     on('s-signin', () => go('signin'));
     on('s-advanced', () => go('advanced'));
+    on('s-logs-open', guarded(() => call('logs:open')));
+    on('s-logdays-save', guarded(async () => {
+      const v = await call('settings:set', { logKeepDays: Number($('s-logdays').value) });
+      settle(v);
+      toast('ok', `Logs are kept for ${v.logs.keepDays} day${v.logs.keepDays === 1 ? '' : 's'}; anything older is gone.`);
+    }));
     on('s-restart', guarded(async () => { toast('ok', 'Restarting the server on this computer…'); state.stack = await call('stack:restart'); renderSettings(true); }));
     on('s-logs', guarded(() => call('stack:open', { what: 'logs' })));
     on('s-config', guarded(() => call('stack:open', { what: 'config' })));
@@ -2398,6 +2425,8 @@
       <p>Credits are what a place in a line is staked with, and your balance is kept on the LineRight Regbot site — the app shows it beside your name and brings it up to date on every sync. You do not have to buy any: a new account starts with enough for a place in a line, every week the site tops you back up to that many to spend (credits staked on your places do not count, so the longer you wait, the more you can stake), and while this app checks lines for everybody it earns you more, every hour — <b>+ Credits</b> in the top bar shows how much, and when the next top-up is. Buying more is a way to move up faster: <b>+ Credits</b> (or <b>File → Buy credits</b>) shows what is on sale; buying opens the payment page in your own browser, where your card is typed — never in this app — and the credits appear as soon as the payment is confirmed. A bid holds its credits while you wait and gives them back in full if you leave the line or the booking does not happen; they are spent only when an appointment is booked for you. A bid your credits do not cover is refused, and the app offers to buy the difference.</p>
       <h2>Asking for a line</h2>
       <p>Need a booking system LineRight Regbot does not cover yet — another DMV, a consulate, a clinic — or another kind of appointment on a site that is here? <b>Help → Ask for a site or a line</b> (or <b>Not here?</b> under the sites) asks the people running LineRight Regbot for it: the site's address, what it is called, which appointments and where. Everybody who asks for the same one is counted together, and once the people running LineRight Regbot have read a request, it is listed there for anybody to add themselves to with <b>Me too</b>. When they answer, the app tells you, and the answer shows on that screen. If you run the booking system, say so in the form.</p>
+      <h2>Logs</h2>
+      <p>Everything the app does is written down on this computer, so what happened on a booking site can be told exactly afterwards: each page in its tabs — what it asked the site and what came back, what was clicked and filled in, a copy of the page after each step — what the robots did, with a trace of every step, and each exchange with the LineRight Regbot site. <b>Help → Open the logs folder</b> shows them. They are kept three days unless <b>Settings → Logs</b> says otherwise, and nothing in them is sent anywhere. Passwords, tokens, cookies, captcha answers, licence and Social Security numbers and dates of birth are never written; a name, email or phone you type is kept as its length.</p>
       <h2>Advanced: telemetry and diagnostics</h2>
       <p><b>Help → Advanced</b> (or <b>Settings → Advanced</b>) plots how this app is doing over the last day: its syncs with the site and how long they take, the round trips the site timed, what its robots did, and the memory and CPU it uses, with a log of what happened. It is kept on this computer. <b>Share now</b> sends those numbers to the LineRight Regbot site — numbers and a short list of words, never anything from your profile — and shows exactly what would go first; sharing can also be turned on every six hours.</p>
       <h2>Your account and the LineRight Regbot site</h2>

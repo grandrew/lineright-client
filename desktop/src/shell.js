@@ -77,6 +77,8 @@ class Shell extends EventEmitter {
     this.order.push(id);
     this.win.contentView.addChildView(view);
     this.wire(tab);
+    // Before it loads, so whatever writes the page down (pagelog.js) sees its first request.
+    this.emit('created', tab);
     view.webContents.loadURL(url).catch(() => {});
     if (activate || !this.active) this.select(id);
     else this.layout();

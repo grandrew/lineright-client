@@ -334,6 +334,24 @@ test('every request is timed for the app\'s own telemetry, the failed ones too',
   for (const r of seen) assert.ok(Number.isFinite(r.ms) && r.ms >= 0);
 });
 
+test('the logs hear each exchange whole: what was sent, and what came back or went wrong', async () => {
+  const seen = [];
+  const fetch = fakeFetch({
+    '/api/client/sync': { body: { protocol: 'RQP/1', handoffs: [] } },
+    '/api/client/handoffs/77/booked': { status: 409, body: { error: 'That slot is no longer held for you.' } },
+  });
+  const client = new SyncClient({ serverUrl: 'http://srv', token: 'tok', fetch, onExchange: (r) => seen.push(r) });
+  await client.sync();
+  await assert.rejects(client.booked(77, 'TS-1', { robot: true }));
+  assert.equal(seen[0].path, '/api/client/sync');
+  assert.deepEqual(seen[0].reply, { protocol: 'RQP/1', handoffs: [] });
+  assert.equal(seen[0].error, null);
+  assert.deepEqual([seen[1].path, seen[1].status], ['/api/client/handoffs/77/booked', 409]);
+  assert.deepEqual(seen[1].body, { confirmation: 'TS-1', robot: true });
+  assert.equal(seen[1].error.message, 'That slot is no longer held for you.');
+  assert.equal(seen[1].reply, undefined);
+});
+
 test('a site that asks to be left alone says for how long', async () => {
   const fetch = async () => ({ status: 429, ok: false, headers: { get: (h) => (h === 'retry-after' ? '1800' : null) },
     json: async () => ({ error: 'Shared recently enough — try again later.' }) });

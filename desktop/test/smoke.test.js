@@ -756,6 +756,71 @@ test('the app looks for openings when the site asks, with its own scout, and ans
   }
 });
 
+test('a booking page in a tab is written down: its network, what was clicked and typed, the page after each step',
+  { timeout: 120000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+
+  const dmv = await dmvStub();
+  const site = await bookingSite(dmv.base);
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-logs-'));
+  seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
+  // Not let to book for them: the turn's page opens, for the person to book on.
+  const run = startApp({ electron, display, port: site.port, userData, exitAfter: 16000, extra: ['--remote-debugging-port=0'] });
+  let page = null;
+  try {
+    const devPort = Number(await until(() => fs.readFileSync(path.join(userData, 'DevToolsActivePort'), 'utf8').split('\n')[0], 30000, 'DevTools'));
+    page = await pageWhere(devPort, (u) => u.startsWith(dmv.base), 'the booking page');
+    await until(() => page.evaluate("document.readyState === 'complete' && Boolean(document.getElementById('note'))"), 15000, 'the form');
+    await new Promise((r) => setTimeout(r, 1000));
+    // A person at the page: an office in a field that is nobody's, their name in one that is theirs, a click.
+    await page.evaluate(`(() => {
+      const set = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
+      set('note', 'Poway');
+      set('fn', 'Ada');
+      document.getElementById('ln').click();
+      return true;
+    })()`);
+    await run.result;
+  } finally {
+    if (page) page.close();
+    if (run.child.exitCode === null) run.child.kill();
+    site.server.close();
+    dmv.server.close();
+  }
+
+  const logs = path.join(userData, 'logs');
+  const named = (prefix) => fs.readdirSync(logs).filter((f) => f.startsWith(prefix));
+  const lines = (file) => fs.readFileSync(path.join(logs, file), 'utf8').trim().split('\n');
+  assert.match(lines(named('app-')[0]).join('\n'), /starting .*logs in .*kept 3 days/);
+  const site_ = lines(named('site-')[0]).map((l) => JSON.parse(l));
+  assert.ok(site_.some((r) => r.path === '/api/client/sync' && r.reply && r.reply.handoffs), 'the site\'s answers are kept');
+  assert.ok(site_.every((r) => !JSON.stringify(r).includes('smoke-token')), 'the device token never is');
+
+  const records = lines(named('pages-')[0]).map((l) => JSON.parse(l));
+  const of = (type) => records.filter((r) => r.type === type && r.job === 77);
+  assert.equal(of('opened')[0].network, true, 'the network watched from outside the page');
+  const doc = of('request').find((r) => r.rtype === 'Document' && r.url.startsWith(dmv.base));
+  assert.ok(doc, JSON.stringify(records.slice(0, 5)));
+  assert.equal(of('response').find((r) => r.id === doc.id).status, 200);
+  const body = of('body').find((r) => r.id === doc.id);
+  assert.match(fs.readFileSync(path.join(logs, body.file), 'utf8'), /DMV stub/);
+  assert.ok(of('loaded').length >= 1);
+  const actions = of('action');
+  const changed = (id) => actions.find((a) => a.action === 'change' && a.target && a.target.id === id);
+  assert.equal(changed('note').value, 'Poway', 'a field that is nobody\'s keeps its value');
+  assert.deepEqual([changed('fn').value, changed('fn').length], [undefined, 3], 'a name is kept as its length');
+  assert.ok(actions.some((a) => a.action === 'click' && a.target && a.target.id === 'ln'), JSON.stringify(actions));
+  const copies = of('snapshot');
+  assert.ok(copies.length >= 1, 'the page copied after the step');
+  const last = fs.readFileSync(path.join(logs, copies.at(-1).file), 'utf8');
+  assert.match(last, /id="note"[^>]*value="Poway"/);
+  assert.match(last, /id="fn"[^>]*value="‹3 chars›"/);
+  assert.doesNotMatch(last, /value="Ada"/);
+});
+
 /**
  * A regbot site whose one hand-off this app can book itself: the job's stored
  * request, the DMV to book it on, what the form needs. It records the claim and
@@ -913,6 +978,12 @@ test("the app's robot books the person's slot once they let it, and the page ope
     assert.equal(closed.seen.booked.length, 1, 'the site heard it was booked');
     assert.match(closed.seen.booked[0].confirmation, /^SIM-[0-9A-F]{8}$/);
     assert.ok(closed.ms > 9000, `the app went only once the robot was done (${closed.ms} ms)`);
+    // Each robot run is written down in the logs, the booking's with what it was asked and answered.
+    const runs = fs.readdirSync(path.join(closed.userData, 'logs', 'robots'));
+    assert.equal(runs.length, 1, runs.join(', '));
+    const run = JSON.parse(fs.readFileSync(path.join(closed.userData, 'logs', 'robots', runs[0], 'run.json'), 'utf8'));
+    assert.equal(run.kind, 'book');
+    assert.equal(run.answer.confirmation, closed.seen.booked[0].confirmation);
     const robotsDir = path.join(closed.userData, 'robots');
     assert.deepEqual(fs.readdirSync(robotsDir).filter((f) => f.endsWith('.running')), [], 'no booking left half done');
     const made = JSON.parse(fs.readFileSync(path.join(robotsDir, 'rqp-bookings.json'), 'utf8'));

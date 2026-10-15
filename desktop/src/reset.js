@@ -8,8 +8,9 @@
  * Chromium — and this deletes the files: the built-in server's folder (its
  * database, its credentials, its settings file, its logs and the robots'
  * state), the folder of the robots the app runs for the regbot site (their
- * booking replay store and log, robots.js), the profile, the app's settings,
- * and its telemetry (telemetry.js).
+ * booking replay store and log, robots.js), the app's logs (logbook.js: they
+ * hold the pages booked on, and so the person's details), the profile, the
+ * app's settings, and its telemetry (telemetry.js).
  *
  * The server's folder goes first. It is the one thing a process can still be
  * holding on Windows, where a service's files are let go a moment after it
@@ -21,6 +22,7 @@ const path = require('node:path');
 
 const SERVER = 'server';
 const ROBOTS = 'robots';
+const LOGS = 'logs';
 const FILES = ['profile.json', 'regbot.json', 'telemetry.json'];
 // What a crash between writing and renaming leaves (see store.js, profile.js).
 const LEFTOVER = /^((profile|regbot)\.json\.\d+\.tmp|telemetry\.json\.tmp)$/;
@@ -33,7 +35,7 @@ const LEFTOVER = /^((profile|regbot)\.json\.\d+\.tmp|telemetry\.json\.tmp)$/;
 function wipe(dir, { disk = fs } = {}) {
   const removed = [];
   const there = (name) => disk.existsSync(path.join(dir, name));
-  for (const folder of [SERVER, ROBOTS]) {
+  for (const folder of [SERVER, ROBOTS, LOGS]) {
     if (!there(folder)) continue;
     disk.rmSync(path.join(dir, folder), { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     removed.push(folder);

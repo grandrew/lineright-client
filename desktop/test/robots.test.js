@@ -153,6 +153,43 @@ test('stopping stops every robot still running', async () => {
   assert.equal(answer.status, 'unavailable');
 });
 
+test('with a logbook, each run is written down in a folder of its own, secrets struck out', async () => {
+  const { Logbook } = require('../src/logbook');
+  const logs = path.join(tmpdir(), 'logs');
+  const logbook = new Logbook({ dir: logs });
+  const traced = runner(fakeDmq(`let s=''; process.stdin.on('data', d => s += d); process.stdin.on('end', () => {
+    console.log('[t] TARGETED | Poway');
+    console.error('a warning');
+    console.log(JSON.stringify({ kind: 'booking.result', status: 'confirmed', confirmation: 'TS-1',
+      trace: process.env.RQP_TRACE_DIR, shots: process.env.RQP_TRACE_SCREENSHOTS, runlog: process.env.RUN_LOG_PATH }));
+  });`), { logbook });
+  const answer = await traced.run('book', { job_id: 77, idempotency_key: 'k',
+    personal_data: { first_name: 'Ada', dl_number: 'D1234567', dob: '12/10/1990' } }, { allowBooking: true, dmvBase: 'http://127.0.0.1:8787' });
+  assert.match(path.basename(answer.trace), /^\d{8}-\d{6}-\d{3}-book-job77$/);
+  assert.equal(path.dirname(answer.trace), path.join(logs, 'robots'));
+  assert.equal(answer.shots, '1', 'a booking keeps pictures');
+  assert.equal(answer.runlog, logbook.file('robot', 'log'));
+  const run = JSON.parse(fs.readFileSync(path.join(answer.trace, 'run.json'), 'utf8'));
+  assert.equal(run.kind, 'book');
+  assert.equal(run.envelope.personal_data.first_name, 'Ada');
+  assert.match(run.envelope.personal_data.dl_number, /^‹redacted/);
+  assert.match(run.envelope.personal_data.dob, /^‹redacted/);
+  assert.equal(run.options.dmvBase, 'http://127.0.0.1:8787');
+  assert.equal(run.code, 0);
+  assert.equal(run.answer.confirmation, 'TS-1');
+  assert.match(run.stdout, /TARGETED \| Poway/);
+  assert.match(run.stderr, /a warning/);
+  assert.ok(run.startedAt && run.endedAt && Number.isFinite(run.ms));
+
+  const look = await traced.run('scout', { target: { queue: 'real-id' } });
+  assert.match(path.basename(look.trace), /-scout-real-id$/);
+  assert.equal(look.shots, '0', 'a look does not');
+  // Without a logbook, nothing is kept and the robot is told nothing of it.
+  const plain = await runner(fakeDmq(`process.stdin.on('data', () => {}); process.stdin.on('end', () =>
+    console.log(JSON.stringify({ status: 'confirmed', trace: process.env.RQP_TRACE_DIR || null })));`)).run('book', {});
+  assert.equal(plain.trace, null);
+});
+
 test('closing stops the robots that look, and leaves one booking to finish', async () => {
   const stuck = runner(fakeDmq('setInterval(() => {}, 1000);'));
   const scout = stuck.run('scout', {}, { timeoutMs: 60000 });

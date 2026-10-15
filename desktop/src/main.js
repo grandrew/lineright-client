@@ -54,6 +54,8 @@ const { Booker, mayBook, definitive } = require('./booker');
 const { Pinger } = require('./pinger');
 const confirmations = require('./confirmations');
 const { Telemetry } = require('./telemetry');
+const { Logbook } = require('./logbook');
+const { watchTab } = require('./pagelog');
 
 const CHROME_BASE = 98;          // tab strip + address bar + the line, in browser mode
 const SITES_EVERY_MS = 10 * 60 * 1000;
@@ -84,7 +86,44 @@ if (argv.smoke || process.env.REGBOT_NO_GPU) app.disableHardwareAcceleration();
 
 function log(...parts) {
   console.log(new Date().toISOString().slice(11, 19), ...parts);
+  if (logbook) logbook.line('app', parts.join(' '));
   trace(parts.join(' '));
+}
+
+/**
+ * One request to the LineRight Regbot site, in the logs (site-<day>.jsonl):
+ * what was sent and what came back. An answer the same as that path's last —
+ * the sync's, every few seconds, most of the time — is written as "same".
+ */
+function logSiteExchange({ method, path: where, status, ms, body, reply, error }) {
+  if (!logbook) return;
+  const record = { method, path: where, status, ms };
+  if (body !== undefined) record.body = body;
+  if (error) record.error = error;
+  if (reply !== undefined) {
+    let text = '';
+    try { text = JSON.stringify(reply); } catch { /* written as it is */ }
+    if (text && lastReplies.get(where) === text) record.same = true;
+    else {
+      lastReplies.set(where, text);
+      record.reply = reply;
+    }
+  }
+  logbook.event('site', record);
+}
+
+/** What the app did on the page in a tab, among the rest of that page's log (pagelog.js). */
+function pageNote(tabId, type, fields) {
+  const watcher = pageLogs.get(tabId);
+  if (watcher) watcher.note(type, fields);
+}
+
+/** The logs folder, in whatever this machine opens folders with. */
+async function openLogs() {
+  if (!logbook) throw new Error('This app keeps no logs yet.');
+  logbook.folder();
+  const failed = await osShell.openPath(logbook.dir);
+  if (failed) throw new Error(failed);
 }
 
 // REGBOT_TRACE=<file>: a synchronous, timestamped trace of what the main
@@ -131,6 +170,10 @@ let pinger = null;                // presence, timing, and hearing of a slot at 
 let connection = null;            // how this app's connection stands, as the site last said
 let telemetry = null;             // this app's own numbers, kept here (telemetry.js)
 let telemetryTimer = null;
+let logbook = null;               // what the app did, kept on this computer for a few days (logbook.js)
+let pruneTimer = null;
+const pageLogs = new Map();       // tab id -> what writes its page down (pagelog.js)
+const lastReplies = new Map();    // site path -> its last answer, so an unchanged one is not written again
 let sharing = false;              // a share is on its way to the site
 let shareAccepted = null;         // what the site said, on the last sync, about taking shares
 let autoShareAfter = 0;           // no automatic share before this (epoch ms): after a refusal
@@ -592,6 +635,7 @@ function rebuildMenu() {
       developer: () => setDeveloper(!developer.on),
       controlRoom: () => openServerPage('admin').catch((err) => send('toast', { kind: 'bad', text: err.message })),
       serverLogs: () => openServerPage('logs').catch((err) => send('toast', { kind: 'bad', text: err.message })),
+      openLogs: () => openLogs().catch((err) => send('toast', { kind: 'bad', text: err.message })),
     },
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(items));
@@ -1020,6 +1064,8 @@ async function fill(tabId, force) {
     const result = await tabs.run(tabId, buildFillScript(values, { force }));
     lastFill = { url: tab.url, at: Date.now(), ...result };
     trace(`autofill: ${result.filled} filled, ${result.skipped} skipped on ${tab.url}`);
+    // Which fields, and how each was matched; never what went in them.
+    pageNote(tabId, 'autofill', { asked: Boolean(force), filled: result.filled, skipped: result.skipped, fields: result.fields });
     if (result.filled) {
       send('toast', { kind: 'ok', text: `Filled ${result.filled} field${result.filled === 1 ? '' : 's'} from your profile.` });
     } else if (force) {
@@ -1029,6 +1075,7 @@ async function fill(tabId, force) {
     return lastFill;
   } catch (err) {
     trace(`autofill failed: ${err.message}`);
+    pageNote(tabId, 'autofill', { asked: Boolean(force), error: err.message });
     if (force) send('toast', { kind: 'bad', text: `Could not fill the form: ${err.message}` });
     return null;
   }
@@ -1097,6 +1144,7 @@ function paintCard(jobId) {
   const tab = tabs && tabs.tabFor(jobId);
   if (!tab || tab.view.webContents.isDestroyed()) return;
   const card = turnCards.get(jobId) || null;
+  pageNote(tab.id, 'card', { card: card ? card.kind : null, title: card ? card.title : undefined });
   tab.view.webContents.executeJavaScript(`(${drawCard.toString()})(${JSON.stringify(card)})`).catch(() => {});
 }
 
@@ -1207,13 +1255,16 @@ async function checkHandoffTab(id) {
     if (!ref || bookedInTab.has(h.job_id)) return;
     bookedInTab.add(h.job_id);
     const where = describeHandoff(h);
+    pageNote(id, 'confirmation', { ref, url: wc.getURL(), job: h.job_id });
     try {
       await client.booked(h.job_id, ref);
+      pageNote(id, 'reported', { job: h.job_id, ref });
       log(`booked ${where} in its tab — confirmation ${ref}, said to the site`);
       notify(`Booked — ${h.queue_name}`, `${where}. Confirmation ${ref}.`, h);
       send('toast', { kind: 'ok', ms: 12000, text: `Booked ${where} — confirmation ${ref}. The app told LineRight Regbot for you.` });
     } catch (err) {
       // Not reached: looked for again in a moment. Refused: said once.
+      pageNote(id, 'reported', { job: h.job_id, ref, error: err.message, status: err.status || 0 });
       if (!definitive(err)) { bookedInTab.delete(h.job_id); return; }
       log(`booked ${where} in its tab — confirmation ${ref} — and the site would not take it: ${err.message}`);
       send('toast', { kind: 'warn', ms: 20000, text: `You booked ${where} — confirmation ${ref} — but LineRight Regbot would not record it: ${err.message}` });
@@ -1335,6 +1386,8 @@ function settingsView() {
     packaged: app.isPackaged,
     updates: updateState,
     profileFile: profile.file,
+    // The logs: where they are, how long they are kept, and how much they took at the last look (logbook.js).
+    logs: logbook ? { dir: logbook.dir, keepDays: logbook.keepDays, bytes: logbook.lastPrune ? logbook.lastPrune.bytes : null } : null,
     // This computer's robots, for the regbot site: whether it looks for
     // openings when asked, whether it may look at the real DMV, and whether it
     // may book a slot that is the person's (booker.js) — anywhere.
@@ -1626,7 +1679,7 @@ function wireIpc() {
   // -- the rest
   handle('settings:get', () => settingsView());
   handle('settings:set', async ({ serverMode: mode, serverUrl, updateUrl, clientName, readerEnabled, robotBooking,
-    checking, realDmvChecks, reimportRemind }) => {
+    checking, realDmvChecks, reimportRemind, logKeepDays }) => {
     // Another server, practice and an update feed of the app's own are for the
     // people who work on regbot: developer mode's, wherever the asking came from.
     const elsewhere = mode === 'builtin' || mode === 'remote'
@@ -1655,6 +1708,10 @@ function wireIpc() {
       if (loop) loop.poke();
     }
     if (typeof reimportRemind === 'boolean') store.set('reimportRemind', reimportRemind);
+    if (logKeepDays !== undefined && logbook) {
+      store.set('logKeepDays', logbook.setKeepDays(logKeepDays));
+      logbook.prune();
+    }
     if (typeof robotBooking === 'boolean') {
       // A yes is kept with when it was said: it is the person agreeing to
       // automated traffic from their own address, and to real appointments.
@@ -1696,6 +1753,7 @@ function wireIpc() {
   });
   handle('stack:open', ({ what, next }) => openServerPage(what, next));
   handle('update:check', () => updates.check());
+  handle('logs:open', () => openLogs());
   handle('update:install', () => updates.install());
   handle('sync:now', () => loop.poke());
   handle('app:info', () => settingsView());
@@ -1832,6 +1890,8 @@ function shutdown(code = 0) {
   cancelSignIn();
   if (sitesTimer) clearInterval(sitesTimer);
   if (importAgainTimer) clearInterval(importAgainTimer);
+  if (pruneTimer) clearInterval(pruneTimer);
+  log('closing');
   try { if (loop) loop.stop(); } catch { /* not started */ }
   try { if (pinger) pinger.stop(); } catch { /* not started */ }
   try {
@@ -1927,6 +1987,9 @@ function siteUrl() {
  */
 function loadState() {
   store = new Store(path.join(app.getPath('userData'), 'regbot.json'));
+  // The logs, in the user data folder, kept as long as Settings says: three days unless told.
+  if (!logbook) logbook = new Logbook({ dir: path.join(app.getPath('userData'), 'logs'), keepDays: store.get('logKeepDays', 3) });
+  else logbook.setKeepDays(store.get('logKeepDays', 3));
   profile = new Profile(path.join(app.getPath('userData'), 'profile.json'), safeStorage);
   const choice = serverChoice.resolve({ argv, env: process.env, store });
   serverMode = choice.mode;
@@ -1936,6 +1999,7 @@ function loadState() {
     token: choice.token,
     app: { name: store.get('clientName'), version: app.getVersion(), platform: process.platform },
     onRequest: (r) => { if (telemetry) telemetry.request(r); },
+    onExchange: (r) => logSiteExchange(r),
   });
   if (builtin()) client.token = makeStack().token;
   pairState = { paired: client.paired, user: null, pending: null, message: '' };
@@ -1945,12 +2009,19 @@ function loadState() {
 async function main() {
   wireTelemetry();
   loadState();
+  // What is older than the logs are kept for goes: now, and every hour after.
+  logbook.prune();
+  pruneTimer = setInterval(() => logbook.prune(), 60 * 60 * 1000);
+  pruneTimer.unref();
+  log(`LineRight Regbot ${app.getVersion()} starting (${process.platform}, Electron ${process.versions.electron});`
+    + ` logs in ${logbook.dir}, kept ${logbook.keepDays} day${logbook.keepDays === 1 ? '' : 's'}`);
   robots = new RobotRunner({
     paths: locate({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath() }),
     node: process.execPath,
     stateDir: path.join(app.getPath('userData'), 'robots'),
     log: (message) => log(`robots: ${message}`),
     onRun: (r) => telemetry.robot(r),
+    logbook,
   });
   const robotsState = () => ({ ...reader.state(), ...booker.state() });
   reader = new Reader({
@@ -1994,6 +2065,15 @@ async function main() {
   });
   tabs = new Shell(win, { chromeView: chrome, chromeHeight: CHROME_BASE });
   tabs.on('state', (state) => send('shell:state', state));
+  // Every page in a tab is written down as it goes (pagelog.js), from before its first request.
+  tabs.on('created', (tab) => {
+    try {
+      pageLogs.set(tab.id, watchTab(tab, { logbook }));
+      tab.view.webContents.once('destroyed', () => pageLogs.delete(tab.id));
+    } catch (err) {
+      log(`could not keep a log of tab ${tab.id}: ${err.message}`);
+    }
+  });
   wireAutofill();
 
   // Handlers before the page: it asks for its state the moment it loads.

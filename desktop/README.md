@@ -265,6 +265,40 @@ try again. **Share automatically, every six
 hours** is off until the person turns it on. **Clear this app's telemetry**
 deletes it; so does *Start over*.
 
+## Logs
+
+Everything the app does is written down on this computer, so that what
+happened on a booking site can be told exactly afterwards. It goes into
+`logs/` in the app's data folder (**Help → Open the logs folder**, or
+**Settings → Logs**), and nothing in it is sent anywhere.
+
+| What | Where |
+|---|---|
+| The app's own log, line by line | `app-<day>.log` |
+| Each request to the LineRight Regbot site, with what was sent and what came back (an answer the same as that path's last is written as `"same"`) | `site-<day>.jsonl` |
+| Each page in the app's tabs: every request it made, with headers and body for the site's documents and data, the status and headers that came back, and the body itself; navigations, loads and failed loads; console messages; what was clicked, changed, submitted or entered (the element's tag, id, name, label, text and where it sits); what autofill filled (which field, how it was matched); a confirmation found; the cards over a turn's page | `pages-<day>.jsonl`, one JSON record a line, each naming its tab and job |
+| Those pages' documents as they arrived, and each page as it stood after a step | `pages/<day>/…-tab<N>-doc<M>.html`, `…-tab<N>-page<M>.html` |
+| The robots' run log | `robot-<day>.log` |
+| One robot run: what it was asked and what it answered, all it printed (`run.json`); its network, console, steps and documents as they happened (`events.jsonl`, `doc-N.html`); and Playwright's trace of it (`trace.zip`: every action, the element it resolved to, the page before and after, the network — open it with `npx playwright show-trace trace.zip`) | `robots/<time>-<kind>-<what>/` |
+
+The network is watched from outside the page, through the DevTools protocol on
+the tab (`src/pagelog.js`), and clicks are noted and pages copied by a script
+in a world of its own: the site's scripts see neither. A run killed part way
+keeps `run.json` as it started and `events.jsonl` up to then, but no trace.
+
+Logs are kept for three days unless **Settings → Logs** says otherwise (1 to
+30), and checked at start and every hour; past 2 GB the oldest goes first
+anyway. *Start over* deletes them.
+
+What never goes in: passwords, tokens (the device's among them), cookies,
+captcha answers, Social Security and licence numbers, dates of birth — each
+replaced by `‹redacted, N chars›`, in records, addresses, bodies and headers
+(`src/logbook.js`). A name, email or phone typed into a page is kept as its
+length; a field that is nobody's — an office searched for, a date picked —
+keeps its value. Request and response bodies the site sends back are kept as
+they came, less those secrets, so a confirmation page, or a request that
+carried your name and email to the DMV, shows them: that is what it was.
+
 ## Asking for a line
 
 **Help → Ask for a site or a line** (or **Not here?** under the sites, and *Ask
@@ -598,6 +632,8 @@ each:
 | `src/robots.js` | Runs the DMV robots (`../dmq`'s scout and booking handler) for the regbot site, on the app's own binary, and decides where they may go |
 | `src/reader.js` | Looking for openings when the site hands this device a read, and answering it |
 | `src/booker.js` | Booking the person's own slot with the robot when the site hands it over, and what comes of it |
+| `src/logbook.js` | The logs folder: the day's files, a folder per robot run, what is struck out before anything is written, and what goes after how long |
+| `src/pagelog.js` | Writing down a page in a tab as it goes: its network through the DevTools protocol, clicks and changes and copies of the page from a world of its own |
 | `src/pinger.js` | Pinging the site: being timed, and hearing at once that a slot was released to the person |
 | `src/telemetry.js` | This app's own numbers, a minute at a time for a day: what the Advanced screen plots, and exactly what Share sends |
 | `src/links.js` | Which addresses the app hands your browser: web pages only, Stripe's own payment page, and the sign-in approval on the site the app signs in to |

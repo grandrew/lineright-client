@@ -3,6 +3,7 @@ import path from 'path';
 import { chromium } from 'playwright';
 import { loadConfig } from './config.js';
 import { makeRunLogger } from './runlog.js';
+import { instrument } from './instrument.js';
 import { to24h } from './slots.js';
 import { DRIVE_TEST } from './services.js';
 import { buildCandidateDates, parseMonthHeading, shouldAdvanceMonth } from './calendar.js';
@@ -435,7 +436,14 @@ async function bookAt(context, config, office, log, hooks = {}) {
  */
 export async function run(env = process.env, hooks = {}) {
   const config = loadConfig(env);
-  const log = makeRunLogger(config.runLogPath);
+  const runLog = makeRunLogger(config.runLogPath);
+  // What the run did on the site, when asked to keep it (instrument.js); the
+  // run log's steps go in among its network, so each reads in the other's light.
+  let probe = null;
+  const log = (status, detail) => {
+    runLog(status, detail);
+    if (probe) probe.note(status, detail);
+  };
 
   const browser = await chromium.launch({
     headless: config.headless,
@@ -444,6 +452,7 @@ export async function run(env = process.env, hooks = {}) {
 
   const forceClose = setTimeout(async () => {
     log('STUCK_OR_TIMEOUT', `Force closed after ${config.timeoutMs / 60000} minutes`);
+    if (probe) await probe.stop();
     await browser.close().catch(() => {});
     process.exit(1);
   }, config.timeoutMs);
@@ -451,6 +460,8 @@ export async function run(env = process.env, hooks = {}) {
   // One context for the whole run: the offices share a session, which is both
   // faster and less odd-looking than a cold browser per office.
   const context = await browser.newContext();
+  probe = await instrument(context, { dir: config.traceDir, screenshots: config.traceScreenshots,
+    title: `${config.autoSubmit ? 'book' : 'look'} ${config.service.code}` });
 
   try {
     log('START', `service=${config.service.code} offices=${config.offices.map((o) => o.term).join('|')} window=${config.startDate.toDateString()}..${config.endDate.toDateString()} autoSubmit=${config.autoSubmit}`);
@@ -499,6 +510,7 @@ export async function run(env = process.env, hooks = {}) {
     throw error;
   } finally {
     clearTimeout(forceClose);
+    await probe.stop();
     await browser.close().catch(() => {});
   }
 }

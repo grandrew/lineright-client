@@ -18,6 +18,7 @@
  *   real; only the calendar read is shut.
  */
 import { chromium } from 'playwright';
+import { instrument } from './instrument.js';
 import { loadConfig } from './config.js';
 import { navigateToLocationSearch, scanCalendar, applySolver } from './bot.js';
 import { to24h, parseTimes, dateKey, toOffer } from './slots.js';
@@ -94,14 +95,19 @@ export async function discover(env = process.env) {
   const config = loadConfig(env);
   const datesPerOffice = Math.max(1, Number(env.DISCOVER_DATES_PER_OFFICE || 2));
   const lines = [];
+  let probe = null;
   const log = (tag, message) => {
     const line = `[${new Date().toISOString()}] ${tag}: ${message}`;
     lines.push(line);
     console.error(line);   // stderr: stdout belongs to the envelope
+    if (probe) probe.note(tag, message);
   };
 
   const browser = await chromium.launch({ headless: config.headless });
   const context = await browser.newContext();
+  // What the sweep did on the site, when asked to keep it (instrument.js).
+  probe = await instrument(context, { dir: config.traceDir, screenshots: config.traceScreenshots,
+    title: `look ${config.service.code}` });
   const offers = [];
   const checked = [];
   try {
@@ -122,6 +128,7 @@ export async function discover(env = process.env) {
       if (i < config.offices.length - 1) await new Promise((r) => setTimeout(r, config.officeDelayMs));
     }
   } finally {
+    await probe.stop();
     await browser.close().catch(() => {});
   }
   // The first gate seen speaks for the sweep: they are all the same check on

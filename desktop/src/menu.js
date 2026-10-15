@@ -93,6 +93,7 @@ function template({ platform = process.platform, builtin = false, paired = false
       { label: 'LineRight Regbot help', accelerator: 'F1', click: act('help') },
       { label: 'Ask for a site or a line…', click: act('requestSite') },
       { label: 'Advanced: telemetry and diagnostics…', click: act('advanced') },
+      { label: 'Open the logs folder', click: act('openLogs') },
       ...(builtin ? [{ label: 'Server logs', click: act('serverLogs') }] : []),
       { label: 'Check for updates…', click: act('checkUpdates') },
       { type: 'separator' },

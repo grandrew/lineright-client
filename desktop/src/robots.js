@@ -14,11 +14,17 @@
  * Where a robot may go is decided here and not by the site: the real DMV, or a
  * practice one on this machine when the site is on this machine too. A site that
  * names anywhere else gets no robot sent there, whatever it says.
+ *
+ * Given a logbook (logbook.js), each run is written down in a folder of its own
+ * under the logs: what it was asked and what it answered, all it printed
+ * (run.json), and what it did on the site — its network, its console, its
+ * steps and Playwright's trace (RQP_TRACE_DIR: dmq's instrument.js).
  */
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { killTree, robotPlatformEnv, OWNED } = require('./stack');
+const { redact, clip } = require('./logbook');
 
 const SCRIPTS = { scout: 'rqp-scout.js', book: 'rqp-handler.js' };
 /** The robots this app carries, as the site knows them (a connector's app_robot). */
@@ -56,7 +62,8 @@ function isRealDmv(base) {
  * and from here.
  */
 function robotEnv({ env = process.env, paths, platform = process.platform, stateDir, dmvBase = '',
-  solverUrl = '', allowBooking = false, confirmationShot = '' }) {
+  solverUrl = '', allowBooking = false, confirmationShot = '', traceDir = '', traceScreenshots = false,
+  runLogPath = '' }) {
   // Tests only: an unpackaged app may be told to run the robots in their own
   // simulate mode, which answers without a browser. An installed one never is.
   const simulate = !paths.packaged && env.REGBOT_ROBOT_SIMULATE === '1';
@@ -69,8 +76,13 @@ function robotEnv({ env = process.env, paths, platform = process.platform, state
     ELECTRON_RUN_AS_NODE: '1',
     HEADLESS: 'true',
     RQP_STATE_PATH: path.join(stateDir, 'rqp-bookings.json'),
-    RUN_LOG_PATH: path.join(stateDir, 'dmv-robot.log'),
+    RUN_LOG_PATH: runLogPath || path.join(stateDir, 'dmv-robot.log'),
   }, robotPlatformEnv(paths, platform));
+  // Everything the run does on the site, kept where the app keeps its logs.
+  if (traceDir) {
+    out.RQP_TRACE_DIR = traceDir;
+    out.RQP_TRACE_SCREENSHOTS = traceScreenshots ? '1' : '0';
+  }
   if (paths.browsers) out.PLAYWRIGHT_BROWSERS_PATH = paths.browsers;
   if (dmvBase) out.DMV_BASE_URL = trim(dmvBase);
   // A practice farm only, and only for a practice DMV: the robot checks the same.
@@ -108,8 +120,8 @@ class RobotRunner {
    */
   constructor({ paths, node = process.execPath, stateDir, env = process.env, platform = process.platform,
     spawn = childProcess.spawn, log = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
-    onRun = () => {} }) {
-    Object.assign(this, { paths, node, stateDir, env, platform, spawn, log, setTimeout: st, clearTimeout: ct, onRun });
+    onRun = () => {}, logbook = null }) {
+    Object.assign(this, { paths, node, stateDir, env, platform, spawn, log, setTimeout: st, clearTimeout: ct, onRun, logbook });
     this.running = new Map();   // child -> its kind, 'scout' or 'book'
   }
 
@@ -126,14 +138,21 @@ class RobotRunner {
     confirmationShot = '' } = {}) {
     const script = path.join(this.paths.dmq, 'bin', SCRIPTS[kind]);
     fs.mkdirSync(this.stateDir, { recursive: true });
+    const record = this.record(kind, envelope, { dmvBase, allowBooking: kind === 'book' && allowBooking, timeoutMs });
     const env = robotEnv({ env: this.env, paths: this.paths, platform: this.platform, stateDir: this.stateDir,
-      dmvBase, solverUrl, allowBooking: kind === 'book' && allowBooking, confirmationShot });
+      dmvBase, solverUrl, allowBooking: kind === 'book' && allowBooking, confirmationShot,
+      traceDir: record ? record.dir : '', traceScreenshots: kind === 'book',
+      runLogPath: this.logbook ? this.logbook.file('robot', 'log') : '' });
     const failed = (message) => ({ protocol: 'RQP/1', kind: kind === 'scout' ? 'discovery.result' : 'booking.result',
       status: 'unavailable', message, offers: [], checked: [] });
     const started = Date.now();
+    let printed = '';
+    let complained = '';
+    let ended = {};
     const answered = (answer) => {
       // What each run took and came to, for this app's own telemetry (telemetry.js).
       try { this.onRun({ kind, ms: Date.now() - started, status: String((answer && answer.status) || '') }); } catch { /* never the problem */ }
+      if (record) record.finish({ ms: Date.now() - started, ...ended, answer, stdout: printed, stderr: complained });
       return answer;
     };
     return new Promise((settle) => {
@@ -153,8 +172,8 @@ class RobotRunner {
       let out = '';
       let err = '';
       let timedOut = false;
-      child.stdout.on('data', (d) => { out += d; });
-      child.stderr.on('data', (d) => { err = (err + d).slice(-4000); });
+      child.stdout.on('data', (d) => { out += d; if (record) printed = clip(printed + d, 512 * 1024); });
+      child.stderr.on('data', (d) => { err = (err + d).slice(-4000); if (record) complained = clip(complained + d, 512 * 1024); });
       child.stdin.on('error', () => {});
       const timer = this.setTimeout(() => {
         timedOut = true;
@@ -167,7 +186,8 @@ class RobotRunner {
         resolve(answer);
       };
       child.on('error', (e) => done(failed(`The robot could not be started: ${e.message}`)));
-      child.on('exit', (code) => {
+      child.on('exit', (code, signal) => {
+        ended = { code, signal: signal || undefined, timedOut: timedOut || undefined };
         if (timedOut) return done(failed(`The robot did not finish within ${Math.round(timeoutMs / 1000)}s.`));
         const answer = lastJson(out);
         if (answer) return done(answer);
@@ -176,6 +196,27 @@ class RobotRunner {
       });
       child.stdin.end(JSON.stringify(envelope));
     });
+  }
+
+  /**
+   * One run, written down in a folder of its own under the logs: run.json says
+   * what it was asked as it starts, and again with all the rest when it ends —
+   * so a run that never ends still says what it was. Null without a logbook.
+   */
+  record(kind, envelope, options) {
+    if (!this.logbook) return null;
+    const what = envelope && (envelope.job_id ? `job${envelope.job_id}`
+      : (envelope.target && envelope.target.queue) || envelope.queue || '');
+    const dir = this.logbook.runDir('robots', `${kind}${what ? `-${what}` : ''}`);
+    if (!dir) return null;
+    const startedAt = new Date().toISOString();
+    const write = (fields) => {
+      try {
+        fs.writeFileSync(path.join(dir, 'run.json'), JSON.stringify(redact({ kind, startedAt, options, envelope, ...fields }), null, 2));
+      } catch { /* never the problem */ }
+    };
+    write({});
+    return { dir, finish: (fields) => write({ endedAt: new Date().toISOString(), ...fields }) };
   }
 
   /**

@@ -40,14 +40,18 @@ class SyncClient {
    * @param {number} [opts.timeoutMs]      per-request deadline
    * @param {Function} [opts.onRequest]    ({method, path, status, ms}) after every request,
    *                                       for this app's own telemetry (telemetry.js)
+   * @param {Function} [opts.onExchange]   the same with what was sent and what came back
+   *                                       ({…, body, reply, error}), for the app's logs (logbook.js)
    */
-  constructor({ serverUrl, token = null, fetch = globalThis.fetch, app = {}, timeoutMs = 10000, onRequest = null }) {
+  constructor({ serverUrl, token = null, fetch = globalThis.fetch, app = {}, timeoutMs = 10000, onRequest = null,
+    onExchange = null }) {
     this.serverUrl = String(serverUrl || '').replace(/\/+$/, '');
     this.token = token || null;
     this.fetch = fetch;
     this.app = { name: '', version: '', platform: '', ...app };
     this.timeoutMs = timeoutMs;
     this.onRequest = onRequest;
+    this.onExchange = onExchange;
   }
 
   get paired() {
@@ -61,16 +65,23 @@ class SyncClient {
   async request(path, options = {}) {
     const started = Date.now();
     let status = 0;
+    let reply;
+    let error = null;
     try {
-      const reply = await this.send(path, options);
+      reply = await this.send(path, options);
       status = 200;
       return reply;
     } catch (err) {
       status = err.status || 0;
+      error = { message: err.message, body: err.body };
       throw err;
     } finally {
+      const done = { method: options.method || 'POST', path, status, ms: Date.now() - started };
       if (this.onRequest) {
-        try { this.onRequest({ method: options.method || 'POST', path, status, ms: Date.now() - started }); } catch { /* never the problem */ }
+        try { this.onRequest(done); } catch { /* never the problem */ }
+      }
+      if (this.onExchange) {
+        try { this.onExchange({ ...done, body: options.body, reply, error }); } catch { /* never the problem */ }
       }
     }
   }

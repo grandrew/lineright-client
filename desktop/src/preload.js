@@ -40,7 +40,7 @@ const CALLS = new Set([
   'stack:status', 'stack:restart', 'stack:dmv', 'stack:open',
   // the rest
   'settings:get', 'settings:set', 'update:check', 'update:install', 'sync:now', 'app:info',
-  'app:about', 'app:reset', 'robots:status',
+  'app:about', 'app:reset', 'robots:status', 'logs:open',
 ]);
 
 contextBridge.exposeInMainWorld('regbot', {

@@ -212,6 +212,8 @@ the rest.
 | `RQP_STATE_PATH` | The replay store, default `./data/rqp-bookings.json`; the marks of runs under way, and its lock, sit beside it |
 | `RQP_WAIT_MS` | How long a booking waits for another run of the same booking still going, default 180000 |
 | `RQP_CONFIRMATION_SHOT` | Where a confirmed booking keeps its picture of the confirmation page (a `.png`); none without it |
+| `RQP_TRACE_DIR` | A folder for everything the run does on the site (`src/instrument.js`): `events.jsonl` as it happens (requests and what was sent, responses and the site's data, failures, navigations, console, page errors, the run log's steps), each document as `doc-N.html`, and Playwright's `trace.zip` when the run ends. Secrets are struck out. None without it |
+| `RQP_TRACE_SCREENSHOTS` | `1`: pictures in the trace too |
 | `RQP_MODE` | `simulate`: answer without a browser or a network, to test both sides of the pipe |
 | `RQP_SIMULATE_OUTCOME` | What a simulated booking ends with: `BOOKED_SUCCESS`, `BOOKING_UNCONFIRMED`, `FOUND_AND_STOPPED`, `SLOT_GONE`, or `NO_AVAILABILITY` (the default) |
 | `RQP_SIMULATE_DELAY_MS` | How long a simulated run takes; a booking sends its form half way |
