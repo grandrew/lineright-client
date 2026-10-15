@@ -188,10 +188,14 @@ class Reader {
     return Promise.race([given, new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs))]);
   }
 
-  /** On quit, and on a full reset: stop looking, now. */
+  /**
+   * On quit, and on a full reset: stop looking, now. Only the robots that look
+   * stop here; one booking the person's slot is the booker's to finish (on a
+   * reset, main.js stops that one too).
+   */
   stop() {
     this.stopped = true;
-    this.runner.stopAll();
+    this.runner.stop('scout');
     this.current = null;
   }
 

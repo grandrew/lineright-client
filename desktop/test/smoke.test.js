@@ -816,7 +816,7 @@ async function bookingSite(dmvBase, { quietAfter = null, openUrl = null } = {}) 
 }
 
 test("the app's robot books the person's slot once they let it, and the page opens when it cannot",
-  { timeout: 120000 }, async (t) => {
+  { timeout: 180000 }, async (t) => {
   const electron = electronPath();
   const display = xvfb();
   if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
@@ -824,16 +824,18 @@ test("the app's robot books the person's slot once they let it, and the page ope
   if (!fs.existsSync(path.join(DMQ, 'bin', 'rqp-handler.js'))) return t.skip('no ../dmq checkout');
 
   const dmv = await dmvStub();
-  const book = async (outcome, options, { agreed = true } = {}) => {
+  const book = async (outcome, options, { agreed = true, exitAfter = 10000, delayMs = 0 } = {}) => {
     const site = await bookingSite(dmv.base, options);
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-book-'));
     seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
     // Settings → Let the app book for me, ticked.
     if (agreed) fs.writeFileSync(path.join(userData, 'regbot.json'), JSON.stringify({ v: 2, robotBooking: true }));
     try {
-      const result = await runApp({ electron, display, port: site.port, userData, exitAfter: 10000,
-        extraEnv: { REGBOT_ROBOT_SIMULATE: '1', REGBOT_ROBOT_OUTCOME: outcome } });
-      return { result, seen: site.seen, userData, port: site.port };
+      const started = Date.now();
+      const result = await runApp({ electron, display, port: site.port, userData, exitAfter,
+        extraEnv: { REGBOT_ROBOT_SIMULATE: '1', REGBOT_ROBOT_OUTCOME: outcome,
+          ...(delayMs ? { REGBOT_ROBOT_DELAY_MS: String(delayMs) } : {}) } });
+      return { result, seen: site.seen, userData, port: site.port, ms: Date.now() - started };
     } finally {
       site.server.close();
     }
@@ -900,6 +902,21 @@ test("the app's robot books the person's slot once they let it, and the page ope
     assert.equal(gone.result.robots.lastBooking.kind, 'gone');
     assert.deepEqual(gone.result.tabs.map((t) => t.kind), ['handoff'], 'the page stays, uncovered');
     assert.deepEqual(gone.result.cards, []);
+
+    // Closed while the robot books: the app waits for it, tells the site it is
+    // booked, and only then goes. Stopped part way, the robot could book the
+    // slot with nobody left to say so, and the turn would run out as missed.
+    const closed = await book('BOOKED_SUCCESS', {}, { exitAfter: 4000, delayMs: 9000 });
+    assert.equal(closed.result.robots.booking && closed.result.robots.booking.job_id, 77,
+      'still booking when it was told to close');
+    assert.deepEqual(closed.seen.claims, [77]);
+    assert.equal(closed.seen.booked.length, 1, 'the site heard it was booked');
+    assert.match(closed.seen.booked[0].confirmation, /^SIM-[0-9A-F]{8}$/);
+    assert.ok(closed.ms > 9000, `the app went only once the robot was done (${closed.ms} ms)`);
+    const robotsDir = path.join(closed.userData, 'robots');
+    assert.deepEqual(fs.readdirSync(robotsDir).filter((f) => f.endsWith('.running')), [], 'no booking left half done');
+    const made = JSON.parse(fs.readFileSync(path.join(robotsDir, 'rqp-bookings.json'), 'utf8'));
+    assert.equal(Object.values(made)[0].confirmation, closed.seen.booked[0].confirmation);
   } finally {
     dmv.server.close();
   }

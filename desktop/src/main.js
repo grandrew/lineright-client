@@ -889,7 +889,10 @@ function noteConnection(latency) {
 
 /** What the app's robot made of the person's slot (booker.js), told to them. */
 function afterBooking(h, outcome) {
-  if (closing) return;
+  if (closing) {
+    closingNote(h, outcome);
+    return;
+  }
   const where = describeHandoff(h);
   // Whatever came of it, the page is the person's again; booked, it says so;
   // another device of theirs at it, it says that.
@@ -934,6 +937,26 @@ function afterBooking(h, outcome) {
     }
   }
   if (loop) loop.poke();
+}
+
+/**
+ * A booking the app finished while it was closing (shutdown waits for it), told
+ * the one way left: the window is gone, so a notification, and no click.
+ */
+function closingNote(h, outcome) {
+  const where = describeHandoff(h);
+  log(`${where}: ${outcome.kind} as the app closed${outcome.confirmation ? ` (DMV confirmation ${outcome.confirmation})` : ''}`);
+  const note = outcome.kind === 'booked'
+    ? { title: `Booked — ${h.queue_name}`, body: `${where}. Confirmation ${outcome.confirmation}.` }
+    : outcome.kind === 'page'
+      ? { title: `Not booked — ${h.queue_name}`, body: `The app's robot could not book ${where}. Open LineRight Regbot again to book it before its time runs out.` }
+      : null;
+  if (!note || process.env.REGBOT_NO_NOTIFY === '1' || !Notification.isSupported()) return;
+  try {
+    new Notification({ ...note, urgency: 'critical' }).show();
+  } catch (err) {
+    log('notification failed:', err.message);
+  }
 }
 
 function wireSync() {
@@ -1729,6 +1752,8 @@ async function resetEverything() {
     generation += 1;
     await reader.release(1500);
     reader.stop();
+    // Everything this app keeps goes, the account with it: a booking too.
+    if (robots) robots.stopAll();
     cancelSignIn();
     for (const id of [...tabs.order]) tabs.close(id);
     if (stack) {
@@ -1814,10 +1839,20 @@ function shutdown(code = 0) {
     if (telemetry) { telemetry.event('stop'); telemetry.save(); }
   } catch { /* the numbers are never the problem */ }
   // The read this app is at goes back to the site now, so no line waits on an
-  // app that is gone; then the robots stop.
+  // app that is gone; then the robots that look stop.
   let released = Promise.resolve(false);
   try { if (reader) released = reader.release(1500); } catch (err) { trace(`giving the read back: ${err.message}`); }
   try { if (reader) reader.stop(); } catch (err) { trace(`stopping the robots: ${err.message}`); }
+  // A robot booking the person's slot finishes first, and the site hears how
+  // it went: stopped part way, it may have booked the slot with nobody left to
+  // say so, and the turn would run out as missed. Its own time bounds the wait.
+  let finished = Promise.resolve(true);
+  try {
+    if (booker && booker.running.size) {
+      log(`closing once the robot has finished booking ${[...booker.running.values()].map((b) => b.where).join(' and ')}`);
+      finished = booker.finish();
+    }
+  } catch (err) { trace(`finishing the booking: ${err.message}`); }
   try { if (updates.stop) updates.stop(); } catch { /* not wired */ }
   // Gone from the screen at once; the views themselves go last, in the same
   // turn as the exit (see send()).
@@ -1829,12 +1864,12 @@ function shutdown(code = 0) {
     trace('exit');
     setImmediate(() => app.exit(code));
   };
-  if (!stack) { released.catch(() => {}).then(exit); return; }
+  if (!stack) { Promise.all([released.catch(() => {}), finished]).then(exit); return; }
   // The server, the processor and a robot mid-run go with the app — bounded,
   // so a process that will not die cannot keep the app alive either. (Were
   // the app itself killed, each one's lifeline would close and it would go.)
   Promise.all([Promise.race([stack.stop(), new Promise((resolve) => setTimeout(resolve, 6000))]),
-    released.catch(() => {})])
+    released.catch(() => {}), finished])
     .catch((err) => trace(`stopping the server: ${err.message}`))
     .then(exit);
 }
@@ -2009,7 +2044,20 @@ async function main() {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => { if (win) { win.show(); win.focus(); } });
+  app.on('second-instance', () => {
+    if (closing) {
+      // Opened again while it closes, waiting for its robot to finish a booking:
+      // there is no window to show, only a moment to wait.
+      if (process.env.REGBOT_NO_NOTIFY !== '1' && Notification.isSupported()) {
+        try {
+          new Notification({ title: 'LineRight Regbot is closing',
+            body: 'It is finishing a booking first. Open it again once it has gone.' }).show();
+        } catch (err) { trace(`notification: ${err.message}`); }
+      }
+      return;
+    }
+    if (win) { win.show(); win.focus(); }
+  });
   app.on('window-all-closed', () => shutdown(0));
   // Held until the server this app runs has stopped; shutdown() exits itself.
   app.on('before-quit', (event) => {

@@ -25,14 +25,19 @@
  *                  instead, for that device's "I booked it" to arrive.
  *   claimed        another of the person's devices has it; this one stands back —
  *                  unless this computer's robot booked it already, left running
- *                  when the app crashed or was closed mid-booking: that booking
- *                  is the appointment, and the app, started again, says so.
+ *                  when the app crashed mid-booking: that booking is the
+ *                  appointment, and the app, started again, says so.
  *   too late       the slot is no longer held for them; nothing to open.
  *   anything else  a human check, a timeout, a booking the DMV did not confirm —
  *                  the booking page opens for the person to finish, as a hand-off
  *                  always has, and the bar says why.
  * A booking the DMV did not confirm is never tried again: the appointment may
  * exist, and a second try could make two.
+ *
+ * Closing the app does not stop a booking under way (`finish`): the app waits
+ * for the robot, tells the site how it went, then goes. Stopped part way, the
+ * robot may have sent the form and booked the slot with nobody left to say so,
+ * and the turn would run out as missed while the person has the appointment.
  *
  * None of this happens until the person has said yes ("Let the app book for
  * me", `robotBooking`), on the real DMV or a practice one alike: until then a
@@ -50,6 +55,9 @@ function mayBook(store) {
 
 /** How long a booking the site has not heard about is reported again. */
 const REPORT_FOR_MS = 30 * 60 * 1000;
+
+/** How long closing the app waits for a booking under way: past any robot's own time (budgetMs). */
+const FINISH_MS = 5 * 60 * 1000;
 
 /** An answer from the site that settles it, yes or no — as against no answer. */
 function definitive(err) {
@@ -85,6 +93,19 @@ class Booker {
     this.tried = new Set();
     this.pending = new Map();   // job id -> a booking the site has not heard about yet
     this.retrying = false;
+    this.idle = [];             // waiting in finish() for the bookings under way
+  }
+
+  /**
+   * Wait for the bookings under way to end — the robot done, and the site told
+   * how it went — or for `timeoutMs`. True when none is left. On closing the app.
+   */
+  finish(timeoutMs = FINISH_MS) {
+    if (!this.running.size) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), timeoutMs);
+      this.idle.push(() => { clearTimeout(timer); resolve(true); });
+    });
   }
 
   state() {
@@ -295,6 +316,7 @@ class Booker {
       this.current = [...this.running.values()].at(-1) || null;
       if (this.reader) this.reader.setBusy(this.running.size > 0);
       this.onState(this.state());
+      if (!this.running.size) for (const done of this.idle.splice(0)) done();
     }
   }
 }

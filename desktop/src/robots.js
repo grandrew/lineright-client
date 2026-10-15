@@ -81,6 +81,7 @@ function robotEnv({ env = process.env, paths, platform = process.platform, state
   if (simulate) {
     out.RQP_MODE = 'simulate';
     if (env.REGBOT_ROBOT_OUTCOME) out.RQP_SIMULATE_OUTCOME = env.REGBOT_ROBOT_OUTCOME;
+    if (env.REGBOT_ROBOT_DELAY_MS) out.RQP_SIMULATE_DELAY_MS = env.REGBOT_ROBOT_DELAY_MS;
   }
   return out;
 }
@@ -109,7 +110,7 @@ class RobotRunner {
     spawn = childProcess.spawn, log = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
     onRun = () => {} }) {
     Object.assign(this, { paths, node, stateDir, env, platform, spawn, log, setTimeout: st, clearTimeout: ct, onRun });
-    this.running = new Set();
+    this.running = new Map();   // child -> its kind, 'scout' or 'book'
   }
 
   /** Whether this build has the robots at all (an unbundled checkout may not). */
@@ -148,7 +149,7 @@ class RobotRunner {
         resolve(failed(`The robot could not be started: ${err.message}`));
         return;
       }
-      this.running.add(child);
+      this.running.set(child, kind);
       let out = '';
       let err = '';
       let timedOut = false;
@@ -192,9 +193,22 @@ class RobotRunner {
     }
   }
 
-  /** Stop every robot this app started. On quit, and on a full reset. */
+  /**
+   * Stop the robots of one kind. On quit, the ones that look ('scout'): one
+   * that is booking is left to finish (booker.js `finish`), since stopped mid-
+   * booking it may have booked the slot with nobody left to say so.
+   */
+  stop(kind) {
+    for (const [child, its] of [...this.running]) {
+      if (its !== kind) continue;
+      killTree(child, { platform: this.platform, force: true });
+      this.running.delete(child);
+    }
+  }
+
+  /** Stop every robot this app started. On a full reset. */
   stopAll() {
-    for (const child of this.running) killTree(child, { platform: this.platform, force: true });
+    for (const child of this.running.keys()) killTree(child, { platform: this.platform, force: true });
     this.running.clear();
   }
 }

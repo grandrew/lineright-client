@@ -350,6 +350,14 @@ While the robot is at the form the bar says so and offers nothing to press, so a
 booking by hand cannot run beside it. It has the hand-off's time less a margin
 for the page, up to four minutes.
 
+Closing the app does not stop it. The window goes and the robots that look for
+openings stop, but a booking under way finishes first: the site hears how it
+went, a notification says so (with the confirmation number, if it booked), and
+then the app exits. Stopped part way, the robot could have sent the form and
+booked the slot with nobody left to tell the site, and the turn would have run
+out as missed while you had the appointment. A full reset is the exception: it
+stops every robot.
+
 **Offered to a few, a few seconds apart.** A slot is not held for one person:
 the site offers it to the top few in line who would take it, the first at once
 and each next a few seconds later, and the first to book it has it; the others

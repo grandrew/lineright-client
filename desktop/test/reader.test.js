@@ -8,7 +8,7 @@ const PRACTICE = 'http://127.0.0.1:8787';
 
 function world({ settings = {}, available = true, answer = null, reply = null, serverUrl = SITE,
   giveBack = async () => ({ ok: true, released: true }) } = {}) {
-  const calls = { runs: [], answers: [], stops: 0, released: [] };
+  const calls = { runs: [], answers: [], stops: [], released: [] };
   let release;
   const runner = {
     available: () => available,
@@ -17,7 +17,7 @@ function world({ settings = {}, available = true, answer = null, reply = null, s
       if (answer === 'hold') await new Promise((r) => { release = r; });
       return answer && answer !== 'hold' ? answer : { kind: 'discovery.result', status: 'confirmed', offers: [{ office_code: 'P' }] };
     },
-    stopAll: () => { calls.stops += 1; },
+    stop: (kind) => { calls.stops.push(kind); },
   };
   const client = {
     serverUrl,
@@ -176,12 +176,12 @@ test('closing mid-read gives the read back, and is quick about it whatever the s
   hung.release();
 });
 
-test('stopping stops the robots and nothing is answered after', async () => {
+test('stopping stops the robots that look, and nothing is answered after', async () => {
   const w = world({ answer: 'hold' });
   w.reader.offer([read(8)]);
   await settle();
   w.reader.stop();
-  assert.equal(w.calls.stops, 1);
+  assert.deepEqual(w.calls.stops, ['scout'], 'a robot booking the person\'s slot is the booker\'s to finish');
   assert.equal(w.reader.capabilities().enabled, false);
   w.release();
   await settle(); await settle();

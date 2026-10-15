@@ -120,7 +120,7 @@ test('a booking brings back where its confirmation page was, and the picture the
 });
 
 test('booked is booked, even when the site will not take the report', async () => {
-  const late = 'That slot is no longer held for you — its deadline may have passed and the slot cascaded.';
+  const late = 'That slot is no longer held for you: its time to book ran out, or the turn ended another way.';
   const { booker, calls } = world({ report: refused(409, late) });
   assert.deepEqual(await booker.book(handoff()), { kind: 'booked', confirmation: 'TS-12345678', url: null, shot: null, unreported: late });
   assert.equal(calls.booked.length, 1);
@@ -293,4 +293,29 @@ test('two bookings at once keep the app busy until both are done', async () => {
   assert.equal((await second).kind, 'booked');
   assert.equal(calls.busy.at(-1), false);
   assert.equal(booker.state().booking, null);
+});
+
+test('closing waits for a booking under way: the robot finishes, and the site hears it, first', async () => {
+  const { booker, calls } = world();
+  assert.equal(await booker.finish(50), true, 'nothing under way: closes at once');
+  let done;
+  booker.runner.run = () => new Promise((resolve) => { done = () => resolve({ status: 'confirmed', confirmation: 'TS-CAFE0001' }); });
+  const booking = booker.book(handoff());
+  await new Promise((r) => setImmediate(r));
+  let finished = null;
+  const closing = booker.finish(5000).then((all) => { finished = all; return all; });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(finished, null, 'still booking: the app does not close yet');
+  assert.deepEqual(calls.booked, []);
+  done();
+  assert.equal(await closing, true);
+  assert.deepEqual(calls.booked, [{ id: 77, ref: 'TS-CAFE0001', robot: true }], 'reported before the app goes');
+  assert.equal((await booking).kind, 'booked');
+
+  // A robot that never ends does not keep the app open past the wait.
+  const stuck = world();
+  stuck.booker.runner.run = () => new Promise(() => {});
+  stuck.booker.book(handoff());
+  await new Promise((r) => setImmediate(r));
+  assert.equal(await stuck.booker.finish(40), false);
 });

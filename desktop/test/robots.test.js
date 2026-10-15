@@ -67,9 +67,12 @@ test('booking is allowed only when asked, a solving farm only for a practice DMV
   assert.equal(practice.CAPTCHA_SOLVER_URL, 'http://127.0.0.1:8787/__captcha/solve');
   assert.equal(robotEnv({ env: {}, paths, stateDir: '/s', dmvBase: REAL_DMV,
     solverUrl: 'http://127.0.0.1:8787/__captcha/solve' }).CAPTCHA_SOLVER_URL, undefined);
-  const sim = { REGBOT_ROBOT_SIMULATE: '1', REGBOT_ROBOT_OUTCOME: 'BOOKED_SUCCESS' };
+  const sim = { REGBOT_ROBOT_SIMULATE: '1', REGBOT_ROBOT_OUTCOME: 'BOOKED_SUCCESS', REGBOT_ROBOT_DELAY_MS: '6000' };
   assert.equal(robotEnv({ env: sim, paths, stateDir: '/s' }).RQP_MODE, 'simulate');
   assert.equal(robotEnv({ env: sim, paths, stateDir: '/s' }).RQP_SIMULATE_OUTCOME, 'BOOKED_SUCCESS');
+  assert.equal(robotEnv({ env: sim, paths, stateDir: '/s' }).RQP_SIMULATE_DELAY_MS, '6000');
+  assert.equal(robotEnv({ env: { REGBOT_ROBOT_DELAY_MS: '6000' }, paths, stateDir: '/s' }).RQP_SIMULATE_DELAY_MS, undefined,
+    'only a simulating robot is slowed');
   assert.equal(robotEnv({ env: sim, paths: { ...paths, packaged: true }, stateDir: '/s' }).RQP_MODE, undefined,
     'an installed app never simulates');
   const win = robotEnv({ env: {}, paths: { host: 'C:\\app\\host' }, platform: 'win32', stateDir: 'C:\\s' });
@@ -148,6 +151,20 @@ test('stopping stops every robot still running', async () => {
   stuck.stopAll();
   const answer = await pending;
   assert.equal(answer.status, 'unavailable');
+});
+
+test('closing stops the robots that look, and leaves one booking to finish', async () => {
+  const stuck = runner(fakeDmq('setInterval(() => {}, 1000);'));
+  const scout = stuck.run('scout', {}, { timeoutMs: 60000 });
+  const booking = stuck.run('book', {}, { timeoutMs: 60000 });
+  await new Promise((r) => setTimeout(r, 200));
+  assert.equal(stuck.running.size, 2);
+  stuck.stop('scout');
+  assert.equal((await scout).status, 'unavailable');
+  assert.deepEqual([...stuck.running.values()], ['book'], 'the booking robot still runs');
+  stuck.stopAll();
+  assert.equal((await booking).status, 'unavailable');
+  assert.equal(stuck.running.size, 0);
 });
 
 test('the real scout, in its own simulate mode, finds what the site asked about',
