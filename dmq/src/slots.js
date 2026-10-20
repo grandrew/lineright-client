@@ -8,25 +8,39 @@
  */
 import { findOffice } from './catalog.js';
 
-/** '10:30 AM' -> '10:30'; '1:05 PM' -> '13:05'. Null for anything else. */
+/** '10:30 AM' -> '10:30'; '1:05 PM' -> '13:05'; '14:20' -> '14:20'. Null otherwise. */
 export function to24h(label) {
-  const m = /^\s*(\d{1,2}):(\d{2})\s*([AaPp])\.?[Mm]\.?\s*$/.exec(String(label || ''));
-  if (!m) return null;
-  const minutes = Number(m[2]);
-  let hour = Number(m[1]);
-  if (hour < 1 || hour > 12 || minutes > 59) return null;
-  hour %= 12;
-  if (m[3].toLowerCase() === 'p') hour += 12;
-  return `${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const text = String(label || '').trim();
+  const ampm = /^(\d{1,2}):(\d{2})\s*([AaPp])\.?[Mm]\.?$/.exec(text);
+  if (ampm) {
+    const minutes = Number(ampm[2]);
+    let hour = Number(ampm[1]);
+    if (hour < 1 || hour > 12 || minutes > 59) return null;
+    hour %= 12;
+    if (ampm[3].toLowerCase() === 'p') hour += 12;
+    return `${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+  // The times API returns 24-hour strings ("08:00", "14:20"). A label that
+  // still says that, because the page did not format it, is the same clock time.
+  const h24 = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(text);
+  if (!h24) return null;
+  return `${h24[1]}:${h24[2]}`;
 }
 
 /** Every distinct clock time on a page of appointment slots, earliest first. */
 export function parseTimes(bodyText) {
-  const found = String(bodyText || '').match(/\b\d{1,2}:\d{2}\s?[AaPp]\.?[Mm]\.?\b/g) || [];
+  let text = String(bodyText || '');
+  const ampm = text.match(/\b\d{1,2}:\d{2}\s?[AaPp]\.?[Mm]\.?\b/g) || [];
   const times = [];
-  for (const raw of found) {
+  for (const raw of ampm) {
     const t = to24h(raw);
     if (t && !times.includes(t)) times.push(t);
+  }
+  // Strip the 12-hour hits first so "08:00 AM" is not also counted as "08:00".
+  text = text.replace(/\b\d{1,2}:\d{2}\s?[AaPp]\.?[Mm]\.?\b/g, ' ');
+  const bare = text.match(/\b(?:[01]\d|2[0-3]):[0-5]\d\b/g) || [];
+  for (const raw of bare) {
+    if (!times.includes(raw)) times.push(raw);
   }
   return times.sort();
 }

@@ -1,7 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { SyncClient, SyncLoop, SyncError, NotPaired, diffHandoffs, describeHandoff, clock, backoffMs } = require('../src/sync');
+const { SyncClient, SyncLoop, SyncError, NotPaired, diffHandoffs, describeHandoff, clock, backoffMs,
+  ANSWER_TIMEOUT_MS } = require('../src/sync');
 
 /** A fetch that answers from a route table and remembers what it was asked. */
 function fakeFetch(routes) {
@@ -72,6 +73,15 @@ test('a server that cannot be reached is a SyncError with status 0', async () =>
   await assert.rejects(client.sync(), (err) => err instanceof SyncError && err.status === 0 && /ECONNREFUSED/.test(err.message));
 });
 
+test('applying a suggestion posts that suggestion\'s key and no other change', async () => {
+  const fetch = fakeFetch({ '/api/client/bids/2/advice': { body: { ok: true, message: 'The range is now 15 miles.' } } });
+  const client = new SyncClient({ serverUrl: 'http://srv', token: 'tok', fetch });
+  const reply = await client.applyAdvice(2, '2:radius:15');
+  assert.equal(reply.message, 'The range is now 15 miles.');
+  assert.equal(fetch.calls[0].path, '/api/client/bids/2/advice');
+  assert.deepEqual(fetch.calls[0].body, { key: '2:radius:15' });
+});
+
 test('the hand-off answers and reports go to the right routes', async () => {
   const fetch = fakeFetch({
     '/api/client/handoffs/7/booked': { body: { ok: true } },
@@ -104,6 +114,24 @@ test('a sync carries what the loop is told to say, asked afresh each time', asyn
   await loop.tick();
   assert.deepEqual(fetch.calls.map((c) => c.body.reader.reading), [null, 7]);
   assert.equal(fetch.calls[0].body.app_version, '0.2.0');
+});
+
+test('answering a read waits longer than a sync', async () => {
+  const seen = [];
+  const original = global.setTimeout;
+  global.setTimeout = (fn, ms, ...rest) => { seen.push(ms); return original(fn, ms, ...rest); };
+  try {
+    const fetch = fakeFetch({
+      '/api/client/sync': { body: doc() },
+      '/api/client/reads/5': { body: { ok: true, status: 'done' } },
+    });
+    const client = new SyncClient({ serverUrl: 'http://srv', token: 'tok', fetch, timeoutMs: 10000 });
+    await client.sync();
+    await client.answerRead(5, { offers: [] });
+    assert.deepEqual(seen, [10000, ANSWER_TIMEOUT_MS]);
+  } finally {
+    global.setTimeout = original;
+  }
 });
 
 test('a read is answered, and a hand-off claimed or reported gone, by id', async () => {

@@ -23,6 +23,8 @@
     form: null,        // the found-slot form
     prompt: null,      // job id whose booking reference is being typed
     bannerKey: '',
+    adviceGone: null,  // suggestion keys closed with ×, kept across syncs (advice.js)
+    adviceNoted: '',
     ended: [],         // turns that ended lately, and how: [{job_id, at, kind, text}] (endedTurns)
     consoleTab: 'positions',
     nickEdit: null,    // the new nickname being typed on the account tab, if any
@@ -63,7 +65,38 @@
     const d = new Date(`${iso}T00:00:00`);
     return Number.isNaN(d.getTime()) ? (iso || '—') : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   }
+  const REACHES = [
+    ['1h', 'Book in the nearest 1 hour'],
+    ['2h', 'Book in the nearest 2 hours'],
+    ['5h', 'Book in the nearest 5 hours'],
+    ['1d', 'Book in the nearest 1 day'],
+    ['5d', 'Book in the nearest 5 days'],
+    ['2w', 'Book in the nearest 2 weeks'],
+    ['1mo', 'Book in the nearest 1 month'],
+    ['6mo', 'Book in the nearest 6 months'],
+  ];
+  const chosenReach = {};
+  function shownReach(p) {
+    return (p && (p.if_passed || chosenReach[p.bid_id] || chosenReach[String(p.bid_id)])) || '';
+  }
+  function reachLabel(code) {
+    const hit = REACHES.find(([value]) => value === code);
+    return hit ? hit[1].replace(/^Book in the /, '') : '';
+  }
+  function reachSelect(code, bidId) {
+    return `<label class="field" style="margin:8px 0 0"><span class="field-label">If that time passes</span>
+      <select data-if-passed="${num(bidId)}">
+        ${code ? '' : '<option value="" selected>Choose how far to look</option>'}
+        ${REACHES.map(([value, label]) => `<option value="${esc(value)}"${value === code ? ' selected' : ''}>${esc(label)}</option>`).join('')}
+      </select>
+      <span class="field-help">Until that moment, an earlier opening is taken. Once it has passed, the nearest later opening within this reach is taken. Nothing farther out is offered.</span></label>`;
+  }
+  function uiNote(kind, text) {
+    api.call('ui:note', { kind, text }).catch(() => {});
+  }
   function toast(kind, text, ms = 6000) {
+    const surface = state.shell.mode === 'tab' ? 'top-bar' : 'bottom-right';
+    uiNote('notice', `${surface} ${kind || 'ok'} for ${ms}ms — ${text}`);
     if (state.shell.mode === 'tab') {
       const bar = $('navtoast');
       bar.className = kind;
@@ -248,6 +281,8 @@
         text = `${where} went on to the next person.${still.note ? ` ${still.note}` : ' You keep your place in line.'}`;
       }
       state.ended.unshift({ job_id: h.job_id, at: Date.now(), kind, text });
+      const handoffsNow = [...now].join(',') || 'none';
+      uiNote('banner', `Your turn ended job ${h.job_id} ${kind} — ${text} | handoffs now ${handoffsNow} | position ${still ? still.status : 'none'} | settled ${settled ? settled.status : 'none'}`);
     }
     state.ended = state.ended.filter((e) => Date.now() - e.at < 15 * 60000).slice(0, 3);
   }
@@ -263,6 +298,25 @@
     return `${what} — your details fill in from your profile, and the app sees the confirmation. ${cost}`;
   }
 
+  function adviceGoneMap() {
+    if (state.adviceGone) return state.adviceGone;
+    const gone = {};
+    try {
+      const raw = JSON.parse(localStorage.getItem('regbot.adviceGone') || '[]');
+      if (Array.isArray(raw)) for (const key of raw) if (typeof key === 'string') gone[key] = true;
+    } catch { /* a dismiss this session still sticks in the map below */ }
+    state.adviceGone = gone;
+    return gone;
+  }
+
+  function rememberAdviceGone(key) {
+    const gone = adviceGoneMap();
+    gone[key] = true;
+    try {
+      localStorage.setItem('regbot.adviceGone', JSON.stringify(Object.keys(gone).slice(-40)));
+    } catch { /* still remembered until the page reloads */ }
+  }
+
   function renderBanner(force) {
     const box = $('banner');
     const handoffs = (state.doc && state.doc.handoffs) || [];
@@ -270,12 +324,15 @@
     state.ended = state.ended.filter((e) => Date.now() - e.at < 15 * 60000);
     // The hand-off whose booking page is the one on screen: no button to open it.
     const showing = (state.shell.tabs.find((t) => t.active) || {}).jobId || null;
+    // A turn already on the banner is the whole of it. The suggestion comes
+    // back on its own once that turn is gone, unless this exact key was closed.
+    const advice = window.adviceBanner ? window.adviceBanner.visible(state.doc, adviceGoneMap()) : null;
     const key = handoffs.map((h) => `${h.job_id}:${h.phase}:${h.booker ? `${h.booker.name}:${h.booker.silent}` : ''}:${h.over ? h.over.kind : ''}`).join(',')
-      + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}`;
+      + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}|${advice ? advice.key : ''}`;
     if (!force && key === state.bannerKey) { tickClocks(); return; }
     state.bannerKey = key;
     box.innerHTML = '';
-    if (!handoffs.length && !state.ended.length) { box.classList.add('hidden'); fit(); return; }
+    if (!handoffs.length && !state.ended.length && !advice) { box.classList.add('hidden'); fit(); return; }
     box.classList.remove('hidden');
     for (const e of state.ended) {
       const row = document.createElement('div');
@@ -288,6 +345,29 @@
         renderBanner(true);
       });
       box.appendChild(row);
+    }
+    if (advice) {
+      const row = document.createElement('div');
+      row.className = 'banner-row advice';
+      const line = advice.queue_name ? `${advice.queue_name} — ` : '';
+      const said = window.adviceBanner.sentence(advice, prettyDate);
+      row.innerHTML = `<span class="mark">↑</span>
+        <span class="text"><b>A better opening</b> · ${esc(line + said)}
+          <br><span class="tiny">Nothing changes until you apply this.</span></span>
+        <span class="actions">
+          <button class="pill primary" data-act="apply">${esc(window.adviceBanner.actionLabel(advice))}</button>
+          <button class="pill" data-act="dismiss" title="Dismiss">×</button>
+        </span>`;
+      row.querySelector('[data-act=apply]').addEventListener('click', () => doAdvice(advice));
+      row.querySelector('[data-act=dismiss]').addEventListener('click', () => {
+        rememberAdviceGone(advice.key);
+        renderBanner(true);
+      });
+      box.appendChild(row);
+      if (state.adviceNoted !== advice.key) {
+        state.adviceNoted = advice.key;
+        uiNote('banner', `recommendation ${advice.key} — ${said}`);
+      }
     }
     for (const h of handoffs) {
       const row = document.createElement('div');
@@ -800,7 +880,7 @@
         <div class="bid-who"><span class="bid-nick">${esc(r.nickname)}${r.mine ? '<span class="tag tag-you">you</span>' : ''}${r.status === 'processing' ? '<span class="tag tag-processing">booking</span>' : ''}</span>
           <span class="bid-sub">${esc(r.age)}${r.raises ? ` · raised ${num(r.raises)}×` : ''}</span></div>
         <div class="bid-amount">${coins(r.amount)}</div>
-        <div class="bid-meta">${esc(prettyDate(r.preferred_date))}<br>${esc(r.preferred_time)}</div>
+        <div class="bid-meta">${esc(prettyDate(r.preferred_date))}<br>${esc(r.preferred_time)}${r.if_passed ? `<br><span class="tiny muted">${esc(reachLabel(r.if_passed))}</span>` : ''}</div>
       </div>`).join('');
   }
 
@@ -903,6 +983,7 @@
       ${byOffers(q) && m.rank === 1 ? '<p class="small ok" style="margin:4px 0 0">✓ First in line: the next opening that fits your offices is yours.</p>'
         : !byOffers(q) && m.rank <= q.slots_per_cycle ? '<p class="small ok" style="margin:4px 0 0">✓ In the hand-off window — your turn comes on the next cycle.</p>'
         : `<p class="small muted" style="margin:4px 0 0"><span id="toLead">${coins(b.to_lead)}</span> takes the lead right now.</p>`}
+      ${m.status === 'active' ? reachSelect(shownReach(m), m.bid_id) : ''}
       ${inner}
     </div>`;
   }
@@ -933,6 +1014,11 @@
           <label class="field"><span class="field-label">Preferred date <span class="req">*</span></span><input type="date" name="preferred_date" required value="${esc(b.default_date)}" min="${esc(q.window[0])}" max="${esc(q.window[1])}"></label>
           <label class="field"><span class="field-label">Preferred time <span class="req">*</span></span><input type="time" name="preferred_time" required value="${esc(q.hours[0])}" min="${esc(q.hours[0])}" max="${esc(q.hours[1])}" step="900"></label>
         </div>
+        <label class="field"><span class="field-label">If that time passes</span>
+          <select name="if_passed">
+            ${REACHES.map(([value, label]) => `<option value="${esc(value)}"${value === '1d' ? ' selected' : ''}>${esc(label)}</option>`).join('')}
+          </select>
+          <span class="field-help">Until that moment, an earlier opening is taken. Once it has passed, the nearest later opening within this reach is taken. Nothing farther out is offered.</span></label>
         ${b.fields.length ? `<div class="sep"></div><div class="panel-title" style="margin-bottom:10px">${esc(q.site_name)} needs to know</div>${b.fields.map((f) => fieldHtml(f, values)).join('')}` : ''}
         ${kept.length ? `<div class="sep"></div><div class="panel-title" style="margin-bottom:10px">Kept on this machine</div>${keptList(b)}<p class="tiny muted" style="margin:8px 0 0">Typed into the booking form from <a id="join-profile">your profile</a>, never sent to LineRight Regbot.</p>` : ''}
         <button class="btn btn-accent btn-block" type="submit" style="margin-top:12px">${gap.length ? 'Add your details to join' : 'Pay bid &amp; take a position'}</button>
@@ -956,6 +1042,9 @@
       btn.addEventListener('click', () => doRaise(b.mine.bid_id, Number(btn.dataset.raise)));
     }
     on('#raiseGo', () => { const v = Number(page.querySelector('#raiseCustom').value); if (v > 0) doRaise(b.mine.bid_id, v); });
+    for (const sel of page.querySelectorAll('[data-if-passed]')) {
+      sel.addEventListener('change', () => { if (sel.value) doIfPassed(Number(sel.dataset.ifPassed), sel.value); });
+    }
     on('#withdraw', async () => {
       if (!window.confirm(`Withdraw and get ${coins(b.mine.amount)} back?`)) return;
       try { const r = await call('server:withdraw', { bid_id: b.mine.bid_id }); toast('ok', r.message); state.board = null; renderBoard(); }
@@ -988,7 +1077,7 @@
           if (!el) continue;
           fields[f.key] = el.type === 'checkbox' ? el.checked : el.value;
         }
-        const body = { queue_id: b.queue.id, amount: Number(form.amount.value), preferred_date: form.preferred_date.value, preferred_time: form.preferred_time.value, fields, needs_of_line: b.kept_on_device || [] };
+        const body = { queue_id: b.queue.id, amount: Number(form.amount.value), preferred_date: form.preferred_date.value, preferred_time: form.preferred_time.value, if_passed: form.if_passed.value, fields, needs_of_line: b.kept_on_device || [] };
         const errBox = form.querySelector('#bidError');
         errBox.classList.add('hidden');
         // Keep what they typed either way: a trip to the profile must not cost
@@ -1015,6 +1104,50 @@
           state.bidDraft = { queueId: b.queue.id, values: fields };
         }
       });
+    }
+  }
+
+  async function doAdvice(advice) {
+    try {
+      const reply = await call('server:advice', { bid_id: advice.bid_id, key: advice.key });
+      if (advice.kind === 'time' && advice.if_passed) {
+        chosenReach[advice.bid_id] = advice.if_passed;
+        const positions = state.doc && state.doc.positions;
+        const pos = positions && positions.find((p) => p.bid_id === advice.bid_id);
+        if (pos) pos.if_passed = advice.if_passed;
+        if (state.board && state.board.mine && state.board.mine.bid_id === advice.bid_id) {
+          state.board.mine.if_passed = advice.if_passed;
+        }
+      }
+      toast('ok', reply.message || 'Updated.');
+      rememberAdviceGone(advice.key);
+      renderBanner(true);
+      if (state.route.page === 'board') renderBoard();
+      if (state.route.page === 'console') renderConsole();
+    } catch (err) {
+      toast('bad', err.message, 9000);
+    }
+  }
+
+  async function doIfPassed(bidId, code) {
+    chosenReach[bidId] = code;
+    try {
+      const r = await call('server:if-passed', { bid_id: bidId, if_passed: code });
+      toast('ok', r.message);
+      const positions = state.doc && state.doc.positions;
+      if (positions) {
+        const pos = positions.find((p) => p.bid_id === bidId);
+        if (pos) pos.if_passed = code;
+      }
+      if (state.board && state.board.mine && state.board.mine.bid_id === bidId) {
+        state.board.mine.if_passed = code;
+        const row = (state.board.bids || []).find((item) => item.mine);
+        if (row) row.if_passed = code;
+      }
+      if (state.route.page === 'board') renderBoard();
+      if (state.route.page === 'console') renderConsole();
+    } catch (err) {
+      toast('bad', err.message, 9000);
     }
   }
 
@@ -1064,7 +1197,8 @@
           <div class="pos-rank ${p.rank === 1 ? 'lead' : ''}">${num(p.rank)}</div>
           <div style="min-width:0">
             <div class="row" style="gap:8px; flex-wrap:wrap"><a data-board="${num(p.queue_id)}"><strong>${esc(p.queue_name)}</strong></a><span class="tag tag-${esc(p.status)}">${esc(p.status)}</span>${handoffs.has(p.bid_id) ? '<span class="tag tag-booking">your turn</span>' : ''}${p.mock ? '<span class="test-badge">Test site</span>' : ''}</div>
-            <div class="small muted" style="margin-top:3px">${esc(p.site_name)} · position ${num(p.rank)} of ${num(p.field_size)} · asked for ${esc(prettyDate(p.preferred_date))} at ${esc(p.preferred_time)}</div>
+            <div class="small muted" style="margin-top:3px">${esc(p.site_name)} · position ${num(p.rank)} of ${num(p.field_size)} · asked for ${esc(prettyDate(p.preferred_date))} at ${esc(p.preferred_time)}${shownReach(p) ? ` · if it passes, ${esc(reachLabel(shownReach(p)))}, and nothing farther` : ''}</div>
+            ${p.status === 'active' ? reachSelect(shownReach(p), p.bid_id) : ''}
             ${p.note ? `<div class="tiny muted" style="margin-top:3px">${esc(p.note)}</div>` : ''}
           </div>
           <div class="pos-actions">
@@ -1130,6 +1264,9 @@
     for (const a2 of page.querySelectorAll('[data-go-sites]')) a2.addEventListener('click', () => go('sites'));
     for (const a2 of page.querySelectorAll('[data-external]')) a2.addEventListener('click', () => api.call('tabs:external', { url: a2.dataset.external }));
     for (const b of page.querySelectorAll('[data-raise50]')) b.addEventListener('click', () => doRaise(Number(b.dataset.raise50), 50));
+    for (const sel of page.querySelectorAll('[data-if-passed]')) {
+      sel.addEventListener('change', () => { if (sel.value) doIfPassed(Number(sel.dataset.ifPassed), sel.value); });
+    }
     if (tab === 'wallet') wireCredits(page, () => { state.account = null; renderConsole(); });
     for (const b of page.querySelectorAll('[data-revoke]')) {
       b.addEventListener('click', async () => {

@@ -44,6 +44,8 @@ const needs = require('./needs');
 const { buildFillScript, isBookingPage, originOf } = require('./autofill');
 const { webPage, paymentPage, approvalPage } = require('./links');
 const { prefillFromUrl } = require('./portal');
+const { outsideReach } = require('./reach');
+const { guideScript } = require('./dmv-guide');
 const menu = require('./menu');
 const updater = require('./updater');
 const { Stack, locate, NO_SERVER } = require('./stack');
@@ -787,7 +789,10 @@ function handleDoc(doc) {
   }
   send('sync:doc', withNeeds(doc));
   noteAppsPolicy(doc.apps);
-  if (reader && !builtin()) reader.offer(doc.reads || []);
+  if (reader && !builtin()) {
+    if (doc.reader) reader.notePace(doc.reader);
+    reader.offer(doc.reads || []);
+  }
   if (booker && !builtin()) booker.retryReports();
   noteConnection(doc.latency);
   const current = new Set(doc.handoffs.map((h) => h.job_id));
@@ -827,7 +832,72 @@ function handleDoc(doc) {
  * slot itself, from this computer, unless another of their devices already is;
  * the page opens only if it cannot. `note` says why it is this device's now.
  */
+function rememberReach(bidId, code) {
+  if (!bidId || !code) return;
+  const reaches = { ...(store.get('reaches') || {}) };
+  reaches[String(bidId)] = code;
+  store.set('reaches', reaches);
+}
+
+function chosenReach(h) {
+  const remembered = (store.get('reaches') || {})[String(h.bid_id)];
+  const pos = lastDoc && (lastDoc.positions || []).find((p) => p.bid_id === h.bid_id);
+  return remembered || (pos && pos.if_passed) || '';
+}
+
+/**
+ * A slot past the reach this bid asked for is passed, here, even when the
+ * server still hands out the earliest opening in the window.
+ */
+function passIfTooFar(h) {
+  const code = chosenReach(h);
+  const pos = lastDoc && (lastDoc.positions || []).find((p) => p.bid_id === h.bid_id);
+  const slot = h.slot;
+  if (!code || !pos || !slot) return false;
+  if (!outsideReach({
+    preferredDate: pos.preferred_date, preferredTime: pos.preferred_time, code,
+    slotDate: slot.date, slotTime: slot.time,
+  })) return false;
+  const where = describeHandoff(h);
+  log(`passing ${where}: later than the ${code} you asked for`);
+  send('toast', { kind: 'warn', ms: 12000,
+    text: `${where} is farther than the ${code} you asked for, so it was passed. You keep your place.` });
+  client.pass(h.job_id, `later than ${code}`).catch((err) => log(`pass failed: ${err.message}`));
+  if (loop) loop.poke();
+  return true;
+}
+
+function runGuide(tab) {
+  if (!tab || !tab.guideSlot || tab.guideDone) return;
+  if (tab.guideRunning) {
+    tab.guideAgain = true;
+    return;
+  }
+  tab.guideRunning = true;
+  tab.guideAgain = false;
+  const where = tab.guideWhere || 'this slot';
+  tab.view.webContents.executeJavaScript(guideScript(tab.guideSlot), true).then((status) => {
+    tab.guideRunning = false;
+    if (status === 'time') tab.guideDone = true;
+    log(`booking page for ${where}: ${status}`);
+    if (tab.guideAgain && !tab.guideDone) runGuide(tab);
+  }).catch((err) => {
+    tab.guideRunning = false;
+    log(`booking page for ${where} could not be walked: ${err.message}`);
+    if (tab.guideAgain && !tab.guideDone) runGuide(tab);
+  });
+}
+
+function armGuide(h) {
+  const tab = tabs && tabs.tabFor(h.job_id);
+  if (!tab || !h.slot) return;
+  tab.guideSlot = h.slot;
+  tab.guideWhere = describeHandoff(h);
+  if (!tab.loading) runGuide(tab);
+}
+
 function takeHandoff(h, note = '') {
+  if (passIfTooFar(h)) return;
   if (h.over) {
     // Offered to several of us, and it went before this app got to it.
     log(`${describeHandoff(h)}: ${h.over.message}`);
@@ -878,6 +948,7 @@ function offerHandoff(h, why = '') {
     trace(`handoff gated: profile missing ${gap.map((f) => f.profileKey).join(', ')}`);
   } else {
     turnTab(h);
+    armGuide(h);
     trace('handoff tab opened');
   }
   log(`your turn: ${describeHandoff(h)} — ${clock(h.seconds_left)} to book`
@@ -1091,6 +1162,10 @@ function fillActive(force) {
 }
 
 function wireAutofill() {
+  tabs.on('loaded', ({ id }) => {
+    const tab = tabs.tabs.get(id);
+    if (tab && tab.kind === 'handoff' && tab.guideSlot && !tab.guideDone) runGuide(tab);
+  });
   tabs.on('loaded', ({ id, url, jobId }) => {
     // The cover goes back over every page while the robot books; "booked" is
     // said once, and stays gone once the person has looked underneath.
@@ -1433,6 +1508,12 @@ function wireIpc() {
     return undefined;
   });
   handle('chrome:height', ({ px }) => tabs.setChromeHeight(px));
+  // The window draws these and then they are gone. The app log keeps the sequence.
+  handle('ui:note', ({ kind, text }) => {
+    if (kind !== 'notice' && kind !== 'banner') return;
+    const line = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 800);
+    if (line) log(`ui ${kind}: ${line}`);
+  });
 
   // -- the application half
   // Test sites, made up for demos and tests, only in developer mode — and
@@ -1481,10 +1562,25 @@ function wireIpc() {
       });
     }
     const r = await client.placeBid(queue_id, bid);
+    if (r && r.bid_id && bid.if_passed) rememberReach(r.bid_id, bid.if_passed);
     loop.poke();
     return r;
   });
   handle('server:raise', async ({ bid_id, delta }) => { const r = await client.raiseBid(bid_id, delta); loop.poke(); return r; });
+  handle('server:if-passed', async ({ bid_id, if_passed }) => {
+    // Remembered even when the server has no such route yet, so a later
+    // opening past this reach is passed instead of offered.
+    rememberReach(bid_id, if_passed);
+    const r = await client.setIfPassed(bid_id, if_passed);
+    loop.poke();
+    return r;
+  });
+  handle('server:advice', async ({ bid_id, key }) => {
+    const r = await client.applyAdvice(bid_id, key);
+    if (r && r.if_passed) rememberReach(bid_id, r.if_passed);
+    loop.poke();
+    return r;
+  });
   handle('server:withdraw', async ({ bid_id }) => { const r = await client.withdrawBid(bid_id); loop.poke(); return r; });
   handle('server:account', async () => { await serverReady(); return client.account(); });
   handle('server:revoke', ({ client_id }) => client.revokeDevice(client_id));
@@ -1596,7 +1692,10 @@ function wireIpc() {
         then: { action: 'handoff:open', args: { job_id } },
       });
     }
-    if (h.open_url) tabs.open(h.open_url, { kind: 'handoff', jobId: job_id, title: `Your turn — ${h.queue_name}` });
+    if (h.open_url) {
+      tabs.open(h.open_url, { kind: 'handoff', jobId: job_id, title: `Your turn — ${h.queue_name}` });
+      armGuide(h);
+    }
     return undefined;
   });
   handle('found:submit', async (report) => {

@@ -46,6 +46,11 @@ class Reader {
     this.stopped = false;
     this.declined = false;
     this.answered = new Set();
+    // Until when this app will not start another look. A pace is "wait, then
+    // look"; a drop is "this device is paused". Neither slows the sync that
+    // carries a booking — only offer() looks at them.
+    this.readyAt = 0;
+    this.droppedUntil = 0;
   }
 
   /** Whether the person has said this app may look at the real DMV. */
@@ -70,6 +75,22 @@ class Reader {
   enabled() {
     return !this.stopped && !this.declined && this.runner.available()
       && this.getStore().get('readerEnabled', true) !== false && this.agreed();
+  }
+
+  /**
+   * What a sync said about how hard the site is working (traffic.py). A pace
+   * starts a wait only when one is not already running, so a sync every few
+   * seconds cannot push the wait out forever. A drop is the site's word: when
+   * it stops sending one, this app stops honouring it.
+   */
+  notePace(readerDoc) {
+    if (!readerDoc || typeof readerDoc !== 'object') return;
+    const pace = Number(readerDoc.pace_ms) || 0;
+    if (pace > 0 && Date.now() >= this.readyAt) this.readyAt = Date.now() + pace;
+    if ('dropped_until' in readerDoc) {
+      const until = Date.parse(readerDoc.dropped_until || '');
+      this.droppedUntil = Number.isFinite(until) ? until : 0;
+    }
   }
 
   /** What each sync says about this app's reader (reads.parse_caps on the site). */
@@ -116,6 +137,18 @@ class Reader {
     if (!Array.isArray(reads) || !reads.length || this.current) return;
     const read = reads.find((r) => r && !this.answered.has(r.read_id));
     if (!read) return;
+    if (Date.now() < this.droppedUntil) {
+      // Paused. Give it back so the site does not hold the lease for an app
+      // that will not start it. A look already running is this.current and
+      // was returned above; it finishes, and the answer is the site's to refuse.
+      this.answered.add(read.read_id);
+      Promise.resolve().then(() => this.getClient().releaseRead(read.read_id))
+        .catch((err) => this.log(`giving back read ${read.read_id}: ${err.message}`));
+      return;
+    }
+    // Told to slow down. Leave the read issued: the next sync offers it again
+    // once the wait is over, and the lease is long enough to cover the wait.
+    if (Date.now() < this.readyAt) return;
     if (this.enabled()) {
       this.run(read);
       return;
@@ -150,6 +183,8 @@ class Reader {
       }
       if (this.stopped) return;
       const reply = await client.answerRead(read.read_id, result);
+      const pace = Number(reply && reply.pace_ms) || 0;
+      if (pace > 0) this.readyAt = Math.max(this.readyAt, Date.now() + pace);
       told = { status: reply.status || result.status, found: Number(reply.recorded) || 0 };
       this.last = {
         read_id: read.read_id, queue_name: read.queue_name, at: Date.now(), status: reply.status,
@@ -161,8 +196,21 @@ class Reader {
           + (o.to && !o.to.you ? ` to #${o.to.rank}` : '')).join('; ')}` : ''));
     } catch (err) {
       // Too late, or answered already: the site has moved on, and so does this.
+      // A 429 is different. The site did not take the answer, so the read is
+      // still issued; give it back, and wait out Retry-After before the next
+      // look, or the same read is pinned until its lease runs out.
       this.log(`read ${read.read_id}: ${err.message}`);
       told = { status: 'unanswered', found: 0 };
+      if (err && err.status === 429) {
+        const wait = Number(err.retryAfter);
+        const ms = (Number.isFinite(wait) && wait > 0 ? wait : 30) * 1000;
+        this.readyAt = Math.max(this.readyAt, Date.now() + ms);
+        try {
+          await client.releaseRead(read.read_id);
+        } catch (give) {
+          this.log(`giving back read ${read.read_id}: ${give.message}`);
+        }
+      }
     } finally {
       if (told) {
         try { this.onRead({ ...told, ms: Date.now() - started, offices }); } catch { /* telemetry is never the problem */ }
@@ -204,6 +252,8 @@ class Reader {
     this.stopped = false;
     this.declined = false;
     this.answered.clear();
+    this.readyAt = 0;
+    this.droppedUntil = 0;
     this.last = null;
     this.emit();
   }

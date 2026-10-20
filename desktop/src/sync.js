@@ -12,6 +12,10 @@
  * regbot/client_api.py for the other half and the reasons.
  */
 
+/** How long an answer to a read may take. A sync stays on the client's own
+ *  deadline: judging a filtered scout is the slow call, and only that one. */
+const ANSWER_TIMEOUT_MS = 20000;
+
 class SyncError extends Error {
   constructor(message, status = 0, body = null, retryAfter = 0) {
     super(message);
@@ -86,7 +90,7 @@ class SyncClient {
     }
   }
 
-  async send(path, { method = 'POST', body, fetch = this.fetch, auth = true } = {}) {
+  async send(path, { method = 'POST', body, fetch = this.fetch, auth = true, timeoutMs = null } = {}) {
     const headers = { accept: 'application/json' };
     if (body !== undefined) headers['content-type'] = 'application/json';
     if (auth) {
@@ -94,7 +98,8 @@ class SyncClient {
       headers.authorization = `Bearer ${this.token}`;
     }
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
+    const deadline = timeoutMs > 0 ? timeoutMs : this.timeoutMs;
+    const timer = controller ? setTimeout(() => controller.abort(), deadline) : null;
     let res;
     try {
       res = await fetch(this.url(path), {
@@ -152,9 +157,11 @@ class SyncClient {
     return this.request('/api/client/sync', { body: { app_version: this.app.version, ...extra } });
   }
 
-  /** What this device's robot saw for a read the site handed it. */
+  /** What this device's robot saw for a read the site handed it.
+   *  Longer than a sync: the site filters the openings, then says where each
+   *  kept one goes, and a scout's worth of that used to outlast the sync deadline. */
   async answerRead(readId, result) {
-    return this.request(`/api/client/reads/${Number(readId)}`, { body: result });
+    return this.request(`/api/client/reads/${Number(readId)}`, { body: result, timeoutMs: ANSWER_TIMEOUT_MS });
   }
 
   /** Presence and a round trip the site times itself (pinger.js). */
@@ -251,6 +258,16 @@ class SyncClient {
 
   async raiseBid(bidId, delta) {
     return this.request(`/api/client/bids/${Number(bidId)}/raise`, { body: { delta: Number(delta) } });
+  }
+
+  async setIfPassed(bidId, code) {
+    return this.request(`/api/client/bids/${Number(bidId)}/if-passed`, { body: { if_passed: code } });
+  }
+
+  /** Apply the one suggestion sync is showing. The server checks the key
+   *  against a fresh look and refuses anything else. */
+  async applyAdvice(bidId, key) {
+    return this.request(`/api/client/bids/${Number(bidId)}/advice`, { body: { key } });
   }
 
   async withdrawBid(bidId) {
@@ -427,4 +444,5 @@ class SyncLoop {
   }
 }
 
-module.exports = { SyncClient, SyncLoop, SyncError, NotPaired, diffHandoffs, describeHandoff, clock, backoffMs };
+module.exports = { SyncClient, SyncLoop, SyncError, NotPaired, diffHandoffs, describeHandoff, clock, backoffMs,
+  ANSWER_TIMEOUT_MS };

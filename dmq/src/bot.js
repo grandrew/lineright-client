@@ -4,9 +4,9 @@ import { chromium } from 'playwright';
 import { loadConfig } from './config.js';
 import { makeRunLogger } from './runlog.js';
 import { instrument } from './instrument.js';
-import { to24h } from './slots.js';
+import { parseTimes, to24h, dateKey } from './slots.js';
 import { DRIVE_TEST } from './services.js';
-import { buildCandidateDates, parseMonthHeading, shouldAdvanceMonth } from './calendar.js';
+import { buildCandidateDates, parseMonthHeading, shouldAdvanceMonth, dateFromCellText } from './calendar.js';
 import {
   appointmentUrl,
   vehicleSelectButton,
@@ -64,10 +64,22 @@ async function collectDayLabels(page) {
   const count = await buttons.count();
   const labels = [];
   for (let i = 0; i < count; i++) {
-    const text = (await buttons.nth(i).innerText().catch(() => '')).trim();
-    labels.push({ text, index: i });
+    const button = buttons.nth(i);
+    const text = (await button.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+    // textContent keeps the full date the live cell paints in a visually hidden
+    // span. innerText drops that span, and the visible day number plus the
+    // month heading then names the wrong month.
+    const full = (await button.evaluate((el) => el.textContent || '').catch(() => ''))
+      .replace(/\s+/g, ' ').trim();
+    const className = await button.evaluate((el) => el.className || '').catch(() => '');
+    labels.push({ text, full, className, index: i });
   }
   return labels;
+}
+
+function cellIsoDate(text) {
+  const date = dateFromCellText(text);
+  return date ? dateKey(date) : null;
 }
 
 /**
@@ -327,6 +339,223 @@ async function describeUnconfirmed(page) {
   return message ? `still on ${where}, which said "${message}"` : `still on ${where}, no confirmation shown`;
 }
 
+const DAY_TIMES_TIMEOUT_MS = 20000;
+
+/**
+ * A locator that becomes visible only once a day's times have been drawn.
+ *
+ * On dmv.ca.gov the dialog heading is in the first paint, while `#loading-gif`
+ * is still up and the labels are not. The stand-in has no dialog: its times
+ * are buttons, and an empty day says "No times are available."
+ */
+function drawnTimes(page) {
+  const dialog = page.locator('#time-selector');
+  return dialog.locator('label.appt-dialog-time__label')
+    .or(dialog.locator('.appt-dialog-times__no-times'))
+    .or(page.locator('button.time'))
+    .or(page.getByText(/no times are available/i));
+}
+
+function tidyLabels(texts) {
+  return texts.map((text) => text.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
+
+/** The clock labels on the open day, after they have actually been drawn. */
+export async function readShownTimeLabels(page, timeout = DAY_TIMES_TIMEOUT_MS) {
+  await drawnTimes(page).first().waitFor({ state: 'visible', timeout });
+  const dialog = page.locator('#time-selector');
+  if (await dialog.isVisible().catch(() => false)) {
+    return tidyLabels(await dialog.locator('label.appt-dialog-time__label').allInnerTexts());
+  }
+  const buttons = page.locator('button.time');
+  if (await buttons.count()) return tidyLabels(await buttons.allInnerTexts());
+  return [];
+}
+
+function onCalendar(page) {
+  try {
+    return /\/select-date\b/.test(new URL(page.url()).pathname);
+  } catch {
+    return false;
+  }
+}
+
+async function overlayOpen(page) {
+  if (await page.locator('#appointments-dialog-root.overlay-active').count()) return true;
+  return page.locator('.dialog-overlay').isVisible().catch(() => false);
+}
+
+/**
+ * The live time dialog is portaled. Cancel can hide `#time-selector` and
+ * leave `.dialog-overlay` inside `#appointments-dialog-root.overlay-active`
+ * covering the calendar. The day buttons underneath stay Playwright-visible,
+ * so the next Open Times click waits out its timeout on that overlay.
+ * Overlay click and Escape are how the page itself closes that layer.
+ */
+async function dismissOverlay(page) {
+  const overlay = page.locator('.dialog-overlay');
+  if (!(await overlayOpen(page)) && !(await overlay.count())) return;
+  if (await overlay.isVisible().catch(() => false)) {
+    await overlay.click({ timeout: 2000 }).catch(() => {});
+  }
+  if (await overlayOpen(page)) await page.keyboard.press('Escape').catch(() => {});
+  const root = page.locator('#appointments-dialog-root.overlay-active');
+  if (await root.count()) await root.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+  if (await overlay.isVisible().catch(() => false)) {
+    await overlay.first().waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+  }
+  // Cancel can drop `overlay-active` and leave `.dialog-overlay` in the DOM,
+  // where Playwright no longer calls it visible and the next Open Times click
+  // still lands on it. The times have already been read. The leftover layer
+  // is not the calendar.
+  if (await overlay.count()) {
+    await page.evaluate(() => {
+      document.querySelectorAll('.dialog-overlay').forEach((el) => el.remove());
+      const host = document.getElementById('appointments-dialog-root');
+      if (!host) return;
+      host.classList.remove('overlay-active');
+      if (!host.querySelector('#time-selector')) host.replaceChildren();
+    }).catch(() => {});
+  }
+}
+
+/**
+ * Leave the time list and land back on the calendar.
+ *
+ * The live time list is `#time-selector` on the same `/select-date` document.
+ * Its Cancel button (`aria-label="Close this dialog window"`) only closes
+ * that dialog. Browser Back is a history step from `/select-date` to the
+ * office list, which is why the next day's Open Times click then waits until
+ * it times out. The stand-in does navigate to `/times`, and there the way
+ * back is the calendar link (history Back if that link is absent).
+ */
+async function returnToCalendar(page) {
+  const dialog = page.locator('#time-selector');
+  if (await dialog.isVisible().catch(() => false)) {
+    const close = dialog.getByRole('button', { name: /close this dialog window/i });
+    if (await close.count()) await close.click({ timeout: 2000 }).catch(() => {});
+    if (await dialog.isVisible().catch(() => false)) await page.keyboard.press('Escape').catch(() => {});
+    await dialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+  }
+  // The dialog node can already be gone, or never counted as visible, while
+  // the overlay is still the thing under the cursor.
+  await dismissOverlay(page);
+  if (await overlayOpen(page)) {
+    throw new Error('The time dialog overlay is still covering the calendar');
+  }
+  if (onCalendar(page)) {
+    await openTimeButtons(page).first().waitFor({ state: 'visible', timeout: 5000 });
+    return;
+  }
+
+  const back = page.getByRole('link', { name: /back to the calendar/i });
+  if (await back.count()) {
+    await Promise.all([
+      page.waitForURL(/\/select-date\b/, { timeout: 15000 }),
+      back.click(),
+    ]);
+  } else {
+    await Promise.all([
+      page.waitForURL(/\/select-date\b/, { timeout: 15000 }),
+      page.goBack(),
+    ]);
+  }
+  await openTimeButtons(page).first().waitFor({ state: 'visible', timeout: 15000 });
+}
+
+/**
+ * Remember the page's own `/times` response.
+ *
+ * That body is a JSON array of 24-hour clock times, and its `date` query is
+ * the day those times belong to. The stand-in has no such request; this only
+ * listens, and a day is never held open waiting for one that will not come.
+ */
+function attachTimesCapture(page) {
+  let pending = 0;
+  let captured = null;
+  let notify = () => {};
+  const ready = new Promise((resolve) => { notify = resolve; });
+  const onResponse = (response) => {
+    let url;
+    try { url = new URL(response.url()); } catch { return; }
+    if (!/\/times\b/.test(url.pathname) || !response.ok()) return;
+    const rawDate = url.searchParams.get('date') || '';
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+    pending += 1;
+    response.json().then((body) => {
+      if (!Array.isArray(body)) return;
+      const times = [];
+      for (const item of body) {
+        const t = to24h(typeof item === 'string' ? item : '');
+        if (t && !times.includes(t)) times.push(t);
+      }
+      times.sort();
+      captured = { date, times };
+      notify();
+    }).catch(() => {}).finally(() => { pending -= 1; });
+  };
+  page.on('response', onResponse);
+  return {
+    stop() { page.off('response', onResponse); },
+    waitForBody(ms) {
+      return Promise.race([
+        ready,
+        new Promise((resolve) => { setTimeout(resolve, ms); }),
+      ]);
+    },
+    async settle(ms) {
+      // The label can be on screen before the times body has been read, and
+      // the stand-in never requests one. Wait out `ms` for a body, and return
+      // as soon as it has been read so a page with no such request only pays
+      // the grace once.
+      const deadline = Date.now() + ms;
+      while (Date.now() < deadline) {
+        if (captured && pending === 0) return captured;
+        await new Promise((resolve) => { setTimeout(resolve, 20); });
+      }
+      const extra = Date.now() + 500;
+      while (pending > 0 && Date.now() < extra) {
+        await new Promise((resolve) => { setTimeout(resolve, 20); });
+      }
+      return captured;
+    },
+  };
+}
+
+/**
+ * Open one day's times, read them, and come back to the calendar.
+ *
+ * Returns `{ times, date }`. `times` are 24-hour `HH:MM` strings, earliest
+ * first. `date` is `YYYY-MM-DD` from the times response when the page asked
+ * for one, otherwise from the full date on the cell, otherwise null. An
+ * explicit empty day returns no times. A scout stops here: it never clicks
+ * Confirm.
+ */
+export async function readOpenDay(page, index) {
+  const capture = attachTimesCapture(page);
+  try {
+    await dismissOverlay(page);
+    const button = openTimeButtons(page).nth(index);
+    const cellDate = cellIsoDate(await button.evaluate((el) => el.textContent || '').catch(() => ''));
+    await button.click({ timeout: 8000 });
+    const labelsPromise = readShownTimeLabels(page).catch(() => []);
+    const winner = await Promise.race([
+      labelsPromise.then((value) => ({ kind: 'labels', value })),
+      capture.waitForBody(DAY_TIMES_TIMEOUT_MS).then(() => ({ kind: 'body' })),
+    ]);
+    const fromNetwork = await capture.settle(750);
+    const labels = fromNetwork
+      ? []
+      : (winner.kind === 'labels' ? winner.value : await labelsPromise);
+    const times = fromNetwork ? fromNetwork.times : parseTimes(labels.join('\n'));
+    const date = (fromNetwork && fromNetwork.date) || cellDate || null;
+    await returnToCalendar(page);
+    return { times, date };
+  } finally {
+    capture.stop();
+  }
+}
+
 async function bookAt(context, config, office, log, hooks = {}) {
   const page = await context.newPage();
   try {
@@ -352,28 +581,52 @@ async function bookAt(context, config, office, log, hooks = {}) {
     };
     if (!target) return gone(`${office.date.toDateString()} no longer listed`);
 
-    await openTimeButtons(page).nth(target.index).click();
-    await page
-      .getByRole('heading', { name: /choose an appointment time/i })
-      .waitFor({ state: 'visible', timeout: 20000 });
-
-    const bodyText = await page.locator('body').innerText();
-    const listed = [...new Set((bodyText.match(/\b\d{1,2}:\d{2}\s?(AM|PM)\b/gi) || []).map((s) => s.trim()))];
-    // Allocated a time, the robot books that time and no other: the person was
-    // given one slot, and the board's allocation is of that one. A hunt, with
-    // no time given, takes the first that holds.
-    const slots = office.time ? listed.filter((label) => to24h(label) === office.time) : listed;
-    if (office.time && slots.length === 0) {
+    const capture = attachTimesCapture(page);
+    let choices = [];
+    try {
+      await openTimeButtons(page).nth(target.index).click();
+      // The heading is on the page while the times are still loading, so it is
+      // not the signal that a slot can be read. Same wait the scout uses.
+      const rawLabels = await readShownTimeLabels(page);
+      const fromNetwork = await capture.settle(750);
+      const parsed = [];
+      for (const label of rawLabels) {
+        const time = to24h(label.trim());
+        if (time) parsed.push({ label: label.trim(), time });
+      }
+      const networkTimes = (fromNetwork && fromNetwork.times) || [];
+      // Allocated a time, the robot books that time and no other. The live
+      // label can read "Invalid Date" while the times response still lists
+      // "14:20"; the label's position in that list is the button to press.
+      if (office.time) {
+        const hit = parsed.find((item) => item.time === office.time);
+        if (hit) choices = [{ label: hit.label }];
+        else if (networkTimes.includes(office.time)) {
+          choices = [{ index: networkTimes.indexOf(office.time), label: office.time }];
+        }
+      } else if (parsed.length) {
+        choices = parsed.map((item) => ({ label: item.label }));
+      } else {
+        choices = networkTimes.map((time, index) => ({ index, label: time }));
+      }
+    } finally {
+      capture.stop();
+    }
+    if (office.time && choices.length === 0) {
       return gone(`${office.date.toDateString()} ${office.time} no longer listed`);
     }
-    if (slots.length === 0) return { status: NO_AVAILABILITY };
+    if (choices.length === 0) return { status: NO_AVAILABILITY };
 
     let booked = null;
-    for (const slot of slots) {
-      await page
-        .getByText(new RegExp(`^${slot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'))
-        .first()
-        .click();
+    for (const slot of choices) {
+      if (slot.index !== undefined) {
+        await page.locator('#time-selector label.appt-dialog-time__label').nth(slot.index).click();
+      } else {
+        await page
+          .getByText(new RegExp(`^${slot.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'))
+          .first()
+          .click();
+      }
       await page.waitForTimeout(1000);
 
       const confirm = page.getByRole('button', { name: /^confirm$/i }).first();
@@ -389,7 +642,7 @@ async function bookAt(context, config, office, log, hooks = {}) {
         await page.waitForTimeout(1000);
         continue;
       }
-      booked = slot;
+      booked = slot.label;
       break;
     }
     if (!booked) {

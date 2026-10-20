@@ -20,27 +20,11 @@
 import { chromium } from 'playwright';
 import { instrument } from './instrument.js';
 import { loadConfig } from './config.js';
-import { navigateToLocationSearch, scanCalendar, applySolver } from './bot.js';
+import { navigateToLocationSearch, scanCalendar, applySolver, readOpenDay } from './bot.js';
 import { to24h, parseTimes, dateKey, toOffer } from './slots.js';
-import {
-  searchOffices,
-  officeSelectButton,
-  openTimeButtons,
-} from './selectors.js';
+import { searchOffices, officeSelectButton } from './selectors.js';
 
 export { to24h, parseTimes, dateKey, toOffer };
-
-/** Read the times behind one open day, then step back to the calendar. */
-async function timesForDay(page, index) {
-  await openTimeButtons(page).nth(index).click();
-  await page
-    .getByRole('heading', { name: /choose an appointment time/i })
-    .waitFor({ state: 'visible', timeout: 20000 });
-  const times = parseTimes(await page.locator('body').innerText());
-  await page.goBack().catch(() => {});
-  await page.waitForTimeout(1000);
-  return times;
-}
 
 async function scoutOffice(context, config, office, datesPerOffice, log) {
   const page = await context.newPage();
@@ -64,12 +48,18 @@ async function scoutOffice(context, config, office, datesPerOffice, log) {
     // competing over, and every extra day costs another page load against a
     // government site that is entitled not to be hammered.
     for (const candidate of candidates.slice(0, datesPerOffice)) {
-      const times = await timesForDay(page, candidate.index);
+      const opened = await readOpenDay(page, candidate.index);
+      const times = opened.times || [];
+      // The times response names the day it loaded. The cell's visible day
+      // number can belong to the next month while this month's heading is
+      // still on screen, and an offer stored under that heading is the wrong
+      // appointment.
+      const when = opened.date || candidate.date;
       for (const time of times) {
-        const offer = toOffer(office.term, candidate.date, time);
+        const offer = toOffer(office.term, when, time);
         if (offer) offers.push(offer);
       }
-      log('DAY_SCOUTED', `${office.term} ${dateKey(candidate.date)}: ${times.length} time(s)`);
+      log('DAY_SCOUTED', `${office.term} ${dateKey(when)}: ${times.length} time(s)`);
     }
     return { office: office.term, offers, error: null, gate: null };
   } catch (error) {

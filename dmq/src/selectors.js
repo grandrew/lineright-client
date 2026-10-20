@@ -79,6 +79,27 @@ export async function officeCardText(card) {
 }
 
 /**
+ * Whether a result card is the office that was asked for.
+ *
+ * The catalogue name has to appear, as a phrase or as the same words in any
+ * order: the branch line is sometimes the name turned around ("IBC Mountain
+ * View" for "Mountain View IBC"). The first card is not good enough. A search
+ * can return a nearby office that does offer the service while the one asked
+ * for does not, and that card is then the only one on the page. Taking it
+ * would store its calendar under the other office's name.
+ */
+export function officeNameMatches(term, cardText) {
+  const text = String(cardText ?? '').replace(/\s+/g, ' ').trim();
+  const name = String(term ?? '').replace(/\s+/g, ' ').trim();
+  if (!name || !text) return false;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`\\b${escaped}\\b`, 'i').test(text)) return true;
+  const tokens = name.toLowerCase().match(/[a-z0-9]+/g) || [];
+  if (tokens.length < 2) return false;
+  return tokens.every((word) => new RegExp(`\\b${word}\\b`, 'i').test(text));
+}
+
+/**
  * The "Select Location" button for a given office.
  *
  * A name is matched against the card's own text. A ZIP can only be matched
@@ -94,14 +115,21 @@ export async function officeSelectButton(page, { term, isZip }) {
     return cards.first().getByRole('button', { name: /select location/i }).first();
   }
 
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const seen = [];
   for (let i = 0; i < count; i++) {
     const card = cards.nth(i);
-    if (new RegExp(`\\b${escaped}\\b`, 'i').test(await officeCardText(card))) {
-      return card.getByRole('button', { name: /select location/i }).first();
+    const text = await officeCardText(card);
+    seen.push(text.replace(/\s+/g, ' ').trim().slice(0, 80));
+    if (officeNameMatches(term, text)) {
+      const button = card.getByRole('button', { name: /select location/i }).first();
+      if (await button.count().catch(() => 0)) return button;
+      throw new Error(`"${term}" is listed, but its button is not Select Location`);
     }
   }
-  throw new Error(`No office matching "${term}" in ${count} result(s)`);
+  const sample = seen.slice(0, 3).filter(Boolean).join(' | ');
+  throw new Error(
+    `No office matching "${term}" in ${count} result(s)${sample ? `: ${sample}` : ''}`
+  );
 }
 
 // Read the month the calendar is actually showing, so day numbers can be

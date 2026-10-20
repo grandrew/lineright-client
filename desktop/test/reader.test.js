@@ -143,6 +143,56 @@ test('the real DMV only once the person has said yes', async () => {
   assert.equal(practice.reader.capabilities().enabled, false);
 });
 
+test('a pace waits once before the next look, and a drop gives the read back', async () => {
+  const w = world();
+  w.reader.notePace({ pace_ms: 60000, dropped_until: null });
+  w.reader.offer([read(4)]);
+  await settle();
+  assert.equal(w.calls.runs.length, 0, 'not started while the site asked for a slower look');
+  // Part way through the wait, another sync must not start it over.
+  w.reader.readyAt = Date.now() + 1000;
+  w.reader.notePace({ pace_ms: 60000, dropped_until: null });
+  assert.ok(w.reader.readyAt - Date.now() < 5000, 'a later sync does not push the wait out');
+  w.reader.readyAt = 0;
+  const until = new Date(Date.now() + 60000).toISOString();
+  w.reader.notePace({ pace_ms: 0, dropped_until: until });
+  w.reader.offer([read(4)]);
+  await settle(); await settle();
+  assert.equal(w.calls.runs.length, 0, 'paused: the scout does not start');
+  assert.deepEqual(w.calls.released, [4], 'and the read is given back');
+  w.reader.notePace({ pace_ms: 0, dropped_until: null });
+  w.reader.offer([read(5)]);
+  await settle(); await settle();
+  assert.equal(w.calls.runs.length, 1, 'the site lifted the pause');
+});
+
+test('a 429 gives the read back and waits out Retry-After', async () => {
+  const w = world({ reply: Object.assign(new Error('Too many reads at once'), { status: 429, retryAfter: 30 }) });
+  w.reader.offer([read(6)]);
+  await settle(); await settle();
+  assert.equal(w.calls.runs.length, 1);
+  assert.deepEqual(w.calls.released, [6]);
+  assert.ok(w.reader.readyAt > Date.now());
+  w.reader.offer([read(7)]);
+  await settle();
+  assert.equal(w.calls.runs.length, 1, 'the next look waits');
+  w.reader.readyAt = 0;
+  w.reader.offer([read(7)]);
+  await settle(); await settle();
+  assert.equal(w.calls.runs.length, 2);
+});
+
+test('an answer that asks for a slower look waits before the next one', async () => {
+  const w = world({ reply: { status: 'done', recorded: 1, pace_ms: 30000, offers: [] } });
+  w.reader.offer([read(8)]);
+  await settle(); await settle();
+  assert.equal(w.calls.answers.length, 1);
+  assert.ok(w.reader.readyAt > Date.now());
+  w.reader.offer([read(9)]);
+  await settle();
+  assert.equal(w.calls.runs.length, 1);
+});
+
 test('an answer the site will not take is let go', async () => {
   const w = world({ reply: Object.assign(new Error('That read ran out of time'), { status: 410 }) });
   w.reader.offer([read(6)]);

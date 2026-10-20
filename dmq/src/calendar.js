@@ -12,6 +12,38 @@ export function extractDayNumber(label) {
   return day;
 }
 
+/**
+ * The full date painted on a day cell, when the cell carries one.
+ *
+ * The live calendar puts "December 1, 2026" in a span that is hidden on a
+ * desktop layout, then the day-of-month "1", then "Open Times". Reading only
+ * the visible day number and the month heading turns that December cell into
+ * November 1 whenever November is the month on screen.
+ */
+export function dateFromCellText(text) {
+  // The next span is glued on, so the year is followed by the day number:
+  // "December 1, 2026" + "1" + "Open Times" is "December 1, 20261Open Times".
+  // Four digits is the year either way.
+  const match = String(text ?? '').match(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}),\s+(\d{4})/i
+  );
+  if (!match) return null;
+  const month = MONTHS.indexOf(match[1].toLowerCase());
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) return null;
+  return date;
+}
+
+/** A month named by the cell's own class, such as `rbc-event december`. */
+export function monthFromClass(className) {
+  const match = String(className ?? '').toLowerCase().match(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/
+  );
+  return match ? MONTHS.indexOf(match[1]) : null;
+}
+
 // The calendar widget renders a heading like "September 2026". The original
 // code never read it, so day numbers were always interpreted as belonging to
 // DATE_START's month -- see buildCandidateDates below.
@@ -45,12 +77,28 @@ export function buildCandidateDates({ dayLabels, displayedMonth, startDate, endD
   const candidates = [];
 
   for (const label of dayLabels) {
-    const day = extractDayNumber(label.text ?? label);
-    if (day === null) continue;
-
-    const date = new Date(displayedMonth.year, displayedMonth.month, day);
-    // Reject days that overflow the displayed month (e.g. 31 in a 30-day month).
-    if (date.getMonth() !== displayedMonth.month) continue;
+    const source = typeof label === 'string' ? label : `${label.full || ''} ${label.text || ''}`;
+    // A full date on the cell wins over heading + day number. An off-range
+    // day (December 1 shown on the November grid) would otherwise inherit
+    // the heading's month.
+    let date = dateFromCellText(source);
+    if (!date) {
+      const day = extractDayNumber(label.text ?? label);
+      if (day === null) continue;
+      const fromClass = typeof label === 'string' ? null : monthFromClass(label.className);
+      let month = displayedMonth.month;
+      let year = displayedMonth.year;
+      // The live cell's class names its own month. A December cell on the
+      // November grid must not become November 1, which would sort first and
+      // be the day the scout opens.
+      if (fromClass !== null) {
+        month = fromClass;
+        if (fromClass === 11 && displayedMonth.month === 0) year -= 1;
+        if (fromClass === 0 && displayedMonth.month === 11) year += 1;
+      }
+      date = new Date(year, month, day);
+      if (date.getMonth() !== month) continue;
+    }
     if (date < startDate || date > endDate) continue;
 
     const key = date.getTime();

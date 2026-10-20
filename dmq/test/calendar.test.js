@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   extractDayNumber,
+  dateFromCellText,
+  monthFromClass,
   parseMonthHeading,
   buildCandidateDates,
   shouldAdvanceMonth,
@@ -84,6 +86,47 @@ test('buildCandidateDates returns earliest first', () => {
     endDate: new Date(2026, 8, 30),
   });
   assert.deepEqual(candidates.map((c) => c.date.getDate()), [4, 13, 22]);
+});
+
+test('a full date on the cell beats the month heading', () => {
+  // November's grid includes December 1–5. The visible label is "1 Open Times"
+  // and the heading says November, which used to store 1 November. The hidden
+  // span still says December 1, 2026, and that is the appointment.
+  assert.equal(dateFromCellText('December 1, 2026 1 Open Times').getMonth(), 11);
+  const candidates = buildCandidateDates({
+    dayLabels: [{
+      text: '1 Open Times',
+      full: 'December 1, 2026 1 Open Times',
+      index: 4,
+    }],
+    displayedMonth: { year: 2026, month: 10 }, // November
+    startDate: new Date(2026, 9, 1),
+    endDate: new Date(2026, 11, 31),
+  });
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].date.getFullYear(), 2026);
+  assert.equal(candidates[0].date.getMonth(), 11, 'December, not the November heading');
+  assert.equal(candidates[0].date.getDate(), 1);
+  assert.equal(candidates[0].index, 4);
+  // The mobile span is the next DOM sibling of nothing: its text is glued to
+  // the day number, "December 1, 20261Open Times", and the year is not at a
+  // word boundary.
+  assert.equal(dateFromCellText('December 1, 20261Open Times').getMonth(), 11);
+});
+
+test('a month class beats the heading when the cell text has no full date', () => {
+  assert.equal(monthFromClass('rbc-event rbc-event-allday december'), 11);
+  const candidates = buildCandidateDates({
+    dayLabels: [
+      { text: '3 Open Times', full: '3 Open Times', className: 'rbc-event november', index: 0 },
+      { text: '1 Open Times', full: '1 Open Times', className: 'rbc-event december', index: 4 },
+    ],
+    displayedMonth: { year: 2026, month: 10 },
+    startDate: new Date(2026, 9, 1),
+    endDate: new Date(2026, 11, 31),
+  });
+  assert.deepEqual(candidates.map((c) => c.date.getMonth()), [10, 11]);
+  assert.equal(candidates[0].index, 0, 'the November day is opened before the December cell');
 });
 
 test('buildCandidateDates refuses to guess the month', () => {
