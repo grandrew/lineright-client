@@ -27,6 +27,8 @@
     adviceNoted: '',
     situationPace: null,  // when the nearest-opening bar next comes back (situation.js)
     situationNoted: '',
+    situationPainted: '',
+    adviceHold: null,     // last suggestion, kept across a short gap in sync (advice.js)
     situationTimer: null,
     ended: [],         // turns that ended lately, and how: [{job_id, at, kind, text}] (endedTurns)
     consoleTab: 'positions',
@@ -354,22 +356,25 @@
   }
 
   /** The second bar: the nearest opening, with no button that changes the bid. */
-  function renderSituation(force) {
+  function renderSituation(force, doc) {
     const box = $('situation');
     if (!box || !window.situationBar) return;
-    const decided = window.situationBar.visible(state.doc, situationPace(), Date.now());
+    const decided = window.situationBar.visible(doc || state.doc, situationPace(), Date.now());
     saveSituationPace(decided.pace);
     armSituation(decided.armIn);
     const show = decided.show;
-    const mark = show ? `${show.key}:${decided.pace && decided.pace.closed}` : '';
-    if (!force && mark === state.situationNoted) return;
+    const news = window.situationBar.announced(state.situationNoted, show, decided.pace);
+    const painted = show ? news.noted : '';
     if (!show) {
-      box.classList.add('hidden');
-      box.innerHTML = '';
-      if (!mark) state.situationNoted = '';
-      fit();
+      if (!box.classList.contains('hidden')) {
+        box.classList.add('hidden');
+        box.innerHTML = '';
+        state.situationPainted = '';
+        fit();
+      }
       return;
     }
+    if (!force && state.situationPainted === painted && !box.classList.contains('hidden')) return;
     box.classList.remove('hidden');
     const line = show.queue_name ? `${show.queue_name} — ` : '';
     const said = window.situationBar.sentence(show, prettyDate);
@@ -380,10 +385,12 @@
     box.querySelector('[data-act=dismiss]').addEventListener('click', () => {
       saveSituationPace(window.situationBar.dismiss(situationPace(), Date.now()));
       state.situationNoted = '';
-      renderSituation(true);
+      state.situationPainted = '';
+      renderSituation(true, doc);
     });
-    if (state.situationNoted !== mark) {
-      state.situationNoted = mark;
+    state.situationPainted = painted;
+    if (news.log) {
+      state.situationNoted = news.noted;
       uiNote('banner', `situation ${show.key} — ${said}`);
     }
     fit();
@@ -398,10 +405,15 @@
     const showing = (state.shell.tabs.find((t) => t.active) || {}).jobId || null;
     // A turn already on the banner is the whole of it. The suggestion comes
     // back on its own once that turn is gone, unless this exact key was closed.
-    const advice = window.adviceBanner ? window.adviceBanner.visible(state.doc, adviceGoneMap()) : null;
-    renderSituation(false);
+    const kept = window.adviceBanner && window.adviceBanner.hold
+      ? window.adviceBanner.hold(state.doc, state.adviceHold, Date.now(), adviceGoneMap())
+      : { advice: null, at: 0, doc: state.doc };
+    state.adviceHold = kept.advice ? { advice: kept.advice, at: kept.at } : null;
+    const advice = kept.advice;
+    renderSituation(false, kept.doc || state.doc);
+    const adviceMark = advice ? `${advice.key}|${advice.office_code || ''}|${advice.slot_date || ''}|${advice.slot_time || ''}` : '';
     const key = handoffs.map((h) => `${h.job_id}:${h.phase}:${h.booker ? `${h.booker.name}:${h.booker.silent}` : ''}:${h.over ? h.over.kind : ''}`).join(',')
-      + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}|${advice ? advice.key : ''}`;
+      + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}|${adviceMark}`;
     if (!force && key === state.bannerKey) { tickClocks(); return; }
     state.bannerKey = key;
     box.innerHTML = '';

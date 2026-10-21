@@ -45,6 +45,14 @@
     return { pace: next, show: situation, armIn: null };
   }
 
+  /** Whether this showing is a new notice. Hiding the bar does not forget it. */
+  function announced(prev, show, pace) {
+    if (!show || !show.key) return { noted: prev || '', log: false };
+    const mark = `${show.key}:${(pace && pace.closed) || 0}`;
+    if (prev === mark) return { noted: prev, log: false };
+    return { noted: mark, log: true };
+  }
+
   function dismiss(pace, now) {
     if (!pace || !pace.key) return pace || null;
     const closed = (Number(pace.closed) || 0) + 1;
@@ -114,5 +122,5 @@
     return parts.join(' ');
   }
 
-  return { GAPS_MS, visible, dismiss, sentence, miles, fresh };
+  return { GAPS_MS, visible, announced, dismiss, sentence, miles, fresh };
 });

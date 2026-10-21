@@ -78,6 +78,19 @@ test('a different opening starts the 5 minutes over', () => {
   assert.equal(again.pace.nextAt, now + bar.GAPS_MS[0] + bar.GAPS_MS[0]);
 });
 
+test('covering the notice does not make the same opening a new notice', () => {
+  const pace = { key: both.key, closed: 0, nextAt: now, open: true };
+  const first = bar.announced('', both, pace);
+  assert.equal(first.log, true);
+  const hidden = bar.announced(first.noted, null, pace);
+  assert.equal(hidden.log, false);
+  assert.equal(hidden.noted, first.noted);
+  const back = bar.announced(hidden.noted, both, pace);
+  assert.equal(back.log, false);
+  const again = bar.announced('', both, { ...pace, closed: 1 });
+  assert.equal(again.log, true);
+});
+
 test('a turn or a suggestion hides the notice and does not close it', () => {
   const pace = { key: both.key, closed: 0, nextAt: now, open: true };
   assert.equal(bar.visible({ situation: both, handoffs: [{ job_id: 1 }] }, pace, now).show, null);

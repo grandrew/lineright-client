@@ -16,6 +16,21 @@ test('a suggestion is shown, and a turn on the banner hides it', () => {
   assert.equal(banner.visible({ advice: { kind: 'other', key: 'x' } }, {}), null);
 });
 
+test('a suggestion that drops out of one sync stays up for two minutes', () => {
+  const doc = { advice: radius, handoffs: [] };
+  const first = banner.hold(doc, null, 1000, {});
+  assert.equal(first.advice, radius);
+  const gap = banner.hold({ advice: null, handoffs: [] }, first, 1000 + 60 * 1000, {});
+  assert.equal(gap.advice, radius);
+  assert.equal(gap.doc.advice, radius);
+  const gone = banner.hold({ advice: null, handoffs: [] }, first, 1000 + banner.HOLD_MS, {});
+  assert.equal(gone.advice, null);
+  const closed = banner.hold({ advice: null, handoffs: [] }, first, 1000 + 1000, { '2:radius:15': true });
+  assert.equal(closed.advice, null);
+  const turn = banner.hold({ advice: radius, handoffs: [{ job_id: 1 }] }, null, 1000, {});
+  assert.equal(turn.advice, null);
+});
+
 test('closing one suggestion leaves a different one visible', () => {
   const gone = { '2:radius:15': true };
   assert.equal(banner.visible({ advice: radius, handoffs: [] }, gone), null);

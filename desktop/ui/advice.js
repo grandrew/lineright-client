@@ -9,6 +9,10 @@
   'use strict';
 
   const KINDS = { radius: true, time: true, offices: true };
+  // A sync that drops the suggestion for a moment does not take the bar down.
+  // Two minutes is long enough for the board to flicker and short enough that
+  // a suggestion which has really gone gets out of the way.
+  const HOLD_MS = 2 * 60 * 1000;
   const REACH_SHORT = {
     '1h': '1 hour', '2h': '2 hours', '5h': '5 hours', '1d': '1 day',
     '5d': '5 days', '2w': '2 weeks', '1mo': '1 month', '6mo': '6 months',
@@ -29,6 +33,17 @@
     if (doc.handoffs && doc.handoffs.length) return null;
     if (gone && gone[advice.key]) return null;
     return advice;
+  }
+
+  /** The suggestion to paint, keeping the last one across a short gap in sync. */
+  function hold(doc, kept, now, gone) {
+    const raw = visible(doc, gone);
+    if (raw) return { advice: raw, at: now, doc: doc };
+    const still = kept && kept.advice && (now - kept.at) < HOLD_MS
+      ? visible({ advice: kept.advice, handoffs: doc && doc.handoffs }, gone)
+      : null;
+    if (still) return { advice: still, at: kept.at, doc: Object.assign({}, doc, { advice: still }) };
+    return { advice: null, at: 0, doc: doc };
   }
 
   function sentence(advice, formatDate) {
@@ -55,5 +70,5 @@
     return '';
   }
 
-  return { visible, sentence, actionLabel, miles };
+  return { visible, hold, HOLD_MS, sentence, actionLabel, miles };
 });
