@@ -30,6 +30,7 @@
     nickEdit: null,    // the new nickname being typed on the account tab, if any
 
     boardTimer: null, boardShape: '',
+    change: null,      // a bid change being drawn up: {bidId, draft, quote, error, busy, seq, shape} (bidchange.js)
     pairTimer: null,
     credits: null,     // the balance, packs and purchases, from the site
     checkout: null,    // a purchase waiting on the payment page: {id, url, status, message}
@@ -896,8 +897,13 @@
       return;
     }
     const q = b.queue;
-    const shape = `${b.mine ? b.mine.status : 'none'}|${b.handoff ? b.handoff.job_id : ''}|${paired()}`;
-    const editing = document.activeElement && document.activeElement.closest('#bidForm');
+    if (state.change && !(b.mine && b.mine.bid_id === state.change.bidId && b.mine.status === 'active' && !b.handoff)) state.change = null;
+    if (!state.change && state.route.change && b.mine && b.mine.status === 'active' && !b.handoff) {
+      state.route = { ...state.route, change: false };
+      openChange(b);
+    }
+    const shape = `${b.mine ? b.mine.status : 'none'}|${b.handoff ? b.handoff.job_id : ''}|${paired()}|${state.change ? state.change.bidId : ''}`;
+    const editing = document.activeElement && document.activeElement.closest('#bidForm, #changePanel');
     if (page.querySelector('#boardRows') && (shape === state.boardShape || editing)) {
       // Patch in place: the rows and the numbers, not the form somebody is typing in.
       page.querySelector('#boardRows').innerHTML = boardRows(b);
@@ -936,6 +942,7 @@
         </div>
         <aside class="stack">
           ${side}
+          ${state.change && b.mine ? changePanel(b) : ''}
           <div class="panel">
             <div class="panel-title">The line</div>
             <dl>
@@ -951,6 +958,7 @@
       </div>
     </div>`;
     wireBoard(b);
+    if (state.change) wireChange(b);
     if (!state.boardTimer) {
       state.boardTimer = setInterval(() => { if (!document.hidden) loadBoard(id).then((doc) => { if (doc) renderBoard(); }).catch(() => {}); }, 4000);
     }
@@ -974,6 +982,8 @@
           <button class="btn btn-accent" data-raise="${lead}" ${m.rank === 1 ? 'disabled' : ''}>${m.rank === 1 ? 'Leading' : 'Take the lead'}</button>
         </div>
         <div class="row"><input type="number" id="raiseCustom" min="${num(b.min_raise)}" step="1" placeholder="Custom raise" style="flex:1"><button class="btn" id="raiseGo">Raise</button></div>
+        ${state.change ? '' : `<button class="btn btn-block btn-sm" id="change-open" style="margin-top:10px">Change range, time or amount…</button>
+        <p class="tiny muted" style="margin:6px 0 0">See what each amount buys, and get back what your place does not need.</p>`}
         <div class="sep"></div>
         <div class="between"><span class="tiny muted">${esc(m.note || '')}</span><button class="btn btn-sm btn-danger" id="withdraw">Withdraw</button></div>`;
     }
@@ -1042,6 +1052,7 @@
       btn.addEventListener('click', () => doRaise(b.mine.bid_id, Number(btn.dataset.raise)));
     }
     on('#raiseGo', () => { const v = Number(page.querySelector('#raiseCustom').value); if (v > 0) doRaise(b.mine.bid_id, v); });
+    on('#change-open', () => { openChange(b); renderBoard(); });
     for (const sel of page.querySelectorAll('[data-if-passed]')) {
       sel.addEventListener('change', () => { if (sel.value) doIfPassed(Number(sel.dataset.ifPassed), sel.value); });
     }
@@ -1105,6 +1116,178 @@
         }
       });
     }
+  }
+
+  // ------------------------------------------------------- changing a bid
+  // Drawn up beside the position: a wider range, a later time, and the amount.
+  // The site prices every amount worth paying (regbot/quote.py) and says which
+  // one it would choose; nothing changes until Save. What is being drawn up
+  // lives in state.change, because the board is fetched again every few seconds.
+  const BC = window.bidChange;
+
+  function openChange(b) {
+    const m = b.mine;
+    state.change = {
+      bidId: m.bid_id, quote: null, error: '', saveError: '', busy: false, seq: 0, shape: null,
+      draft: { place: '', date: m.preferred_date || '', time: m.preferred_time || '', reach: m.if_passed || '', amount: m.amount },
+    };
+    requestQuote(b);
+  }
+
+  function requestQuote(b) {
+    const c = state.change;
+    if (!c) return;
+    const sent = BC.body({ ...c.draft, amount: null }, b.mine);
+    c.shape = BC.shapeKey(c.draft);
+    c.seq += 1;
+    const seq = c.seq;
+    c.loading = true;
+    paintQuote(b);
+    call('server:quote', { bid_id: c.bidId, change: sent }).then((doc) => {
+      if (state.change !== c || seq !== c.seq) return;
+      c.quote = doc; c.error = ''; c.loading = false;
+      paintQuote(b);
+    }).catch((err) => {
+      if (state.change !== c || seq !== c.seq) return;
+      c.quote = null; c.error = err.message; c.loading = false;
+      paintQuote(b);
+    });
+  }
+
+  function quoteHtml(b) {
+    const c = state.change;
+    if (c.error) return `<div class="note bad">${esc(c.error)}</div>`;
+    const doc = c.quote;
+    if (!doc) return '<p class="small muted" style="margin:6px 0">Working out what each amount buys…</p>';
+    const pick = doc.suggested || {};
+    const use = pick.amount !== Number(c.draft.amount)
+      ? ` <button class="btn btn-sm" data-change-amount="${num(pick.amount)}" style="margin-top:8px">Use ${coins(pick.amount)}${pick.delta ? ` · ${esc(BC.deltaText(pick.delta, coins))}` : ''}</button>` : '';
+    const tone = pick.kind === 'refund' ? 'ok' : (pick.kind === 'raise' ? 'warn' : '');
+    const opts = (doc.options || []).map((o) => `<button type="button" class="quote-opt${o.amount === Number(c.draft.amount) ? ' on' : ''}" data-change-amount="${num(o.amount)}" ${o.afford ? '' : 'disabled title="More than you have to spend"'}>
+        <span class="q-amt">${coins(o.amount)}</span><span class="q-what">${esc(BC.title(o))}</span><span class="q-delta">${esc(BC.deltaText(o.delta, coins))}</span>
+        <span class="q-when">${esc(BC.soon(o.outlook, doc.basis && doc.basis.horizon_days))}</span></button>`).join('');
+    const ahead = (doc.rivals && doc.rivals.ahead) || [];
+    const basis = doc.basis || {};
+    return `<div class="note ${tone}" style="margin:6px 0 10px">${esc(pick.why || '')}${use}</div>
+      <div class="quote-opts">${opts}</div>
+      ${ahead.length ? `<p class="tiny muted" style="margin:6px 0 0">Ahead of you for these offices: ${ahead.map((r) => `${esc(r.nickname)} ${coins(r.amount)} (#${num(r.rank)})`).join(', ')}.</p>` : ''}
+      <p class="tiny muted" style="margin:6px 0 0">Worked out from the ${num(basis.openings)} openings found on this line in the last ${esc(String(basis.days || 0))} days, played against the board as it is now. Only the top ${num(basis.pool)} bids are offered an opening, and ${doc.lowers_left ? `this bid can be lowered ${num(doc.lowers_left)} more time${doc.lowers_left === 1 ? '' : 's'} today` : 'this bid cannot be lowered again today'}.</p>`;
+  }
+
+  function paintQuote(b) {
+    const box = $('changeQuote');
+    if (box) {
+      box.innerHTML = quoteHtml(b);
+      for (const btn of box.querySelectorAll('[data-change-amount]')) {
+        btn.addEventListener('click', () => setChangeAmount(b, Number(btn.dataset.changeAmount)));
+      }
+    }
+    paintSave(b);
+  }
+
+  function paintSave(b) {
+    const c = state.change;
+    const save = $('change-save');
+    if (!c || !save) return;
+    save.textContent = c.busy ? 'Saving…' : BC.saveLabel(c.draft, b.mine, coins);
+    save.disabled = c.busy || !Object.keys(BC.body(c.draft, b.mine)).length || Boolean(c.error);
+    const said = $('changeError');
+    if (said) { said.textContent = c.saveError || ''; said.classList.toggle('hidden', !c.saveError); }
+  }
+
+  function setChangeAmount(b, amount) {
+    const c = state.change;
+    if (!c) return;
+    c.draft.amount = amount;
+    const input = document.querySelector('#changePanel [data-change="amount"]');
+    if (input) input.value = String(amount);
+    paintQuote(b);
+  }
+
+  function changePanel(b) {
+    const m = b.mine;
+    const q = b.queue;
+    const c = state.change;
+    const d = c.draft;
+    const places = BC.placeChoices(m.place);
+    const reaches = BC.reachChoices(m.if_passed);
+    return `<div class="panel" id="changePanel">
+      <div class="panel-title">Change your bid</div>
+      <label class="field"><span class="field-label">Offices</span>
+        <select data-change="place">${places.map((o) => `<option value="${esc(o.value)}"${o.value === d.place ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select>
+        <span class="field-help">You can add offices, never drop one. To ask for fewer, withdraw and bid again.</span></label>
+      ${reaches.length ? `<div class="grid-2">
+        <label class="field"><span class="field-label">Preferred date</span><input type="date" data-change="date" value="${esc(d.date)}" min="${esc(m.preferred_date)}" max="${esc(q.window[1])}"></label>
+        <label class="field"><span class="field-label">Preferred time</span><input type="time" data-change="time" value="${esc(d.time)}" min="${esc(q.hours[0])}" max="${esc(q.hours[1])}" step="900"></label>
+      </div>
+      <label class="field"><span class="field-label">If that time passes</span>
+        <select data-change="reach">${reaches.map((o) => `<option value="${esc(o.value)}"${o.value === d.reach ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select>
+        <span class="field-help">Later, or farther: every time the bid takes now stays in.</span></label>`
+        : '<p class="tiny muted" style="margin:0 0 12px">This bid already takes any time in the line\'s window.</p>'}
+      <div class="sep"></div>
+      <span class="field-label">Your bid</span>
+      <div id="changeQuote">${quoteHtml(b)}</div>
+      <label class="field" style="margin-top:10px"><span class="field-label">Or type an amount</span>
+        <input type="number" data-change="amount" min="${num(q.min_bid)}" step="1" value="${num(d.amount)}"></label>
+      <div class="row" style="margin-top:12px"><button class="btn btn-accent" id="change-save" style="flex:1"></button><button class="btn btn-ghost" id="change-cancel">Cancel</button></div>
+      <div id="changeError" class="note bad hidden" style="margin-top:10px"></div>
+    </div>`;
+  }
+
+  function wireChange(b) {
+    const panel = $('changePanel');
+    const c = state.change;
+    if (!panel || !c) return;
+    let timer = null;
+    const shapeChanged = () => {
+      paintSave(b);
+      if (BC.shapeKey(c.draft) === c.shape) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => requestQuote(b), 350);
+    };
+    for (const el of panel.querySelectorAll('[data-change]')) {
+      const key = el.dataset.change;
+      const read = () => {
+        c.saveError = '';
+        if (key === 'amount') { c.draft.amount = Number(el.value) || 0; paintQuote(b); return; }
+        c.draft[key] = el.value;
+        shapeChanged();
+      };
+      el.addEventListener(key === 'amount' ? 'input' : 'change', read);
+    }
+    paintQuote(b);
+    $('change-cancel').addEventListener('click', () => { state.change = null; renderBoard(); });
+    $('change-save').addEventListener('click', async () => {
+      const change = { ...BC.body(c.draft, b.mine), expect_amount: b.mine.amount };
+      c.busy = true; c.saveError = ''; paintSave(b);
+      try {
+        const r = await call('server:change', { bid_id: c.bidId, change });
+        if (change.if_passed) chosenReach[c.bidId] = change.if_passed;
+        toast('ok', r.message, 9000);
+        state.change = null;
+        state.board = null;
+        renderBoard();
+      } catch (err) {
+        c.busy = false;
+        if (err.status === 402) {
+          go('credits', { need: err.detail.need, back: { page: 'board', id: b.queue.id } });
+          return;
+        }
+        c.saveError = err.message;
+        paintSave(b);
+        if (err.status === 409) {
+          toast('warn', err.message, 9000);
+          // The bid moved under the form: show it as it is now, and price it again.
+          loadBoard(b.queue.id).then((doc) => {
+            if (!doc || state.change !== c) return;
+            c.draft.amount = doc.mine ? doc.mine.amount : c.draft.amount;
+            state.boardShape = '';
+            renderBoard();
+            if (state.change === c) requestQuote(doc);
+          }).catch(() => {});
+        }
+      }
+    });
   }
 
   async function doAdvice(advice) {
@@ -1203,7 +1386,8 @@
           </div>
           <div class="pos-actions">
             <div style="text-align:right; margin-right:6px"><div class="num" style="font-weight:700; font-size:16px">${coins(p.amount)}</div><div class="tiny muted">${esc(p.site_name)}</div></div>
-            ${p.status === 'active' ? `<button class="btn btn-sm" data-raise50="${num(p.bid_id)}" title="Raise by 50 credits">+${coins(50)}</button>` : ''}
+            ${p.status === 'active' ? `<button class="btn btn-sm" data-raise50="${num(p.bid_id)}" title="Raise by 50 credits">+${coins(50)}</button>
+            <button class="btn btn-sm" data-change-bid="${num(p.queue_id)}" title="A wider range, a later time, or another amount">Change</button>` : ''}
             <button class="btn btn-sm btn-ghost" data-board="${num(p.queue_id)}">Board</button>
           </div>
         </div>`).join('') : '<div class="empty">No live positions. <a data-go-sites>Find a line to join →</a></div>'}</div>`;
@@ -1264,6 +1448,7 @@
     for (const a2 of page.querySelectorAll('[data-go-sites]')) a2.addEventListener('click', () => go('sites'));
     for (const a2 of page.querySelectorAll('[data-external]')) a2.addEventListener('click', () => api.call('tabs:external', { url: a2.dataset.external }));
     for (const b of page.querySelectorAll('[data-raise50]')) b.addEventListener('click', () => doRaise(Number(b.dataset.raise50), 50));
+    for (const b of page.querySelectorAll('[data-change-bid]')) b.addEventListener('click', () => go('board', { id: Number(b.dataset.changeBid), change: true }));
     for (const sel of page.querySelectorAll('[data-if-passed]')) {
       sel.addEventListener('change', () => { if (sel.value) doIfPassed(Number(sel.dataset.ifPassed), sel.value); });
     }

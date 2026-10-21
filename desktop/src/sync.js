@@ -270,6 +270,18 @@ class SyncClient {
     return this.request(`/api/client/bids/${Number(bidId)}/advice`, { body: { key } });
   }
 
+  /** What a bid would get at each amount worth paying, as it is or with `change`
+   *  (a wider range, a later time, a longer reach: see ui/bidchange.js). Writes nothing. */
+  async quoteBid(bidId, change = {}) {
+    return this.request(`/api/client/bids/${Number(bidId)}/quote`, { body: change || {} });
+  }
+
+  /** Change a live bid in one write: `amount` is the new total; `fields`,
+   *  `preferred_date`, `preferred_time` and `if_passed` may only widen it. */
+  async changeBid(bidId, change) {
+    return this.request(`/api/client/bids/${Number(bidId)}/change`, { body: change || {} });
+  }
+
   async withdrawBid(bidId) {
     return this.request(`/api/client/bids/${Number(bidId)}/withdraw`, { body: {} });
   }

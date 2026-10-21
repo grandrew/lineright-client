@@ -82,6 +82,23 @@ test('applying a suggestion posts that suggestion\'s key and no other change', a
   assert.deepEqual(fetch.calls[0].body, { key: '2:radius:15' });
 });
 
+test('a quote and a change of a bid go to the bid\'s routes with what was asked', async () => {
+  const fetch = fakeFetch({
+    '/api/client/bids/5/quote': { body: { kind: 'client.quote', suggested: { kind: 'refund', amount: 71 } } },
+    '/api/client/bids/5/change': { body: { ok: true, amount: 71, delta: -89 } },
+  });
+  const client = new SyncClient({ serverUrl: 'http://srv', token: 'tok', fetch });
+  assert.equal((await client.quoteBid('5')).suggested.amount, 71);
+  assert.deepEqual(fetch.calls[0].body, {}, 'as it is');
+  await client.quoteBid(5, { fields: { radius_miles: 15 } });
+  assert.deepEqual(fetch.calls[1].body, { fields: { radius_miles: 15 } });
+  const done = await client.changeBid(5, { amount: 71, expect_amount: 160 });
+  assert.equal(done.delta, -89);
+  assert.equal(fetch.calls[2].path, '/api/client/bids/5/change');
+  assert.deepEqual(fetch.calls[2].body, { amount: 71, expect_amount: 160 });
+  assert.equal(fetch.calls[2].init.method, 'POST');
+});
+
 test('the hand-off answers and reports go to the right routes', async () => {
   const fetch = fakeFetch({
     '/api/client/handoffs/7/booked': { body: { ok: true } },

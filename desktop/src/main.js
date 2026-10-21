@@ -1581,6 +1581,14 @@ function wireIpc() {
     loop.poke();
     return r;
   });
+  handle('server:quote', ({ bid_id, change }) => client.quoteBid(bid_id, change));
+  handle('server:change', async ({ bid_id, change }) => {
+    const r = await client.changeBid(bid_id, change);
+    // The reach the app passes openings by is the one just saved.
+    if (change && change.if_passed) rememberReach(bid_id, change.if_passed);
+    loop.poke();
+    return r;
+  });
   handle('server:withdraw', async ({ bid_id }) => { const r = await client.withdrawBid(bid_id); loop.poke(); return r; });
   handle('server:account', async () => { await serverReady(); return client.account(); });
   handle('server:revoke', ({ client_id }) => client.revokeDevice(client_id));

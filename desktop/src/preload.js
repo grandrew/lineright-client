@@ -18,7 +18,7 @@ const CALLS = new Set([
   'tabs:reload', 'tabs:home', 'tabs:external', 'chrome:height',
   // the application half: everything it shows comes from the server as JSON
   'server:sites', 'server:site', 'server:board', 'server:bid', 'server:raise', 'server:if-passed',
-  'server:advice',
+  'server:advice', 'server:quote', 'server:change',
   'server:withdraw', 'server:account', 'server:topup', 'server:revoke', 'server:nickname',
   // credits: the balance kept on the site, and buying more through its payment page
   'server:credits', 'server:payment', 'server:payment-open', 'server:payment-cancel',

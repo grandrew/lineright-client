@@ -231,6 +231,21 @@ site asks Stripe), and shows the credits as soon as they are paid, with
 page opens in a browser that has never signed in to the site, on the purchase's
 own token.
 
+### Changing a bid
+
+On a line's board, **Change range, time or amount…** (or **Change** beside a
+position in the Console) opens a panel beside your position. The offices can
+only grow — a wider range, or the offices around the one you named — and the
+time only move later or reach farther: every slot your bid takes now stays in.
+For each amount worth paying, the site says how many people ahead of you want
+your offices, and how soon you would likely book, worked out by playing the
+line's last week of found openings against the board as it is now. It suggests
+one amount, with the reason in a sentence: often less than you bid, with the
+difference back, because only the people who want your offices are in your way
+(`ui/bidchange.js`; the site's `regbot/quote.py`). Nothing changes until
+**Save**, which does all of it in one go. A bid can be lowered a few times a
+day, and not at all once it has been handed a turn.
+
 A bid or a raise your credits cannot cover is refused by the site, which says
 how many are missing; the join form warns before you send it, and a refusal
 opens the Credits screen with the pack that covers it marked and a way back to
@@ -439,6 +454,8 @@ earned, and the weekly top-up back to ⧗35 that every account gets.
 | The site hands this computer a read | The scout looks, and `POST …/reads/<id>` answers it |
 | You open Sites, a site, a line | `GET /api/client/sites`, `…/sites/<slug>`, `…/queues/<id>` — the same numbers the website shows |
 | You join a line, bid up, withdraw | `POST …/queues/<id>/bids`, `…/bids/<id>/raise`, `…/bids/<id>/withdraw` |
+| You open **Change range, time or amount…** on a line, and change any of them | `POST …/bids/<id>/quote` — what each amount worth paying would buy, and the one the site suggests (writes nothing) |
+| You click **Save** | `POST …/bids/<id>/change` — the amount, and only a wider range or time, in one write; a lower amount comes back to your balance |
 | A hand-off arrives | Desktop notification, a tab on the booking page and the bar over it with the clock and what to do; or, when you let the app book for you, the same tab under a "booking it for you" card while the robot claims it and books it (`…/claim`, then `…/booked` or `…/gone`), then the confirmation in a tab beside it |
 | The tab's page loads | Your profile is typed into the form (see below) |
 | You click **I booked it** | `POST …/handoffs/<job>/booked` — the worker captures your escrow |

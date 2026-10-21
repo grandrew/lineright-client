@@ -992,3 +992,125 @@ test("the app's robot books the person's slot once they let it, and the page ope
     dmv.server.close();
   }
 });
+
+/**
+ * A site with one live bid on one line, for changing it: the board, a quote
+ * for whatever is asked (a wider range or the bid as it is), and the change.
+ * It keeps what the app sent to each.
+ */
+async function bidChangeStub() {
+  const seen = { quotes: [], changes: [] };
+  const place = { office_mode: 'radius', origin: '95050', origin_label: '95050', radius_miles: 5 };
+  const mine = { bid_id: 5, rank: 3, amount: 160, status: 'active', note: '', preferred_date: '2026-10-20',
+    preferred_time: '11:30', if_passed: '1d', raises: 0, place };
+  const option = (amount, label, rivals, first) => ({ amount, delta: amount - 160, label, afford: true,
+    standing: { amount, rank: rivals + 1, field: 4, rivals_ahead: rivals, in_pool: true, pool: 16, scouted: 1, offices: 1, running: true, above: rivals },
+    outlook: { turns: 4, fitting: 40, thin: false, first_turn_s: first, likely_s: first, chance: 1, office_name: 'Santa Clara', lead_s: 86400 } });
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    const read = () => new Promise((resolve) => { let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => resolve(b ? JSON.parse(b) : {})); });
+    if (url.pathname === '/api/client/sites') return json(200, { protocol: 'RQP/1', sites: [] });
+    if (url.pathname === '/api/client/sync') {
+      return json(200, { protocol: 'RQP/1', poll_after_ms: 1500, user: { id: 1, nickname: 'ada', balance: 840, escrow: 160 },
+        positions: [{ bid_id: 5, queue_id: 9, queue_name: 'Driver licence or ID card', site_slug: 'ca-dmv', site_name: 'California DMV', rank: 3, field_size: 4, amount: mine.amount, status: 'active', note: '', preferred_date: mine.preferred_date, preferred_time: mine.preferred_time, if_passed: '1d', window: ['2026-10-01', '2026-12-31'], hours: ['08:00', '17:00'] }],
+        handoffs: [], settled: [], reports: [] });
+    }
+    if (url.pathname === '/api/client/queues/9') {
+      return json(200, { protocol: 'RQP/1', kind: 'client.board',
+        queue: { id: 9, slug: 'license-id', name: 'Driver licence or ID card', description: '', status: 'open', window: ['2026-10-01', '2026-12-31'],
+          hours: ['08:00', '17:00'], weekdays: 'Mon–Fri', timezone: 'America/Los_Angeles', min_bid: 45, slots_per_cycle: 2, cycle_seconds: 80,
+          dispatch: 'offers', site_slug: 'ca-dmv', site_name: 'California DMV', accent: '#0b63d6', connector: 'dmv.ca.gov.qmatic', mock: false, next_dispatch_in: 30 },
+        bids: [
+          { rank: 1, bid_id: 2, nickname: 'bo', amount: 300, status: 'active', bot: false, mine: false, raises: 0, preferred_date: '2026-10-22', preferred_time: '09:00', if_passed: '1d', age: '1h' },
+          { rank: 2, bid_id: 3, nickname: 'cy', amount: 200, status: 'active', bot: false, mine: false, raises: 0, preferred_date: '2026-10-22', preferred_time: '09:00', if_passed: '1d', age: '1h' },
+          { rank: 3, bid_id: 5, nickname: 'ada', amount: mine.amount, status: 'active', bot: false, mine: true, raises: 0, preferred_date: mine.preferred_date, preferred_time: mine.preferred_time, if_passed: '1d', age: '1h' },
+          { rank: 4, bid_id: 4, nickname: 'di', amount: 70, status: 'active', bot: false, mine: false, raises: 0, preferred_date: '2026-10-22', preferred_time: '09:00', if_passed: '1d', age: '2h' }],
+        mine, handoff: null, field_size: 4, to_lead: 301, min_raise: 5, default_date: '2026-10-21', fields: [], kept_on_device: [], portal_url: 'http://127.0.0.1:9/' });
+    }
+    if (url.pathname === '/api/client/bids/5/quote') {
+      return read().then((body) => {
+        seen.quotes.push(body);
+        const wider = body.fields && body.fields.radius_miles;
+        const options = wider
+          ? [option(45, 'less', 0, 300), option(160, 'current', 0, 300)]
+          : [option(71, 'less', 0, 600), option(160, 'current', 0, 600), option(201, 'more', 1, 600)];
+        const pick = wider ? 45 : 71;
+        json(200, { protocol: 'RQP/1', kind: 'client.quote', bid_id: 5, queue_id: 9, amount: 160, status: 'active', locked: false,
+          balance: 840, min_bid: 45, min_raise: 5, lowers_left: 3,
+          change: wider ? { words: [`offices within ${wider} miles of 95050`], place: { ...place, radius_miles: wider }, preferred: null, if_passed: null } : null,
+          now: options[1], proposed: wider ? options[1] : null, options,
+          suggested: { kind: 'refund', amount: pick, delta: pick - 160, reason: wider ? 'wait' : 'standing',
+            why: wider ? `With this change, ⧗${pick} should get a booking in about 5 minutes, no later than ⧗160 does now, so ⧗${160 - pick} can come back.`
+              : 'Lower it to ⧗71 and get ⧗89 back: you stay first for openings at your offices, and the wait stays the same.' },
+          rivals: { ahead: [], behind: [{ nickname: 'di', amount: 70, rank: 4 }] },
+          basis: { days: 7, openings: 412, booked_share: 0.9, pool: 16, scout_cap: 12, horizon_days: 28 } });
+      });
+    }
+    if (url.pathname === '/api/client/bids/5/change') {
+      return read().then((body) => {
+        seen.changes.push(body);
+        mine.amount = body.amount || mine.amount;
+        if (body.fields) place.radius_miles = body.fields.radius_miles;
+        json(200, { ok: true, bid_id: 5, queue_id: 9, amount: mine.amount, delta: mine.amount - 160, rank: 3, balance: 840 + 160 - mine.amount,
+          message: `Now offices within ${place.radius_miles} miles of 95050. Lowered to ⧗${mine.amount}: ⧗${160 - mine.amount} is back in your balance. You are at position 3.` });
+      });
+    }
+    res.writeHead(404); res.end();
+    return undefined;
+  });
+  const port = await listen(server);
+  return { server, seen, port };
+}
+
+test('a bid is changed from its board: priced as it is, priced wider, then saved wider and cheaper',
+  { timeout: 120000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+  const { server, seen, port } = await bidChangeStub();
+  t.after(() => server.close());
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-change-'));
+  const run = startApp({ electron, display, port, userData, exitAfter: 20000,
+    extra: ['--remote-debugging-port=0', '--page=board:9'] });
+  let ui = null;
+  try {
+    const devPort = Number(await until(() => fs.readFileSync(path.join(userData, 'DevToolsActivePort'), 'utf8').split('\n')[0], 30000, 'DevTools'));
+    ui = await pageWhere(devPort, (u) => u.endsWith('/ui/index.html'), 'the app page');
+    await until(() => ui.evaluate("Boolean(document.getElementById('change-open'))"), 30000, 'the board with a change button');
+    await ui.evaluate("document.getElementById('change-open').click()");
+
+    // As it is: the site says what the place needs, and offers it.
+    const said = () => ui.evaluate("(document.getElementById('changeQuote') || {}).innerText || ''");
+    assert.match(await until(async () => { const s = await said(); return /get ⧗89 back/.test(s) && s; }, 15000, 'the first quote'),
+      /First, for less[\s\S]*⧗89 back/);
+    assert.deepEqual(seen.quotes[0], {}, 'priced as it is');
+    const save = () => ui.evaluate("document.getElementById('change-save').textContent");
+    assert.equal(await save(), 'Nothing changed yet');
+    assert.equal(await ui.evaluate("document.getElementById('change-save').disabled"), true);
+
+    // Wider: offered only wider ranges, priced again, and the site's pick taken.
+    const ranges = await ui.evaluate("[...document.querySelectorAll('#changePanel [data-change=place] option')].map((o) => o.value)");
+    assert.deepEqual(ranges, ['', '10', '15', '25', '40', '60', '100', '150', '250']);
+    await ui.evaluate(`(() => { const s = document.querySelector('#changePanel [data-change=place]'); s.value = '15'; s.dispatchEvent(new Event('change')); })()`);
+    await until(() => seen.quotes.length >= 2, 10000, 'the wider quote');
+    assert.deepEqual(seen.quotes[1], { fields: { radius_miles: 15 } });
+    assert.match(await until(async () => { const s = await said(); return /⧗115 can come back/.test(s) && s; }, 10000, 'the wider quote shown'),
+      /no later than ⧗160 does now/);
+    await ui.evaluate("[...document.querySelectorAll('#changeQuote button')].find((b) => /^Use ⧗45/.test(b.textContent)).click()");
+    assert.equal(await ui.evaluate("document.querySelector('#changePanel [data-change=amount]').value"), '45');
+    assert.equal(await save(), 'Save the change · ⧗115 back');
+
+    await ui.evaluate("document.getElementById('change-save').click()");
+    await until(() => seen.changes.length === 1, 10000, 'the change sent');
+    assert.deepEqual(seen.changes[0], { fields: { radius_miles: 15 }, amount: 45, expect_amount: 160 });
+    assert.match(await until(async () => { const s = await ui.evaluate("document.getElementById('toasts').innerText"); return /back in your balance/.test(s) && s; }, 10000, 'the toast'),
+      /Now offices within 15 miles of 95050\. Lowered to ⧗45/);
+    assert.equal(await until(() => ui.evaluate("!document.getElementById('changePanel') && document.getElementById('myAmount').textContent"), 10000, 'the board again'), '⧗45');
+  } finally {
+    if (ui) ui.close();
+  }
+  const result = await run.result;
+  assert.equal(result.server, `http://127.0.0.1:${port}`);
+});
