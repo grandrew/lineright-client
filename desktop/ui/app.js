@@ -25,6 +25,9 @@
     bannerKey: '',
     adviceGone: null,  // suggestion keys closed with ×, kept across syncs (advice.js)
     adviceNoted: '',
+    situationPace: null,  // when the nearest-opening bar next comes back (situation.js)
+    situationNoted: '',
+    situationTimer: null,
     ended: [],         // turns that ended lately, and how: [{job_id, at, kind, text}] (endedTurns)
     consoleTab: 'positions',
     nickEdit: null,    // the new nickname being typed on the account tab, if any
@@ -318,6 +321,74 @@
     } catch { /* still remembered until the page reloads */ }
   }
 
+  function situationPace() {
+    if (state.situationPace) return state.situationPace;
+    try {
+      const raw = JSON.parse(localStorage.getItem('regbot.situationPace') || 'null');
+      if (raw && typeof raw.key === 'string' && Number.isFinite(Number(raw.nextAt))) {
+        state.situationPace = {
+          key: raw.key,
+          closed: Number(raw.closed) || 0,
+          nextAt: Number(raw.nextAt),
+          open: !!raw.open,
+        };
+        return state.situationPace;
+      }
+    } catch { /* a wait this session still sticks in the state below */ }
+    return null;
+  }
+
+  function saveSituationPace(pace) {
+    state.situationPace = pace;
+    try {
+      if (!pace) localStorage.removeItem('regbot.situationPace');
+      else localStorage.setItem('regbot.situationPace', JSON.stringify(pace));
+    } catch { /* still remembered until the page reloads */ }
+  }
+
+  function armSituation(ms) {
+    if (state.situationTimer) clearTimeout(state.situationTimer);
+    state.situationTimer = null;
+    if (ms == null || ms < 0) return;
+    state.situationTimer = setTimeout(() => renderSituation(true), Math.min(ms + 20, 2147483647));
+  }
+
+  /** The second bar: the nearest opening, with no button that changes the bid. */
+  function renderSituation(force) {
+    const box = $('situation');
+    if (!box || !window.situationBar) return;
+    const decided = window.situationBar.visible(state.doc, situationPace(), Date.now());
+    saveSituationPace(decided.pace);
+    armSituation(decided.armIn);
+    const show = decided.show;
+    const mark = show ? `${show.key}:${decided.pace && decided.pace.closed}` : '';
+    if (!force && mark === state.situationNoted) return;
+    if (!show) {
+      box.classList.add('hidden');
+      box.innerHTML = '';
+      if (!mark) state.situationNoted = '';
+      fit();
+      return;
+    }
+    box.classList.remove('hidden');
+    const line = show.queue_name ? `${show.queue_name} — ` : '';
+    const said = window.situationBar.sentence(show, prettyDate);
+    box.innerHTML = `<span class="mark">·</span>
+      <span class="text"><b>Nearest opening</b> · ${esc(line + said)}
+        <br><span class="tiny">This does not change your bid.</span></span>
+      <span class="actions"><button class="pill" data-act="dismiss" title="Dismiss">×</button></span>`;
+    box.querySelector('[data-act=dismiss]').addEventListener('click', () => {
+      saveSituationPace(window.situationBar.dismiss(situationPace(), Date.now()));
+      state.situationNoted = '';
+      renderSituation(true);
+    });
+    if (state.situationNoted !== mark) {
+      state.situationNoted = mark;
+      uiNote('banner', `situation ${show.key} — ${said}`);
+    }
+    fit();
+  }
+
   function renderBanner(force) {
     const box = $('banner');
     const handoffs = (state.doc && state.doc.handoffs) || [];
@@ -328,6 +399,7 @@
     // A turn already on the banner is the whole of it. The suggestion comes
     // back on its own once that turn is gone, unless this exact key was closed.
     const advice = window.adviceBanner ? window.adviceBanner.visible(state.doc, adviceGoneMap()) : null;
+    renderSituation(false);
     const key = handoffs.map((h) => `${h.job_id}:${h.phase}:${h.booker ? `${h.booker.name}:${h.booker.silent}` : ''}:${h.over ? h.over.kind : ''}`).join(',')
       + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}|${advice ? advice.key : ''}`;
     if (!force && key === state.bannerKey) { tickClocks(); return; }

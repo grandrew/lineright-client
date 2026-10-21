@@ -112,6 +112,10 @@ body.has-tabs #tabbar{display:flex}
 .banner-row .steps{display:inline-block; margin-top:2px}
 .banner-row.ended-ok .mark, .banner-row.ended-ok .text b{color:var(--ok)}
 .banner-row.ended-bad .mark, .banner-row.ended-bad .text b{color:var(--bad)}
+#situation{display:flex; align-items:center; gap:12px; padding:6px 14px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+#situation .mark{font-size:16px; color:var(--muted)}
+#situation .text{flex:1; min-width:0; font-size:13px; color:var(--text)}
+#situation .text b{color:var(--muted); font-weight:650}
 
 /* ------------------------------------------------------- found form */
 .section{padding:10px 14px; background:var(--surface); border-bottom:1px solid var(--line)}
