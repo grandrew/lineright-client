@@ -162,3 +162,40 @@ test('with the network closed to it, the page is still written down', async () =
   assert.equal(all.find((r) => r.type === 'opened').network, false);
   assert.ok(all.some((r) => r.type === 'navigated'));
 });
+
+test('each request is timed by the network\'s own clock, and the rest of a page counted when the tab moves on', async () => {
+  const h = harness();
+  const send = (method, params) => h.dbg.emit('message', {}, method, params);
+  send('Network.requestWillBeSent', { requestId: 'd1', type: 'Document', timestamp: 100.000,
+    request: { method: 'GET', url: 'https://dmv.example/portal/appointments/select-date', headers: {} } });
+  send('Network.responseReceived', { requestId: 'd1', type: 'Document', timestamp: 100.250,
+    response: { status: 200, url: 'https://dmv.example/portal/appointments/select-date', mimeType: 'image/png', headers: {} } });
+  send('Network.loadingFinished', { requestId: 'd1', timestamp: 100.400, encodedDataLength: 51200 });
+  for (const [id, type, url, t0, t1, bytes] of [['s1', 'Script', 'https://dmv.example/app.js', 100.5, 101.4, 300000],
+    ['s2', 'Image', 'https://maps.example/t.png', 100.5, 100.6, 2000], ['s3', 'Font', 'https://fonts.example/f.woff2', 100.5, 100.7, 40000]]) {
+    send('Network.requestWillBeSent', { requestId: id, type, timestamp: t0, request: { method: 'GET', url, headers: {} } });
+    send('Network.responseReceived', { requestId: id, type, timestamp: t0 + 0.05, response: { status: 200, url, mimeType: 'x', headers: {} } });
+    send('Network.loadingFinished', { requestId: id, timestamp: t1, encodedDataLength: bytes });
+  }
+  send('Network.requestWillBeSent', { requestId: 's4', type: 'Image', timestamp: 100.5, request: { method: 'GET', url: 'https://dmv.example/x.png', headers: {} } });
+  send('Network.loadingFailed', { requestId: 's4', type: 'Image', timestamp: 100.9, errorText: 'net::ERR_FAILED' });
+  h.wc.emit('did-start-navigation', { url: 'https://dmv.example/portal/appointments/select-time', isMainFrame: true, isSameDocument: false });
+  send('Network.requestWillBeSent', { requestId: 's5', type: 'Script', timestamp: 102, request: { method: 'GET', url: 'https://dmv.example/b.js', headers: {} } });
+  send('Network.loadingFinished', { requestId: 's5', timestamp: 102.1, encodedDataLength: 10 });
+  h.wc.destroy();
+  await settle();
+  const all = h.records();
+  assert.equal(all.find((r) => r.type === 'response' && r.id === 'd1').ms, 250, 'to the answer\'s headers');
+  assert.deepEqual(all.filter((r) => r.type === 'done').map((r) => [r.id, r.ms, r.bytes]), [['d1', 400, 51200]], 'documents and data only');
+  assert.equal(all.find((r) => r.type === 'failed').ms, 400);
+  const pages = all.filter((r) => r.type === 'resources');
+  assert.equal(pages.length, 2, 'one for the page left, one for the page closed');
+  assert.deepEqual([pages[0].n, pages[0].bytes, pages[0].failed, pages[0].slowest_ms, pages[0].slowest_url],
+    [4, 342000, 1, 900, 'https://dmv.example/app.js']);
+  assert.deepEqual(pages[0].types, { Script: 1, Image: 2, Font: 1 });
+  assert.deepEqual(pages[0].hosts, { 'dmv.example': 2, 'maps.example': 1, 'fonts.example': 1 });
+  assert.equal(pages[1].n, 1);
+  const order = all.map((r) => r.type);
+  assert.ok(order.indexOf('resources') < order.indexOf('navigating'), 'said before the next page starts');
+  assert.equal(order.at(-1), 'closed');
+});

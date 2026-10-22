@@ -40,7 +40,7 @@
     credits: null,     // the balance, packs and purchases, from the site
     checkout: null,    // a purchase waiting on the payment page: {id, url, status, message}
     checkoutTimer: null,
-    advRange: '1h', advTimer: null, advPreview: null,
+    advRange: '1h', advTimer: null, advPreview: null, advTrace: false,
     again: null,       // the weekly re-import, when it is asking: {due, sources, busy, result} (reimport.js)
     againKey: '',
   };
@@ -597,6 +597,8 @@
     }
     state.route = { page, ...params };
     $('page').scrollTop = 0;
+    // Which screen, by its name, for the trace (src/traces.js).
+    api.call('trace:ui', { page }).catch(() => {});
     render();
     renderAgain();
   }
@@ -1996,6 +1998,31 @@
     </div>`;
   }
 
+  // The trace the site asks for (src/traces.js): what this app did, with the
+  // person taken out (src/scrub.js), sent only when LineRight Regbot asks for
+  // it — and the switch that stops it and deletes what was kept.
+  const LEVEL_WORDS = { full: 'everything', outline: 'an outline — no single requests', off: 'nothing at the moment' };
+
+  function advTrace(x) {
+    if (!x) return '';
+    const last = (x.uploads || [])[0];
+    const kb = Math.round((x.bytes || 0) / 102.4) / 10;
+    const lines = (x.recent || []).slice(-40).reverse().map((e) => {
+      const { s: n, t, k, ...rest } = e;
+      return `${new Date(t).toLocaleTimeString()}  ${k}  ${JSON.stringify(rest)}`;
+    }).join('\n');
+    return `<div class="panel"><div class="panel-title">A trace for LineRight Regbot</div>
+      <p class="small" style="margin:0 0 8px">This app writes down what it does — the booking pages it opens and how long each request takes, what its robots saw, how each of your turns went, and what it told you — with you taken out of it: your name, date of birth, licence, passport and Social Security numbers, address, phone and email, in every way a page could spell them; any confirmation number; and nothing you type into a form. <b>${esc(x.server || 'The LineRight Regbot site')}</b> asks for it now and then, so the people running it can see why a booking did or did not work.</p>
+      <label class="small row" style="gap:6px; margin:0 0 8px; cursor:pointer"><input type="checkbox" id="adv-trace-on" ${x.on ? 'checked' : ''}> Keep a trace, and send it when the site asks</label>
+      ${x.on ? `<p class="tiny muted" style="margin:0 0 8px">${num(x.kept)} event${x.kept === 1 ? '' : 's'} kept here (${kb} KB) · ${num(x.sent)} sent so far · the site asks for ${esc(LEVEL_WORDS[x.level] || x.level)}${x.lost ? ` · ${num(x.lost)} too old to send, deleted` : ''}.
+        ${last ? `Last upload ${esc(new Date(last.at).toLocaleString())}: ${last.ok ? `${num(last.events)} events` : `<span class="bad">refused — ${esc(last.message)}</span>`}.` : 'Nothing sent yet.'}</p>
+        <div class="row" style="flex-wrap:wrap; margin-bottom:8px"><button class="btn btn-sm" id="adv-trace-see">${state.advTrace ? 'Hide' : 'See'} the last events</button>
+          <button class="btn btn-sm btn-danger" id="adv-trace-clear">Delete what is kept</button></div>
+        ${state.advTrace ? `<pre class="json-box" style="max-height:340px; overflow:auto">${esc(lines || 'Nothing yet.')}</pre>` : ''}`
+    : '<p class="tiny muted" style="margin:0">Off: nothing is written down, and nothing is sent.</p>'}
+    </div>`;
+  }
+
   async function renderAdvanced(fresh) {
     const page = $('page');
     let t;
@@ -2007,14 +2034,14 @@
       page.innerHTML = `<div class="wrap" id="adv-root" style="max-width:1100px">
         <div class="between" style="margin-bottom:14px; flex-wrap:wrap">
           <div><h1 style="font-size:24px">Advanced — telemetry and diagnostics</h1>
-            <p class="small muted" style="margin:4px 0 0">How this app is doing, kept on this computer for the last day. Nothing here leaves it unless you share it.</p></div>
+            <p class="small muted" style="margin:4px 0 0">How this app is doing, kept on this computer for the last day. These numbers leave it only if you share them; the trace, with your details taken out, goes to LineRight Regbot when the site asks — unless you turn it off.</p></div>
           <div class="rc-range" id="adv-range">${['1h', '6h', '24h'].map((r) => `<button type="button" data-range="${r}" class="${r === state.advRange ? 'on' : ''}">${r}</button>`).join('')}</div>
         </div>
         <div id="adv-tiles"></div>
         <div class="rc-charts" id="adv-charts" style="margin-bottom:18px">${ADV_CHARTS.map((c) => `<div id="adv-${c.id}"></div>`).join('')}</div>
         <div class="split">
           <div class="card"><div class="card-pad" style="padding-bottom:0"><div class="panel-title">What happened</div></div><div id="adv-events"></div></div>
-          <div class="stack"><div id="adv-share"></div>
+          <div class="stack"><div id="adv-trace"></div><div id="adv-share"></div>
             <div class="panel"><div class="panel-title">Kept on this computer</div>
               <p class="tiny muted" style="margin:0 0 10px">A minute at a time for the last day, and the last few hundred events, in telemetry.json in this app's data folder. Start over in Settings deletes it too.</p>
               <button class="btn btn-sm btn-danger" id="adv-clear">Clear this app's telemetry</button></div></div>
@@ -2035,6 +2062,33 @@
     $('adv-tiles').innerHTML = advTiles(t);
     for (const spec of ADV_CHARTS) window.RegbotCharts.render($(`adv-${spec.id}`), advChart(t, spec), { points: t.points, step: t.step });
     $('adv-events').innerHTML = advEvents(t);
+    let x = null;
+    try { x = await call('traces:get', { n: 60 }); } catch { /* an app without one */ }
+    if (state.route.page !== 'advanced') return;
+    const box = $('adv-trace');
+    box.innerHTML = advTrace(x);
+    if (x) {
+      box.querySelector('#adv-trace-on').addEventListener('change', async (e) => {
+        if (!e.target.checked && !window.confirm('Turn the trace off? What is kept here is deleted, and nothing more is written down or sent.')) {
+          e.target.checked = true;
+          return;
+        }
+        await call('traces:on', { on: e.target.checked });
+        toast('ok', e.target.checked ? 'The trace is on: LineRight Regbot gets it when the site asks.' : 'The trace is off, and what was kept is deleted.');
+        renderAdvanced(false);
+      });
+      const see = box.querySelector('#adv-trace-see');
+      if (see) see.addEventListener('click', () => { state.advTrace = !state.advTrace; renderAdvanced(false); });
+      const clear = box.querySelector('#adv-trace-clear');
+      if (clear) {
+        clear.addEventListener('click', async () => {
+          if (!window.confirm('Delete the trace kept on this computer? What the site already has stays there.')) return;
+          await call('traces:clear');
+          toast('ok', 'Deleted.');
+          renderAdvanced(false);
+        });
+      }
+    }
     const share = $('adv-share');
     share.innerHTML = advShare(t);
     share.querySelector('#adv-preview').addEventListener('click', async () => {
@@ -2669,6 +2723,7 @@
     return `<div class="panel"><div class="panel-title">Advanced</div>
       <p class="small" style="margin:0 0 10px">Telemetry and diagnostics: how this app's conversation with the site is going, the round trips the site timed, what the robots did, and the memory and CPU the app uses — plotted over the last day, kept on this computer.</p>
       <p class="tiny muted" style="margin:0 0 10px">${t.autoShare ? 'Shared with the site automatically every six hours.' : 'Shared with the site only when you press Share.'}${last ? ` Last shared ${esc(new Date(last.at * 1000).toLocaleString())}.` : ''}</p>
+      <p class="tiny muted" style="margin:0 0 10px">${s.traces && s.traces.on ? 'A trace of what the app does, with your details taken out, goes to LineRight Regbot when the site asks.' : 'The trace for LineRight Regbot is off.'} Advanced shows it, and turns it ${s.traces && s.traces.on ? 'off' : 'on'}.</p>
       <button class="btn btn-sm" id="s-advanced">Open Advanced</button></div>`;
   }
 
@@ -2686,7 +2741,7 @@
       <p class="small" style="margin:0 0 6px"><b>This deletes from this computer, for good:</b></p>
       <ul class="small" style="margin:0 0 10px; padding-left:20px">
         ${dev() ? '<li>the practice server on this computer, if there is one, and everything on it: your account there, your lines, bids, practice credits and their history, its settings file and its logs</li>' : ''}
-        <li>this app's telemetry — what the Advanced screen plots</li>
+        <li>this app's telemetry — what the Advanced screen plots — and the trace kept for LineRight Regbot</li>
         <li>this app's logs — what it did on booking sites, and the copies of those pages</li>
         <li>your profile, every personal detail kept for booking forms</li>
         <li>sign-ins and anything else booking sites stored in this app's tabs</li>
@@ -2835,6 +2890,7 @@
       <p>Everything the app does is written down on this computer, so what happened on a booking site can be told exactly afterwards: each page in its tabs — what it asked the site and what came back, what was clicked and filled in, a copy of the page after each step — what the robots did, with a trace of every step, and each exchange with the LineRight Regbot site. <b>Help → Open the logs folder</b> shows them. They are kept three days unless <b>Settings → Logs</b> says otherwise, and nothing in them is sent anywhere. Passwords, tokens, cookies, captcha answers, licence and Social Security numbers and dates of birth are never written; a name, email or phone you type is kept as its length.</p>
       <h2>Advanced: telemetry and diagnostics</h2>
       <p><b>Help → Advanced</b> (or <b>Settings → Advanced</b>) plots how this app is doing over the last day: its syncs with the site and how long they take, the round trips the site timed, what its robots did, and the memory and CPU it uses, with a log of what happened. It is kept on this computer. <b>Share now</b> sends those numbers to the LineRight Regbot site — numbers and a short list of words, never anything from your profile — and shows exactly what would go first; sharing can also be turned on every six hours.</p>
+      <p>Besides those numbers the app keeps a <b>trace</b> of what it does — the booking pages it opens, each request they make and how long it takes, what its robots saw, how each of your turns went and what it told you — with you taken out of it first: your name, date of birth, licence, passport and Social Security numbers, address, phone and email, wherever and however they appear, any confirmation number, and anything you type into a form. Pages you open on other sites are kept as the site's name alone. The LineRight Regbot site asks for the trace now and then — the app never sends it of its own accord — so the people running it can see why a booking did or did not work. Advanced shows the last of it as it would go, and turns it off; off, nothing more is written down and what was kept is deleted.</p>
       <h2>Your account and the LineRight Regbot site</h2>
       <p>The line itself — who is waiting, in what order, and what a place is worth — is kept on the LineRight Regbot website, and your account is there. The first time the app opens it asks you to create that account, or sign in if you have one: it opens the website in your usual browser on a page showing this app's code, you create the account (or sign in, with a password or with Google when the site offers it) and approve the code, and the app is signed in within a few seconds. It never sees your password. <b>File → Sign out</b> revokes this device; your positions keep their rank. Other devices of yours are listed under <b>Console → Account</b>, where any of them can be unpaired.</p>
       <h2>This app looks, and books, for you</h2>

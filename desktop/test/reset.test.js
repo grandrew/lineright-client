@@ -21,6 +21,8 @@ function used() {
   put('robots/rqp-bookings.json');
   put('logs/app-2026-10-14.log');
   put('logs/pages/2026-10-14/x-tab1-page1.html');
+  put('traces/state.json');
+  put('traces/000000000001.jsonl');
   put('profile.json');
   put('regbot.json');
   put('regbot.json.4242.tmp');
@@ -31,10 +33,10 @@ function used() {
   return dir;
 }
 
-test('the server, the robots\' state, the logs, the profile and the settings go; Chromium\'s files and strangers stay', () => {
+test('the server, the robots\' state, the logs, the trace, the profile and the settings go; Chromium\'s files and strangers stay', () => {
   const dir = used();
   const removed = wipe(dir);
-  assert.deepEqual(removed.sort(), ['logs', 'profile.json', 'profile.json.17.tmp', 'regbot.json', 'regbot.json.4242.tmp', 'robots', 'server']);
+  assert.deepEqual(removed.sort(), ['logs', 'profile.json', 'profile.json.17.tmp', 'regbot.json', 'regbot.json.4242.tmp', 'robots', 'server', 'traces']);
   assert.deepEqual(fs.readdirSync(dir).sort(), ['Local State', 'Partitions', 'notes.txt']);
 });
 

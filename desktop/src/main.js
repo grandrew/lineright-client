@@ -29,7 +29,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const {
   app, BaseWindow, WebContentsView, ipcMain, Menu, Notification, dialog, safeStorage, session,
-  shell: osShell,
+  shell: osShell, powerMonitor,
 } = require('electron');
 
 const { Store, bundled } = require('./store');
@@ -58,6 +58,9 @@ const confirmations = require('./confirmations');
 const { Telemetry } = require('./telemetry');
 const { Logbook } = require('./logbook');
 const { watchTab } = require('./pagelog');
+const { Scrubber } = require('./scrub');
+const { TraceStore } = require('./traces');
+const { TraceTaps } = require('./tracetaps');
 
 const CHROME_BASE = 98;          // tab strip + address bar + the line, in browser mode
 const SITES_EVERY_MS = 10 * 60 * 1000;
@@ -67,6 +70,8 @@ const IMPORT_AGAIN_CHECK_MS = 30 * 60 * 1000;
 // turned sharing on, how often they are shared with the site at most.
 const TELEMETRY_EVERY_MS = 60 * 1000;
 const AUTO_SHARE_EVERY_S = 6 * 3600;
+// How often the trace says how the app has been doing (app.stats): syncs, round trips, memory.
+const TRACE_STATS_EVERY_MS = 5 * 60 * 1000;
 
 function parseArgs(args) {
   const out = {};
@@ -171,6 +176,12 @@ let booker = null;                // booking the person's own slot (booker.js)
 let pinger = null;                // presence, timing, and hearing of a slot at once (pinger.js)
 let connection = null;            // how this app's connection stands, as the site last said
 let telemetry = null;             // this app's own numbers, kept here (telemetry.js)
+let traces = null;                // what this app did, kept for the site to ask for (traces.js)
+let scrubber = null;              // what takes the person out of it: their details, however spelt (scrub.js)
+let taps = null;                  // what makes it from the logs and the robots' runs (tracetaps.js)
+let traceTimer = null;
+let tracesUploading = null;       // the ask an upload is on its way for
+let tracesRefused = null;         // {id, until}: an ask whose upload failed, not tried again before `until`
 let telemetryTimer = null;
 let logbook = null;               // what the app did, kept on this computer for a few days (logbook.js)
 let pruneTimer = null;
@@ -190,6 +201,8 @@ const bookingOrigins = new Set(); // origins the app itself sent the person to b
 // through the view, or sent to, after they have been closed — and stopping
 // the server this app runs takes long enough for events to arrive meanwhile.
 function send(channel, payload) {
+  // What the app told its person, in the trace: what went wrong for them is the first thing to know.
+  if (channel === 'toast' && traces && payload) traces.add('ui.toast', { kind: payload.kind, text: payload.text });
   if (closing || !chromeContents || chromeContents.isDestroyed()) return;
   chromeContents.send(channel, payload);
 }
@@ -674,6 +687,7 @@ async function refreshSites(reason = 'timer') {
 
 // ------------------------------------------------------------- signing in
 function setPair(next) {
+  if (traces && typeof next.paired === 'boolean' && next.paired !== pairState.paired) traces.add('app.pair', { paired: next.paired });
   pairState = { ...pairState, ...next };
   send('pair:state', pairState);
   rebuildMenu();
@@ -767,19 +781,22 @@ function notify(title, body, handoff) {
   try {
     const note = new Notification({ title, body, urgency: 'critical' });
     note.on('click', () => {
+      if (traces) traces.add('handoff.click', { job: handoff.job_id });
       win.show();
       win.focus();
       const tab = tabs.tabFor(handoff.job_id);
       if (tab) tabs.select(tab.id);
     });
     note.show();
+    if (traces) traces.add('handoff.notify', { job: handoff.job_id, title });
   } catch (err) {
     log('notification failed:', err.message);
   }
 }
 
 function handleDoc(doc) {
-  const { arrived } = diffHandoffs(lastDoc ? lastDoc.handoffs : [], doc.handoffs);
+  const { arrived, gone, kept } = diffHandoffs(lastDoc ? lastDoc.handoffs : [], doc.handoffs);
+  noteTraces(doc, { arrived, gone, kept, before: lastDoc });
   trace(`doc: ${doc.positions.length} positions, ${doc.handoffs.length} handoffs, ${arrived.length} new`);
   lastDoc = doc;
   for (const p of doc.positions) if (p.portal_url) rememberBookingOrigin(p.portal_url);
@@ -897,13 +914,16 @@ function armGuide(h) {
 }
 
 function takeHandoff(h, note = '') {
-  if (passIfTooFar(h)) return;
+  const took = (how, fields = {}) => { if (traces) traces.add('handoff.take', { job: h.job_id, how, note, ...fields }); };
+  if (passIfTooFar(h)) { took('too_far'); return; }
   if (h.over) {
     // Offered to several of us, and it went before this app got to it.
+    took('over', { over: h.over.kind });
     log(`${describeHandoff(h)}: ${h.over.message}`);
     return;
   }
   const robot = booker && !builtin() ? booker.wants(h) : { ok: false, why: 'practice' };
+  took(robot.ok ? 'robot' : robot.why === 'elsewhere' ? 'elsewhere' : 'page', { robot_why: robot.ok ? undefined : robot.why });
   if (robot.ok) {
     log(`your turn: ${describeHandoff(h)} — ${note ? `${note}; ` : ''}booking it with this computer's robot`);
     notify(`Your turn — ${h.queue_name}`, `Booking ${describeHandoff(h)} for you now…`, h);
@@ -938,6 +958,10 @@ function takeHandoff(h, note = '') {
  */
 function offerHandoff(h, why = '') {
   const gap = needs.missing(h.needs || [], profile.values());
+  if (traces) {
+    traces.add('handoff.page', { job: h.job_id, why, secs_left: h.seconds_left,
+      missing: gap.length ? gap.map((f) => f.profileKey) : undefined });
+  }
   if (gap.length) {
     // Their turn is still their turn — notify, raise the window — but send
     // them to the profile rather than to a form nothing can fill in.
@@ -990,6 +1014,7 @@ function noteConnection(latency) {
   const state = (l) => (l ? (l.dropped ? 'dropped' : l.warn ? 'warn' : 'ok') : 'ok');
   if (state(was) === state(connection)) return;
   if (telemetry) telemetry.connection(state(connection), connection ? connection.ms : null);
+  if (traces) traces.add('app.connection', { state: state(connection), ms: connection ? connection.ms : undefined, why: connection ? connection.why : undefined });
   if (state(connection) === 'dropped') {
     log(`this app's connection is too slow to be offered slots: ${connection.ms} ms, ${connection.why}`);
     send('toast', { kind: 'bad', ms: 20000, text: `Your connection to LineRight Regbot is too slow for slots to be offered to this app (${connection.ms} ms — ${connection.why}). They go to the next person in line until it is faster.` });
@@ -1080,7 +1105,9 @@ function wireSync() {
   const self = new SyncLoop(client, {
     // On the regbot site this app looks for openings when asked; its own
     // practice server looks for itself.
-    body: () => (reader && !builtin() ? { reader: reader.capabilities() } : {}),
+    // And how far this app's trace goes, for the site to ask for when it wants it (traces.js).
+    body: () => ({ ...(reader && !builtin() ? { reader: reader.capabilities() } : {}),
+      ...(traces ? { traces: traces.status() } : {}) }),
     onDoc: (doc) => { if (loop === self) handleDoc(doc); },
     onStatus: (status) => { if (loop === self) send('sync:status', status); },
     onError: (err) => {
@@ -1331,15 +1358,18 @@ async function checkHandoffTab(id) {
     bookedInTab.add(h.job_id);
     const where = describeHandoff(h);
     pageNote(id, 'confirmation', { ref, url: wc.getURL(), job: h.job_id });
+    if (scrubber) scrubber.learn('confirmation', ref);
     try {
       await client.booked(h.job_id, ref);
       pageNote(id, 'reported', { job: h.job_id, ref });
+      if (traces) traces.add('book.end', { job: h.job_id, outcome: 'booked', by: 'page', reported: true });
       log(`booked ${where} in its tab — confirmation ${ref}, said to the site`);
       notify(`Booked — ${h.queue_name}`, `${where}. Confirmation ${ref}.`, h);
       send('toast', { kind: 'ok', ms: 12000, text: `Booked ${where} — confirmation ${ref}. The app told LineRight Regbot for you.` });
     } catch (err) {
       // Not reached: looked for again in a moment. Refused: said once.
       pageNote(id, 'reported', { job: h.job_id, ref, error: err.message, status: err.status || 0 });
+      if (traces) traces.add('book.end', { job: h.job_id, outcome: 'booked', by: 'page', reported: false, err: err.message, http: err.status || 0 });
       if (!definitive(err)) { bookedInTab.delete(h.job_id); return; }
       log(`booked ${where} in its tab — confirmation ${ref} — and the site would not take it: ${err.message}`);
       send('toast', { kind: 'warn', ms: 20000, text: `You booked ${where} — confirmation ${ref} — but LineRight Regbot would not record it: ${err.message}` });
@@ -1407,6 +1437,156 @@ function wireTelemetry() {
   };
   telemetryTimer = setInterval(tick, TELEMETRY_EVERY_MS);
   setTimeout(tick, 5000);
+}
+
+// ------------------------------------------------------------------- traces
+/**
+ * What this app did, kept for the site to ask for (traces.js). The person is
+ * taken out of it by what the app knows of them (scrub.js): the profile, kept
+ * in step as it changes, and every confirmation number the app is given or the
+ * site has recorded. It is made from the logs as they are written and the
+ * robots' runs as they end (tracetaps.js), and from what this file says as it
+ * happens: the app starting and stopping, every turn and what came of it, what
+ * the person was told.
+ *
+ * Nothing goes unless the site asks (noteTraces): every sync says how far the
+ * trace goes, and the site answers what to write down, what it has, and —
+ * when it wants them — which events to send.
+ */
+function wireTraces() {
+  scrubber = new Scrubber();
+  scrubber.setProfile(profile.values());
+  traces = new TraceStore({ dir: path.join(app.getPath('userData'), 'traces'), scrubber });
+  taps = new TraceTaps({
+    add: (kind, fields, opts) => traces.add(kind, fields, opts),
+    learn: (label, value) => scrubber.learn(label, value),
+    isBooking: (url) => isBookingPage(url, bookingOrigins),
+  });
+  logbook.tap = {
+    event: (name, record) => taps.logbookEvent(name, record),
+    line: (name, text) => taps.logbookLine(name, text),
+  };
+  startTrace();
+  traceTimer = setInterval(traceStats, TRACE_STATS_EVERY_MS);
+  traceTimer.unref();
+  // A crash of the main process is said before it goes (a monitor: the crash itself goes on as it would).
+  process.on('uncaughtExceptionMonitor', (err, origin) => {
+    if (!traces) return;
+    traces.add('app.error', { where: 'main', origin, name: err && err.name, msg: err && err.message,
+      stack: err && err.stack });
+    traces.flush();
+  });
+  app.on('child-process-gone', (_event, d = {}) => {
+    if (traces && d.reason !== 'clean-exit') traces.add('app.crash', { what: d.type, name: d.name, why: d.reason, code: d.exitCode });
+  });
+  for (const state of ['suspend', 'resume', 'lock-screen', 'unlock-screen', 'on-ac', 'on-battery', 'shutdown']) {
+    try { powerMonitor.on(state, () => { if (traces) traces.add('app.power', { state }); }); } catch { /* not on this system */ }
+  }
+}
+
+/** A new run of the app, with what it runs on — and no more of the computer than that. */
+function startTrace() {
+  let tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* unknown */ }
+  traces.add('app.start', {
+    session: traces.newSession(), version: app.getVersion(), electron: process.versions.electron,
+    chrome: process.versions.chrome, os: process.platform, os_version: os.release(), arch: process.arch,
+    packaged: app.isPackaged, locale: app.getLocale(), tz, tz_offset_min: -new Date().getTimezoneOffset(),
+    mode: shareMode(), developer: developer.on, cpus: os.cpus().length,
+    mem_gb: Math.round(os.totalmem() / 1e8) / 10, server: originOf(client.serverUrl) || undefined,
+    paired: client.paired, profile: profileShape(), reader: store.get('readerEnabled', true) !== false,
+    robot_booking: mayBook(store),
+  });
+}
+
+/** Which details the profile holds: the names of the fields, never what is in them. */
+function profileShape() {
+  const values = profile ? profile.values() : {};
+  return { filled: [...KEYS].filter((k) => values[k]), missing: [...KEYS].filter((k) => !values[k]) };
+}
+
+/** Every five minutes: how the app has been doing since the last time (telemetry.js's minutes). */
+function traceStats() {
+  if (!traces || !telemetry) return;
+  const to = telemetry.nowS();
+  const rows = telemetry.within(to - TRACE_STATS_EVERY_MS / 1000, to);
+  if (!rows.length) return;
+  const sum = (key) => rows.reduce((a, m) => a + (Number(m[key]) || 0), 0);
+  const most = (key) => rows.reduce((a, m) => (m[key] === null || m[key] === undefined ? a : Math.max(a, m[key])), 0);
+  traces.add('app.stats', {
+    syncs: sum('syncs'), sync_errors: sum('sync_errors'),
+    sync_ms: sum('syncs') ? Math.round(sum('sync_ms_sum') / sum('syncs')) : undefined, sync_ms_max: most('sync_ms_max'),
+    rtt_ms: sum('rtt_n') ? Math.round(sum('rtt_ms_sum') / sum('rtt_n')) : undefined, pings: sum('rtt_n'),
+    api_calls: sum('api_calls'), api_errors: sum('api_errors'), offline_min: rows.filter((m) => m.offline > 0).length,
+    reads: sum('reads'), robot_runs: sum('robot_runs'), mem_mb: most('memory_mb'), cpu_pct: most('cpu_pct'),
+    heap_mb: most('heap_mb'), tabs: tabs ? tabs.order.length : undefined,
+  });
+}
+
+/** A turn as the trace keeps it: the line, the slot, how long was left — never who. */
+function handoffFields(h) {
+  const slot = h.slot || {};
+  return {
+    job: h.job_id, bid: h.bid_id, queue: h.queue_id, line: h.queue_slug, phase: h.phase,
+    office: slot.office_code, office_name: slot.office_name, date: slot.date, time: slot.time, miles: slot.miles,
+    secs_left: h.seconds_left, since: h.since, rank: h.rank_at, wave: h.wave ? `${h.wave.place}/${h.wave.of}` : undefined,
+    robot: Boolean(h.robot), booker: h.booker ? (h.booker.you ? 'this' : 'other') : undefined,
+    silent: h.booker && h.booker.silent ? true : undefined, over: h.over ? h.over.kind : undefined,
+  };
+}
+
+/**
+ * What a sync said that the trace keeps, or answers: the turns that came, went
+ * or moved on; the confirmation numbers the site has recorded (taken out from
+ * now on); and the site's word on the trace — how much to write down, what it
+ * has (deleted here), and, when it wants them, an ask to answer.
+ */
+function noteTraces(doc, { arrived = [], gone = [], kept = [], before = null } = {}) {
+  if (!traces) return;
+  for (const b of doc.settled || []) if (b && b.confirmation) scrubber.learn('confirmation', b.confirmation);
+  for (const h of arrived) traces.add('handoff.arrive', handoffFields(h));
+  const was = new Map(((before && before.handoffs) || []).map((h) => [h.job_id, h]));
+  for (const h of kept) {
+    const old = was.get(h.job_id);
+    const who = (x) => (x.booker ? (x.booker.you ? 'this' : 'other') : '');
+    if (old && (old.phase !== h.phase || Boolean(old.over) !== Boolean(h.over) || who(old) !== who(h))) {
+      traces.add('handoff.change', { ...handoffFields(h), from: old.phase });
+    }
+  }
+  for (const h of gone) traces.add('handoff.gone', { job: h.job_id, phase: h.phase, secs_left: h.seconds_left });
+  const said = doc.traces;
+  if (!said || typeof said !== 'object') {
+    // A site that takes no traces will never ask: nothing more is written down for it.
+    traces.setLevel('off');
+    return;
+  }
+  traces.setLevel(said.level);
+  if (said.stream === traces.state.stream && Number.isFinite(said.acked)) traces.ack(said.acked);
+  // An upload the site refused is not sent again for that ask — it lets the ask
+  // lapse and makes another — and one that could not get through waits a little.
+  const held = tracesRefused && tracesRefused.id === (said.ask && said.ask.id) && Date.now() < tracesRefused.until;
+  if (said.ask && said.ask.id && !tracesUploading && !held) uploadTraces(said.ask);
+}
+
+/** The site's ask answered: the events after what it has, as many as it said, gzipped. */
+async function uploadTraces(ask) {
+  if (!traces || !client || !client.paired || tracesUploading) return;
+  tracesUploading = ask.id;
+  const mine = client;
+  let made = null;
+  try {
+    made = traces.upload(ask, { version: app.getVersion(), platform: process.platform, arch: process.arch });
+    const reply = await mine.uploadTraces(made);
+    if (reply && reply.stream === traces.state.stream && Number.isFinite(reply.acked)) traces.ack(reply.acked);
+    traces.noteUpload({ ok: true, events: made.events, bytes: made.gzip.length, message: reply && reply.more ? 'more to send' : '' });
+  } catch (err) {
+    traces.noteUpload({ ok: false, events: made ? made.events : 0, bytes: made ? made.gzip.length : 0, message: err.message });
+    const refused = err.status >= 400 && err.status < 500;
+    tracesRefused = { id: ask.id, until: Date.now() + (refused ? 24 * 3600 * 1000 : 30 * 1000) };
+    log(`trace: the site did not take an upload — ${err.message}`);
+  } finally {
+    tracesUploading = null;
+  }
 }
 
 // ---------------------------------------------------------------------- ipc
@@ -1477,6 +1657,7 @@ function settingsView() {
     robots: reader ? { ...reader.state(), ...booker.state(), available: robots.available() } : null,
     telemetry: telemetry ? { autoShare: Boolean(store.get('telemetryAutoShare', false)),
       lastShare: telemetry.lastShare(), accepted: shareAccepted } : null,
+    traces: traces ? traces.view() : null,
   };
 }
 
@@ -1642,6 +1823,20 @@ function wireIpc() {
     return { autoShare: Boolean(on) };
   });
   handle('telemetry:clear', () => { telemetry.clear(); return telemetry.snapshot('1h'); });
+  // -- the trace the site may ask for (traces.js): what it holds, what went, and the person's switch
+  handle('traces:get', ({ n }) => ({ ...traces.view(), recent: traces.recent(Math.min(Number(n) || 60, 300)),
+    server: client.serverUrl, paired: client.paired }));
+  handle('traces:on', ({ on }) => {
+    traces.setOn(Boolean(on));
+    log(on ? 'trace on: kept for the site to ask for' : 'trace off: nothing more is written down, and what was kept is deleted');
+    if (on) startTrace();
+    return traces.view();
+  });
+  handle('traces:clear', () => { traces.clear(); return traces.view(); });
+  // Which screen the person is on: a word, from the app's own page.
+  handle('trace:ui', ({ page }) => {
+    if (traces && typeof page === 'string' && /^[a-z][a-z0-9:_-]{0,39}$/i.test(page)) traces.add('ui.view', { page });
+  });
 
   // -- asking for a line on a site the regbot site does not cover yet
   handle('requests:list', async () => { await serverReady(); return client.siteRequests(); });
@@ -1659,6 +1854,9 @@ function wireIpc() {
   handle('profile:get', () => profile.view());
   handle('profile:set', ({ data, autofill, check }) => {
     const view = profile.set(data || {}, { autofill }).view();
+    // From now on the trace takes out what the profile holds now.
+    if (scrubber) scrubber.setProfile(profile.values());
+    if (traces) traces.add('app.profile', profileShape());
     if (view.filled) { store.set('suggestImport', false); rebuildMenu(); }
     // Whatever is on screen was drawn against the old profile: the dots beside
     // a line's fields, and the warning on a hand-off. Redraw it.
@@ -1669,6 +1867,8 @@ function wireIpc() {
   });
   handle('profile:clear', () => {
     const view = profile.clear().view();
+    if (scrubber) scrubber.setProfile(profile.values());
+    if (traces) traces.add('app.profile', profileShape());
     // A profile deleted on purpose is not to be filled in again next week.
     reimport.forget(store);
     rebuildMenu();
@@ -1841,6 +2041,14 @@ function wireIpc() {
       const next = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text.replace(/\/+$/, '') : `https://${text.replace(/\/+$/, '')}`;
       if (builtin() || next !== client.serverUrl) await useRemote(next);
     }
+    if (traces) {
+      // What was switched, by name: never an address or a name.
+      const said = { mode, readerEnabled, robotBooking, checking, realDmvChecks, reimportRemind,
+        logKeepDays: logKeepDays === undefined ? undefined : Number(logKeepDays) };
+      const changed = Object.fromEntries(Object.entries(said).filter(([, v]) => typeof v === 'boolean'
+        || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && /^[a-z]{1,12}$/.test(v))));
+      if (Object.keys(changed).length) traces.add('app.setting', changed);
+    }
     return settingsView();
   });
   // -- the built-in server
@@ -1956,6 +2164,11 @@ async function resetEverything() {
     if (closing) return;
     if (telemetry) telemetry.clear();
     loadState();
+    if (traces) {
+      traces.reset();
+      scrubber.setProfile(profile.values());
+      startTrace();
+    }
     lastDoc = null;
     sitesCache = [];
     opened.clear();
@@ -2005,6 +2218,13 @@ function shutdown(code = 0) {
     if (telemetryTimer) clearInterval(telemetryTimer);
     if (telemetry) { telemetry.event('stop'); telemetry.save(); }
   } catch { /* the numbers are never the problem */ }
+  try {
+    if (traceTimer) clearInterval(traceTimer);
+    if (traces) {
+      traces.add('app.stop', { uptime_s: Math.round(process.uptime()) });
+      traces.flush();
+    }
+  } catch { /* a trace is never the problem */ }
   // The read this app is at goes back to the site now, so no line waits on an
   // app that is gone; then the robots that look stop.
   let released = Promise.resolve(false);
@@ -2026,6 +2246,8 @@ function shutdown(code = 0) {
   try { if (win && !win.isDestroyed()) win.hide(); } catch (err) { trace(`hide: ${err.message}`); }
   const exit = () => {
     exiting = true;
+    // What was written down while the app closed, kept for the next start.
+    try { if (traces) traces.flush(); } catch { /* a trace is never the problem */ }
     try { if (tabs) tabs.destroy(); } catch (err) { trace(`destroy tabs: ${err.message}`); }
     try { if (chrome) { win.contentView.removeChildView(chrome); chromeContents.close(); } } catch (err) { trace(`close chrome: ${err.message}`); }
     trace('exit');
@@ -2063,6 +2285,7 @@ function smoke() {
       robots: reader ? { ...reader.state(), ...booker.state() } : null,
       ping: pinger ? { last: pinger.last, everyMs: pinger.everyMs } : null,
       telemetry: telemetry ? { summary: telemetry.summary(), events: telemetry.events.length, shares: telemetry.shares } : null,
+      traces: traces ? { ...traces.view(), status: traces.status(), kinds: traces.recent(300).map((e) => e.k) } : null,
       connection,
       autofill: lastFill,
       screen: lastNavigate,
@@ -2116,6 +2339,7 @@ function loadState() {
 async function main() {
   wireTelemetry();
   loadState();
+  wireTraces();
   // What is older than the logs are kept for goes: now, and every hour after.
   logbook.prune();
   pruneTimer = setInterval(() => logbook.prune(), 60 * 60 * 1000);
@@ -2128,6 +2352,8 @@ async function main() {
     stateDir: path.join(app.getPath('userData'), 'robots'),
     log: (message) => log(`robots: ${message}`),
     onRun: (r) => telemetry.robot(r),
+    // Each run, read back into the trace from its own record once it ends (tracetaps.js).
+    onFinish: (r) => { if (taps) taps.robotRun(r); },
     logbook,
   });
   const robotsState = () => ({ ...reader.state(), ...booker.state() });
@@ -2135,7 +2361,13 @@ async function main() {
     runner: robots, getClient: () => client, getStore: () => store,
     log: (message) => log(`reader: ${message}`),
     onState: () => send('robots:state', robotsState()),
-    onRead: (r) => telemetry.read(r),
+    onRead: (r) => {
+      telemetry.read(r);
+      if (traces) {
+        traces.add('read.end', { read: r.read, queue: r.queue, status: r.status, robot: r.robot, found: r.found,
+          ms: r.ms, offices: r.offices, verdicts: r.verdicts, http: r.http || undefined, err: r.error });
+      }
+    },
   });
   const shotsDir = path.join(app.getPath('userData'), 'robots', 'confirmations');
   confirmations.prune(shotsDir);
@@ -2144,7 +2376,16 @@ async function main() {
     getProfile: () => profile.values(), shotsDir,
     log: (message) => log(`booker: ${message}`),
     onState: () => send('robots:state', robotsState()),
-    onOutcome: (r) => telemetry.booking(r),
+    onOutcome: (r) => {
+      telemetry.booking(r);
+      const o = r.outcome || {};
+      if (o.confirmation && scrubber) scrubber.learn('confirmation', o.confirmation);
+      if (traces) {
+        traces.add('book.end', { job: r.job, outcome: r.kind, by: 'robot', ms: r.ms, why: o.why,
+          unconfirmed: o.unconfirmed, unreported: o.unreported, quiet: o.quiet, device: o.device,
+          recorded: o.recorded, shot: o.shot ? true : undefined });
+      }
+    },
   });
 
   win = new BaseWindow({
@@ -2158,6 +2399,16 @@ async function main() {
     },
   });
   chromeContents = chrome.webContents;
+  // An error in the app's own page is the app's, and goes in the trace.
+  chromeContents.on('console-message', (e, level, message, line, sourceId) => {
+    const d = e && typeof e.message === 'string' ? e : { level, message, lineNumber: line, sourceId };
+    if (traces && (d.level === 'error' || d.level === 3)) {
+      traces.add('ui.error', { text: d.message, src: d.sourceId ? path.basename(String(d.sourceId)) : undefined, line: d.lineNumber });
+    }
+  });
+  chromeContents.on('render-process-gone', (_event, d = {}) => {
+    if (traces) traces.add('app.crash', { what: 'ui', why: d.reason, code: d.exitCode });
+  });
   // The application page is this app's own file, and it holds the bridge to
   // everything the app can do (preload.js). It never becomes another page: a
   // link that would take it elsewhere, or a file dropped on it, goes to a tab
@@ -2192,6 +2443,13 @@ async function main() {
   send('pair:state', pairState);
   send('update:state', updateState);
   send('shell:state', tabs.state());
+  // Once, for whoever had this app before it kept a trace, and on a first start: what it is, and where it is turned off.
+  if (traces && traces.state.on && !store.get('tracesNoticed', false)) {
+    store.set('tracesNoticed', true);
+    send('toast', { kind: 'ok', ms: 25000, text: 'This app keeps a record of what it does — with your personal details taken out — '
+      + 'and sends it to LineRight Regbot when the site asks, so the people running it can see why a booking did or did not work. '
+      + 'Help → Advanced shows it, and turns it off.' });
+  }
   refreshSites('start');
   sitesTimer = setInterval(() => refreshSites(), SITES_EVERY_MS);
   // The page asks at startup itself (import:again-state); this is for the days after.

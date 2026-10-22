@@ -26,6 +26,8 @@ const CALLS = new Set([
   'requests:list', 'requests:submit', 'requests:support',
   // this app's own telemetry, kept here, and sharing it with the site when asked to
   'telemetry:get', 'telemetry:preview', 'telemetry:share', 'telemetry:auto', 'telemetry:clear',
+  // the trace kept for the site to ask for: what it holds, and the person's switch; which screen is on
+  'traces:get', 'traces:on', 'traces:clear', 'trace:ui',
   // signing in
   'pair:start', 'pair:cancel', 'pair:forget', 'pair:state', 'pair:open',
   // the person's own details, kept here

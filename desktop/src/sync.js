@@ -15,6 +15,8 @@
 /** How long an answer to a read may take. A sync stays on the client's own
  *  deadline: judging a filtered scout is the slow call, and only that one. */
 const ANSWER_TIMEOUT_MS = 20000;
+/** How long an upload of the trace may take: a megabyte, gzipped, over a slow line. */
+const UPLOAD_TIMEOUT_MS = 60000;
 
 class SyncError extends Error {
   constructor(message, status = 0, body = null, retryAfter = 0) {
@@ -85,14 +87,18 @@ class SyncClient {
         try { this.onRequest(done); } catch { /* never the problem */ }
       }
       if (this.onExchange) {
-        try { this.onExchange({ ...done, body: options.body, reply, error }); } catch { /* never the problem */ }
+        // An upload says what it was, not all of itself (logBody).
+        const body = options.logBody !== undefined ? options.logBody : options.body;
+        try { this.onExchange({ ...done, body, reply, error }); } catch { /* never the problem */ }
       }
     }
   }
 
-  async send(path, { method = 'POST', body, fetch = this.fetch, auth = true, timeoutMs = null } = {}) {
+  async send(path, { method = 'POST', body, raw = null, encoding = '', fetch = this.fetch, auth = true, timeoutMs = null } = {}) {
     const headers = { accept: 'application/json' };
-    if (body !== undefined) headers['content-type'] = 'application/json';
+    // `raw`: bytes already made (a gzipped upload), sent as they are with their encoding.
+    if (body !== undefined || raw) headers['content-type'] = 'application/json';
+    if (raw && encoding) headers['content-encoding'] = encoding;
     if (auth) {
       if (!this.token) throw new NotPaired();
       headers.authorization = `Bearer ${this.token}`;
@@ -104,7 +110,7 @@ class SyncClient {
     try {
       res = await fetch(this.url(path), {
         method, headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: raw || (body === undefined ? undefined : JSON.stringify(body)),
         signal: controller ? controller.signal : undefined,
       });
     } catch (err) {
@@ -329,6 +335,18 @@ class SyncClient {
   async shareTelemetry(payload) {
     return this.request('/api/client/telemetry', { body: payload });
   }
+
+  /**
+   * The trace the site asked for, on a sync (traces.js upload()): gzipped JSON,
+   * answering its ask. The site says back how far it now has it (`acked`).
+   */
+  async uploadTraces({ gzip, json, body = {}, events = 0 }) {
+    return this.request('/api/client/traces', {
+      raw: gzip, encoding: 'gzip', timeoutMs: UPLOAD_TIMEOUT_MS,
+      logBody: { ask: body.ask, after: body.after, first: body.first, last: body.last, events,
+        bytes: json ? json.length : undefined, gzipped: gzip ? gzip.length : undefined },
+    });
+  }
 }
 
 /** Which hand-offs are new since the last sync, which are gone, by job id. */
@@ -457,4 +475,4 @@ class SyncLoop {
 }
 
 module.exports = { SyncClient, SyncLoop, SyncError, NotPaired, diffHandoffs, describeHandoff, clock, backoffMs,
-  ANSWER_TIMEOUT_MS };
+  ANSWER_TIMEOUT_MS, UPLOAD_TIMEOUT_MS };

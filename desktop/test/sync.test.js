@@ -437,3 +437,25 @@ test('asking for a line: what was asked, a new ask, and "me too" go where the si
   await assert.rejects(client.supportSiteRequest('4/../../x'), () => true, 'an id is a number, not a path');
   assert.ok(fetch.calls.every((c) => c.headers.authorization === 'Bearer tok'));
 });
+
+test('a trace goes up as it was made, gzipped, and the log keeps what it was, not all of it', async () => {
+  const zlib = require('node:zlib');
+  const seen = [];
+  const fetch = async (url, init = {}) => {
+    seen.push({ path: new URL(url).pathname, init });
+    return { status: 200, ok: true, json: async () => ({ ok: true, acked: 25, stream: 'abc', more: false }) };
+  };
+  const exchanges = [];
+  const client = new SyncClient({ serverUrl: 'http://srv', token: 'tok', fetch, onExchange: (r) => exchanges.push(r) });
+  const json = Buffer.from(JSON.stringify({ ask: 'a1', events: [{ s: 1 }] }));
+  const reply = await client.uploadTraces({ gzip: zlib.gzipSync(json), json, body: { ask: 'a1', after: 0, first: 1, last: 25 }, events: 25 });
+  assert.equal(reply.acked, 25);
+  const [call] = seen;
+  assert.equal(call.path, '/api/client/traces');
+  assert.equal(call.init.headers['content-encoding'], 'gzip');
+  assert.equal(call.init.headers['content-type'], 'application/json');
+  assert.equal(call.init.headers.authorization, 'Bearer tok');
+  assert.deepEqual(JSON.parse(zlib.gunzipSync(call.init.body)), { ask: 'a1', events: [{ s: 1 }] });
+  assert.deepEqual(exchanges[0].body, { ask: 'a1', after: 0, first: 1, last: 25, events: 25, bytes: json.length,
+    gzipped: call.init.body.length });
+});

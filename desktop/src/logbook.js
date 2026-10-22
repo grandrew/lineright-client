@@ -103,9 +103,12 @@ class Logbook {
    * @param {number} [opts.keepDays] how long anything is kept
    * @param {number} [opts.maxBytes] past this, the oldest goes even if it is not old yet
    */
-  constructor({ dir, keepDays = 3, maxBytes = 2 * 1024 ** 3, now = () => Date.now(), disk = fs }) {
+  constructor({ dir, keepDays = 3, maxBytes = 2 * 1024 ** 3, now = () => Date.now(), disk = fs, tap = null }) {
     if (!dir || !path.isAbsolute(dir)) throw new Error('A logbook needs an absolute folder.');
     Object.assign(this, { dir, maxBytes, now, disk });
+    // Told of every line and record as it is written, its secrets already struck
+    // out: the app's trace (tracetaps.js) is made from them. {event(name, record), line(name, text)}
+    this.tap = tap;
     this.keepDays = Logbook.days(keepDays);
     this.made = new Set();
     this.lastPrune = null;
@@ -167,13 +170,23 @@ class Logbook {
   /** One line of text, timestamped, in today's `<name>-<day>.log`. */
   line(name, text) {
     this.append(this.file(name, 'log'), `${new Date(this.now()).toISOString()} ${text}\n`);
+    if (this.tap) {
+      try { this.tap.line(name, text); } catch { /* never the problem */ }
+    }
   }
 
   /** One record, its secrets struck out, in today's `<name>-<day>.jsonl`. */
   event(name, record) {
+    let clean;
     let text;
-    try { text = JSON.stringify({ t: new Date(this.now()).toISOString(), ...redact(record) }); } catch { return; }
+    try {
+      clean = redact(record);
+      text = JSON.stringify({ t: new Date(this.now()).toISOString(), ...clean });
+    } catch { return; }
     this.append(this.file(name, 'jsonl'), `${text}\n`);
+    if (this.tap) {
+      try { this.tap.event(name, clean); } catch { /* never the problem */ }
+    }
   }
 
   /** A file of its own under `parts`, named for now and `label`; the path relative to the logs, or null. */

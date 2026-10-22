@@ -5,8 +5,13 @@
  *
  *   request / response / body / failed   every request the page makes, what
  *                    was sent (headers and body, for the site's documents and
- *                    data), the status and headers that came back, and the body
- *                    itself for the site's data — documents whole, as files
+ *                    data), the status and headers that came back and how long
+ *                    they took (ms), and the body itself for the site's data —
+ *                    documents whole, as files
+ *   done             a document or data request finished: how long it took in
+ *                    all, and how many bytes came
+ *   resources        the rest of what a page loaded — scripts, styles,
+ *                    pictures, fonts — counted, when the tab leaves the page
  *   navigated / loaded / load-failed     where the tab went, and how it went
  *   action           what was clicked, changed, submitted or entered: the
  *                    element (tag, id, name, label, text, where in the page) and,
@@ -136,10 +141,32 @@ function watchTab(tab, { logbook, setTimeout: st = setTimeout, clearTimeout: ct 
   let docs = 0;
   let pages = 0;
   let unread = null;           // a document whose body the network had not kept: read once it has loaded
+  let statics = null;          // this page's scripts, styles, pictures and fonts, counted (resources)
 
   const remember = (id, value) => {
     pending.set(id, value);
     if (pending.size > PENDING) pending.delete(pending.keys().next().value);
+  };
+  // Milliseconds between two of the network's own timestamps (seconds, monotonic).
+  const between = (from, to) => (Number.isFinite(from) && Number.isFinite(to) ? Math.round((to - from) * 1000) : undefined);
+  const count = (known, ms, bytes, failed) => {
+    if (!statics) statics = { n: 0, bytes: 0, failed: 0, slowest_ms: 0, slowest_url: undefined, types: {}, hosts: {} };
+    statics.n += 1;
+    if (Number.isFinite(bytes)) statics.bytes += bytes;
+    if (failed) statics.failed += 1;
+    if (Number.isFinite(ms) && ms > statics.slowest_ms) { statics.slowest_ms = ms; statics.slowest_url = redactUrl(known.url); }
+    statics.types[known.rtype] = (statics.types[known.rtype] || 0) + 1;
+    let host = '';
+    try { host = new URL(known.url).host; } catch { /* not a web address */ }
+    if (host) statics.hosts[host] = (statics.hosts[host] || 0) + 1;
+  };
+  // The page's resources, said once the tab moves on from it or closes.
+  const summarize = () => {
+    if (!statics) return;
+    const s = statics;
+    statics = null;
+    const hosts = Object.fromEntries(Object.entries(s.hosts).sort((a, b) => b[1] - a[1]).slice(0, 10));
+    rec('resources', { ...s, hosts, slowest_url: s.slowest_url || undefined, slowest_ms: s.slowest_ms || undefined });
   };
 
   // -- the network, from outside the page
@@ -156,7 +183,7 @@ function watchTab(tab, { logbook, setTimeout: st = setTimeout, clearTimeout: ct 
     if (method === 'Network.requestWillBeSent') {
       const r = p.request || {};
       const rtype = p.type || 'Other';
-      remember(p.requestId, { rtype, url: r.url });
+      remember(p.requestId, { rtype, url: r.url, ts: p.timestamp });
       const record = { id: p.requestId, method: r.method, url: redactUrl(r.url), rtype };
       if (p.redirectResponse) record.redirectedFrom = { status: p.redirectResponse.status, url: redactUrl(p.redirectResponse.url) };
       if (DATA.has(rtype)) {
@@ -171,13 +198,16 @@ function watchTab(tab, { logbook, setTimeout: st = setTimeout, clearTimeout: ct 
       const known = pending.get(p.requestId) || {};
       const rtype = p.type || known.rtype;
       const record = { id: p.requestId, status: res.status, url: redactUrl(res.url), rtype, mime: res.mimeType,
-        ip: res.remoteIPAddress || undefined, cached: res.fromDiskCache || undefined };
+        ip: res.remoteIPAddress || undefined, cached: res.fromDiskCache || undefined, ms: between(known.ts, p.timestamp) };
       if (DATA.has(rtype)) record.headers = redactHeaders(res.headers);
       rec('response', record);
-      if (DATA.has(rtype) && TEXTUAL.test(res.mimeType || '')) remember(p.requestId, { rtype, url: res.url, mime: res.mimeType, keep: true });
+      if (DATA.has(rtype) && TEXTUAL.test(res.mimeType || '')) remember(p.requestId, { ...known, rtype, url: res.url, mime: res.mimeType, keep: true });
     } else if (method === 'Network.loadingFinished') {
       const known = pending.get(p.requestId);
       pending.delete(p.requestId);
+      const ms = known ? between(known.ts, p.timestamp) : undefined;
+      if (known && DATA.has(known.rtype)) rec('done', { id: p.requestId, ms, bytes: p.encodedDataLength });
+      else if (known) count(known, ms, p.encodedDataLength, false);
       if (!known || !known.keep) return;
       dbg.sendCommand('Network.getResponseBody', { requestId: p.requestId })
         .then(({ body, base64Encoded }) => kept(p.requestId, known, body, base64Encoded))
@@ -193,8 +223,10 @@ function watchTab(tab, { logbook, setTimeout: st = setTimeout, clearTimeout: ct 
     } else if (method === 'Network.loadingFailed') {
       const known = pending.get(p.requestId) || {};
       pending.delete(p.requestId);
+      const ms = between(known.ts, p.timestamp);
+      if (known.url && !DATA.has(known.rtype) && !p.canceled) count(known, ms, 0, true);
       rec('failed', { id: p.requestId, url: known.url ? redactUrl(known.url) : undefined, rtype: p.type,
-        error: p.errorText, canceled: p.canceled || undefined, blocked: p.blockedReason || undefined });
+        error: p.errorText, canceled: p.canceled || undefined, blocked: p.blockedReason || undefined, ms });
     }
   };
   function kept(id, known, body, base64Encoded) {
@@ -264,7 +296,10 @@ function watchTab(tab, { logbook, setTimeout: st = setTimeout, clearTimeout: ct 
   on('did-start-navigation', (e, url, inPlace, mainFrame) => {
     const main = e && typeof e.isMainFrame === 'boolean' ? e.isMainFrame : mainFrame;
     const same = e && typeof e.isSameDocument === 'boolean' ? e.isSameDocument : inPlace;
-    if (main && !same) rec('navigating', { url: redactUrl((e && e.url) || url) });
+    if (main && !same) {
+      summarize();
+      rec('navigating', { url: redactUrl((e && e.url) || url) });
+    }
   });
   on('did-navigate', (_e, url, status, statusText) => {
     rec('navigated', { url: redactUrl(url), status, statusText: statusText || undefined });
@@ -303,6 +338,7 @@ function watchTab(tab, { logbook, setTimeout: st = setTimeout, clearTimeout: ct 
   on('responsive', () => rec('responsive'));
   // Gone: nothing more is asked of it (see main.js, send(): a closed page is not to be touched).
   wc.once('destroyed', () => {
+    summarize();
     stopped = true;
     if (snapTimer) ct(snapTimer);
     rec('closed');

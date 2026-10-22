@@ -280,6 +280,70 @@ try again. **Share automatically, every six
 hours** is off until the person turns it on. **Clear this app's telemetry**
 deletes it; so does *Start over*.
 
+## The trace the site asks for
+
+Besides those numbers, the app keeps a **trace** of what it does for the people
+running LineRight Regbot, so they can see why a booking did or did not work —
+with its person taken out first. It is made from what the app already writes
+down (the logbook hands every record and line on as it writes it,
+`src/tracetaps.js`), each robot run read back from its own record when it ends,
+and what `main.js` says as it happens:
+
+- the app starting (version, platform, locale and time zone, which fields the
+  profile holds — never what is in them) and stopping, its numbers every five
+  minutes, its own log line by line, its errors and crashes, sleep and wake, and
+  what it told its person;
+- every exchange with the site but the routine syncs and pings;
+- every turn: when it arrived and how much time was left, how the app took it
+  (its robot, another device, the page, a profile that was not ready), the
+  notification and the click on it, how the booking ended and how long it took;
+- the booking pages of a turn, and any page on a booking site: where the tab
+  went, the status and how long each page took to load, every document and data
+  request with its time to the headers and in all and its size, failures, the
+  rest of a page's requests counted, console warnings and errors, captchas met
+  and how far they went, what was clicked and changed (a field's value never —
+  only its length and its shape), what autofill filled, a confirmation found;
+  a page anywhere else is the site's name alone;
+- every read: how it came out, what it found, how long, and how the site judged
+  each opening; every robot run: how long, what it answered, requests by status
+  and host, the slowest, any captcha — and, for a booking or a look that went
+  wrong, its steps, pages, requests and console errors besides.
+
+**Taken out** (`src/scrub.js`): every detail the profile holds, wherever and
+however it turns up — names, date of birth, licence, passport and Social
+Security numbers, address, phone, email, in any case, URL- or form-encoded,
+HTML-escaped, a phone or SSN with or without its separators, a date of birth in
+the formats forms use — each replaced by its name (`[first_name]`, `[dob]`);
+every confirmation number the app is given or the site has recorded for its
+person; this computer's account name and home folder; and behind those, the
+shapes of an email, a phone, an SSN, a card number, a licence number and a
+token. An address keeps its host and path, its query keys, and a query value
+only when it is plainly nothing personal (a number, a date, a word) and its key
+is not a personal or secret one. Events are scrubbed as they are written and
+again as they are sent, so a value learnt later (a confirmation number) is
+taken out of what was written before it was known. City and state stay: offices
+are named after their cities.
+
+**Kept** in `traces/` in the app's data folder (`src/traces.js`): numbered from
+1 within one history (`stream`), a megabyte a file, at most 3,000 events a
+minute (past that, counted and said), at most 64 MB and a week — the oldest
+first, counted as lost.
+
+**Sent only when the site asks.** Every sync says how far the trace goes
+(`traces: {stream, next, oldest, urgent, on, …}`); the site answers how much to
+write down (`level`: `full`, `outline` — no single requests — or `off`), how far
+it has the trace (`acked`, and the app deletes what is behind it), and, when it
+wants more, an ask. The app answers the ask with the events after the site's
+mark, as many as it said, gzipped, to `POST /api/client/traces`. The site decides
+when to ask each app, within a budget of its own, so it is never flooded; the
+app never sends of its own accord. A site that says nothing of traces is never
+going to ask, and the app stops writing them down for it.
+
+**Advanced** shows how much is kept, what went and when, and the last events as
+they would be sent, and turns it off: off, nothing more is written down and
+what was kept is deleted. A notice says so once, on the first start of a
+version that keeps a trace. *Start over* deletes it and turns it back on.
+
 ## Logs
 
 Everything the app does is written down on this computer, so that what
@@ -653,6 +717,9 @@ each:
 | `src/pagelog.js` | Writing down a page in a tab as it goes: its network through the DevTools protocol, clicks and changes and copies of the page from a world of its own |
 | `src/pinger.js` | Pinging the site: being timed, and hearing at once that a slot was released to the person |
 | `src/telemetry.js` | This app's own numbers, a minute at a time for a day: what the Advanced screen plots, and exactly what Share sends |
+| `src/traces.js` | The trace the site asks for: numbered, kept on disk, sent in the size the site asks, deleted once the site has it |
+| `src/tracetaps.js` | What the trace is made of: the logbook's records as they are written, and each robot run read back when it ends |
+| `src/scrub.js` | What takes the person out of the trace: every profile value in every spelling, confirmation numbers, the shapes of private things, addresses' query values |
 | `src/links.js` | Which addresses the app hands your browser: web pages only, Stripe's own payment page, and the sign-in approval on the site the app signs in to |
 | `src/reset.js` | The files a full reset deletes, the server's folder first |
 | `src/portal.js` | Prefilling a report from a calendar page's address |
@@ -688,7 +755,9 @@ tab at once.
 ## Tests
 
 ```bash
-npm test          # 225 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry, portal,
+npm test          # 337 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
+                  # the trace (what takes the person out of it — a random profile in every spelling — how it is kept,
+                  # what it is made of, and a smoke run whose site asks for it), portal,
                   # updater, menu, profile, needs, autofill, what goes to the browser and the page's policy,
                   # the SQLite reader, browser discovery on all three
                   # systems, the OS key each one gives, what an import takes, the AppImage runtime swap, the Linux

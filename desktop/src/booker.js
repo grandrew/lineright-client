@@ -79,7 +79,8 @@ class Booker {
    * @param {function} opts.getStore   the settings in use now
    * @param {function} opts.getProfile the profile's values now ({key: value})
    * @param {object} [opts.reader]     told it is busy while a booking runs
-   * @param {function} [opts.onOutcome] ({kind, ms}) after each booking attempt, for telemetry.js
+   * @param {function} [opts.onOutcome] ({kind, ms, job, outcome}) after each booking attempt, for
+   *                                    telemetry.js and the trace (traces.js)
    * @param {string} [opts.shotsDir]   where the robot keeps its pictures of confirmation pages; none without
    */
   constructor({ runner, getClient, getStore, getProfile, reader = null, log = () => {}, onState = () => {},
@@ -271,7 +272,7 @@ class Booker {
         + (tookOver ? `, taking it over from ${tookOver}, which stopped answering` : ''));
       const result = await this.runner.run('book', this.request(h), {
         dmvBase: h.robot.base_url, solverUrl: h.robot.captcha_solver_url || '', allowBooking: true,
-        timeoutMs: budgetMs(h.seconds_left), confirmationShot: this.shotFor(h),
+        timeoutMs: budgetMs(h.seconds_left), confirmationShot: this.shotFor(h), context: { job: h.job_id },
       });
       if (result.status === 'confirmed' && result.confirmation) {
         outcome = { kind: 'booked', confirmation: result.confirmation,
@@ -310,7 +311,10 @@ class Booker {
       return outcome;
     } finally {
       this.log(`booking ${where}: ${outcome ? outcome.kind : 'stopped'}`);
-      try { this.onOutcome({ kind: outcome ? outcome.kind : 'stopped', ms: Date.now() - started }); } catch { /* never the problem */ }
+      try {
+        this.onOutcome({ kind: outcome ? outcome.kind : 'stopped', ms: Date.now() - started, job: h.job_id,
+          outcome: outcome || null });
+      } catch { /* never the problem */ }
       this.last = outcome ? { job_id: h.job_id, queue_name: h.queue_name, where, ...outcome, at: Date.now() } : this.last;
       this.running.delete(h.job_id);
       this.current = [...this.running.values()].at(-1) || null;

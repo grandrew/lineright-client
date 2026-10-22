@@ -1114,3 +1114,127 @@ test('a bid is changed from its board: priced as it is, priced wider, then saved
   const result = await run.result;
   assert.equal(result.server, `http://127.0.0.1:${port}`);
 });
+
+/**
+ * A regbot site that asks for the app's trace: every sync answers how far it has
+ * it, and once the app has a turn's worth written down, asks for it — once —
+ * and takes the gzipped answer, as lineright-server's traces.py does.
+ */
+async function tracingSite(bookingBase) {
+  const zlib = require('node:zlib');
+  const seen = { syncs: [], uploads: [], asked: null };
+  const ASK = 'abcdef0123456789';
+  let acked = 0;
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks);
+      const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+      if (req.headers.authorization !== 'Bearer smoke-token') return json(401, { error: 'nope' });
+      if (url.pathname === '/api/client/sync') {
+        const body = JSON.parse(raw.toString() || '{}');
+        const said = body.traces || null;
+        seen.syncs.push(said);
+        const traces = said ? { level: 'full', stream: said.stream, acked } : undefined;
+        // Asked for once, when the turn's page has had time to load.
+        if (said && !seen.asked && seen.syncs.length >= 4 && said.next > 10) {
+          seen.asked = { at: seen.syncs.length, next: said.next };
+          traces.ask = { id: ASK, after: acked, max_events: 5000, max_kb: 1024 };
+        }
+        return json(200, {
+          protocol: 'RQP/1', poll_after_ms: 1000, user: { id: 1, nickname: 'ada', balance: 100, escrow: 0 },
+          positions: [], settled: [], reports: [], traces,
+          handoffs: [{ job_id: 77, bid_id: 5, queue_id: 9, queue_name: 'REAL ID', queue_slug: 'real-id', site_slug: 'ca-dmv',
+            site_name: 'California DMV', phase: 'booking', slot: { office_code: 'POWAY', office_name: 'Poway', date: '2026-10-06', time: '10:00' },
+            open_url: `${bookingBase}/portal/appointments/review?branch=POWAY&email=ada%40example.test`, deadline: null,
+            seconds_left: 280, since: null, rank_at: 1, amount: 200, message: 'Your turn', needs: [] }],
+        });
+      }
+      if (url.pathname === '/api/client/traces') {
+        const body = JSON.parse((req.headers['content-encoding'] === 'gzip' ? zlib.gunzipSync(raw) : raw).toString());
+        seen.uploads.push({ encoding: req.headers['content-encoding'], bytes: raw.length, text: JSON.stringify(body), body });
+        if (body.ask !== ASK) return json(409, { error: 'This site did not ask for that.' });
+        acked = body.last;
+        return json(200, { ok: true, stream: body.stream, acked, kept: body.events.length, more: body.more });
+      }
+      if (url.pathname === '/api/client/sites') return json(200, { protocol: 'RQP/1', sites: [] });
+      return json(404, { error: 'no such route' });
+    });
+  });
+  const port = await listen(server);
+  return { server, seen, port, ASK };
+}
+
+test('the site asks for the app\'s trace on a sync, and gets it gzipped, with the person taken out',
+  { timeout: 90000 }, async (t) => {
+    const electron = electronPath();
+    const display = xvfb();
+    if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+    if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+
+    // A booking page that says the person's name back, as a review page does.
+    const booking = http.createServer((req, res) => {
+      if (req.url.startsWith('/api/')) {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ times: ['10:00', '10:20'], for: 'Ada Lovelace' }));
+      }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(`<!doctype html><title>Review — Ada Lovelace</title><h2>Check your details, Ada</h2><form>
+        <label for="fn">First Name</label><input id="fn" aria-label="First Name">
+        <label for="em">Email Address</label><input id="em" aria-label="Email Address">
+        <label for="ph">Phone Number</label><input id="ph" aria-label="Phone Number"></form>
+        <script>console.error('could not save ada@example.test (555) 555-0123');
+          setTimeout(() => fetch('/api/times?date=2026-10-06&email=ada%40example.test'), 300);</script>`);
+    });
+    const bookingBase = `http://127.0.0.1:${await listen(booking)}`;
+    const site = await tracingSite(bookingBase);
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-trace-'));
+    seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', dob: '12/10/1815', dl_number: 'A1234567',
+      email: 'ada@example.test', phone: '5555550123' });
+    const result = await runApp({ electron, display, port: site.port, userData, exitAfter: 12000 });
+    site.server.close();
+    booking.close();
+
+    // Every sync said how far the trace goes; nothing went up until it was asked for.
+    assert.ok(site.seen.syncs.length >= 5, `syncs: ${site.seen.syncs.length}`);
+    assert.ok(site.seen.syncs.every((s) => s && /^[0-9a-f]{16}$/.test(s.stream) && s.on === true), JSON.stringify(site.seen.syncs[0]));
+    assert.ok(site.seen.asked, 'the site asked');
+    assert.equal(site.seen.uploads.length, 1, 'one ask, one upload');
+    const [up] = site.seen.uploads;
+    assert.equal(up.encoding, 'gzip');
+    assert.equal(up.body.schema, 'regbot.app-trace/1');
+    assert.deepEqual([up.body.ask, up.body.after, up.body.first], [site.ASK, 0, 1]);
+    assert.ok(up.body.last >= site.seen.asked.next - 1, 'all it had when it was asked, at least');
+
+    // A turn's story is in it: the turn, the page opened for it, the page, what was filled in.
+    const kinds = up.body.events.map((e) => e.k);
+    for (const kind of ['app.start', 'handoff.arrive', 'handoff.take', 'handoff.page', 'tab.open', 'page.go', 'net', 'page.load', 'page.note']) {
+      assert.ok(kinds.includes(kind), `${kind} in ${kinds.join(' ')}`);
+    }
+    const load = up.body.events.find((e) => e.k === 'page.load' && e.job === 77);
+    assert.ok(load, 'the turn\'s page load carries the turn');
+    assert.equal(load.title, 'Review — [name]', 'the whole name, taken out as one');
+    const asked = up.body.events.find((e) => e.k === 'net' && /\/api\/times/.test(e.url));
+    assert.ok(asked, 'the page\'s own request, timed');
+    assert.match(asked.url, /\/api\/times\?date=2026-10-06&email=\[redacted\]$/);
+    assert.equal(asked.st, 200);
+    assert.equal(typeof asked.ms, 'number');
+    const said = up.body.events.find((e) => e.k === 'page.console');
+    assert.equal(said.text, 'could not save [email] [phone]');
+    const opened = up.body.events.find((e) => e.k === 'tab.open');
+    assert.match(opened.url, /\/portal\/appointments\/review\?branch=POWAY&email=\[redacted\]$/);
+    const autofill = up.body.events.find((e) => e.k === 'page.note' && e.type === 'autofill');
+    assert.ok(autofill.fields.length >= 3, JSON.stringify(autofill));
+
+    // And none of the person: not their name, their email, their phone, their licence.
+    for (const leak of ['Ada', 'Lovelace', 'ada@example.test', 'ada%40example.test', '5555550123', '555-0123', 'A1234567', '1815']) {
+      assert.ok(!up.text.includes(leak), `${leak} is in the upload`);
+    }
+
+    // What the site said it has is gone from the app; numbering carries on.
+    assert.equal(result.traces.sent, up.body.last, JSON.stringify(result.traces));
+    assert.equal(result.traces.uploads[0].ok, true);
+    assert.equal(result.traces.status.acked, up.body.last);
+  });

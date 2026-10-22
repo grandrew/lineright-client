@@ -220,3 +220,17 @@ test('the real scout, in its own simulate mode, finds what the site asked about'
     assert.equal(offer.slot_date, day);
   }
 });
+
+test('a run that has ended is told, with its folder, its answer and which read or turn it was', async () => {
+  const finished = [];
+  const run = runner(fakeDmq(ECHO), { onFinish: (r) => finished.push(r) });
+  await run.run('scout', { offices: ['Poway'] }, { dmvBase: 'http://127.0.0.1:8787', context: { read: 812 } });
+  const silent = runner(fakeDmq('process.exit(3);'), { onFinish: (r) => finished.push(r) });
+  await silent.run('book', {}, { context: { job: 77 } });
+  assert.deepEqual(finished.map((r) => [r.kind, r.context, r.code, typeof r.ms, r.dir]), [
+    ['scout', { read: 812 }, 0, 'number', ''], ['book', { job: 77 }, 3, 'number', '']]);
+  assert.deepEqual(finished[0].answer.saw, ['Poway']);
+  assert.equal(finished[1].answer.status, 'unavailable');
+  const broken = runner(fakeDmq(ECHO), { onFinish: () => { throw new Error('a broken listener'); } });
+  assert.deepEqual((await broken.run('scout', { offices: ['Poway'] })).saw, ['Poway'], 'never the run\'s problem');
+});

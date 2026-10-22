@@ -85,7 +85,7 @@ test('it books with the stored request, adding only what the form wants from the
   const [run] = calls.runs;
   assert.equal(run.kind, 'book');
   assert.deepEqual(run.opts, { dmvBase: PRACTICE, solverUrl: `${PRACTICE}/__captcha/solve`, allowBooking: true,
-    timeoutMs: 235000, confirmationShot: '' });
+    timeoutMs: 235000, confirmationShot: '', context: { job: 77 } }, 'the run says which turn it is, for the trace');
   assert.deepEqual(run.envelope.personal_data, { office_mode: 'specific', office: 'Poway', booked_by: 'applicant',
     first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.invalid', phone: '5555550100' },
   'never the SSN, the passport or the address');

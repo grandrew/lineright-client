@@ -120,8 +120,11 @@ class RobotRunner {
    */
   constructor({ paths, node = process.execPath, stateDir, env = process.env, platform = process.platform,
     spawn = childProcess.spawn, log = () => {}, setTimeout: st = setTimeout, clearTimeout: ct = clearTimeout,
-    onRun = () => {}, logbook = null }) {
-    Object.assign(this, { paths, node, stateDir, env, platform, spawn, log, setTimeout: st, clearTimeout: ct, onRun, logbook });
+    onRun = () => {}, onFinish = () => {}, logbook = null }) {
+    // onFinish({kind, dir, answer, ms, code, signal, timedOut, context}): a run has
+    // ended and its folder is complete — the app's trace reads it back (tracetaps.js).
+    Object.assign(this, { paths, node, stateDir, env, platform, spawn, log, setTimeout: st, clearTimeout: ct, onRun,
+      onFinish, logbook });
     this.running = new Map();   // child -> its kind, 'scout' or 'book'
   }
 
@@ -135,7 +138,7 @@ class RobotRunner {
    * one saying why there is none — a robot that could not run is an answer too.
    */
   run(kind, envelope, { dmvBase = '', solverUrl = '', allowBooking = false, timeoutMs = 600000,
-    confirmationShot = '' } = {}) {
+    confirmationShot = '', context = {} } = {}) {
     const script = path.join(this.paths.dmq, 'bin', SCRIPTS[kind]);
     fs.mkdirSync(this.stateDir, { recursive: true });
     const record = this.record(kind, envelope, { dmvBase, allowBooking: kind === 'book' && allowBooking, timeoutMs });
@@ -153,6 +156,10 @@ class RobotRunner {
       // What each run took and came to, for this app's own telemetry (telemetry.js).
       try { this.onRun({ kind, ms: Date.now() - started, status: String((answer && answer.status) || '') }); } catch { /* never the problem */ }
       if (record) record.finish({ ms: Date.now() - started, ...ended, answer, stdout: printed, stderr: complained });
+      try {
+        this.onFinish({ kind, dir: record ? record.dir : '', answer, ms: Date.now() - started, code: ended.code,
+          signal: ended.signal, timedOut: ended.timedOut, context });
+      } catch { /* never the problem */ }
       return answer;
     };
     return new Promise((settle) => {

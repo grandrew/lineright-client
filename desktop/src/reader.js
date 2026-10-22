@@ -36,7 +36,8 @@ class Reader {
    * @param {object} opts.runner          a RobotRunner
    * @param {function} opts.getClient     the SyncClient in use now (it changes on a reset)
    * @param {function} opts.getStore      the settings in use now
-   * @param {function} [opts.onRead]      ({status, ms, offices, found}) after each read, for telemetry.js
+   * @param {function} [opts.onRead]      ({status, ms, offices, found, read}) after each read, for
+   *                                      telemetry.js and the trace (traces.js)
    */
   constructor({ runner, getClient, getStore, log = () => {}, onState = () => {}, onRead = () => {} }) {
     Object.assign(this, { runner, getClient, getStore, log, onState, onRead });
@@ -179,13 +180,17 @@ class Reader {
         this.log(`looking for openings on ${read.queue_name} — ${(read.request.offices || []).length} office(s)`);
         const seconds = Math.max(30, Math.min(Number(read.timeout_s) || 600, 600));
         result = await this.runner.run('scout', read.request, {
-          dmvBase: read.base_url, solverUrl: read.captcha_solver_url || '', timeoutMs: seconds * 1000 });
+          dmvBase: read.base_url, solverUrl: read.captcha_solver_url || '', timeoutMs: seconds * 1000,
+          context: { read: read.read_id } });
       }
       if (this.stopped) return;
       const reply = await client.answerRead(read.read_id, result);
       const pace = Number(reply && reply.pace_ms) || 0;
       if (pace > 0) this.readyAt = Math.max(this.readyAt, Date.now() + pace);
-      told = { status: reply.status || result.status, found: Number(reply.recorded) || 0 };
+      const verdicts = {};
+      for (const o of reply.offers || []) if (o && o.verdict) verdicts[o.verdict] = (verdicts[o.verdict] || 0) + 1;
+      told = { status: reply.status || result.status, found: Number(reply.recorded) || 0, robot: result.status,
+        verdicts };
       this.last = {
         read_id: read.read_id, queue_name: read.queue_name, at: Date.now(), status: reply.status,
         recorded: reply.recorded,
@@ -200,7 +205,7 @@ class Reader {
       // still issued; give it back, and wait out Retry-After before the next
       // look, or the same read is pinned until its lease runs out.
       this.log(`read ${read.read_id}: ${err.message}`);
-      told = { status: 'unanswered', found: 0 };
+      told = { status: 'unanswered', found: 0, http: err.status || 0, error: err.message };
       if (err && err.status === 429) {
         const wait = Number(err.retryAfter);
         const ms = (Number.isFinite(wait) && wait > 0 ? wait : 30) * 1000;
@@ -213,7 +218,9 @@ class Reader {
       }
     } finally {
       if (told) {
-        try { this.onRead({ ...told, ms: Date.now() - started, offices }); } catch { /* telemetry is never the problem */ }
+        try {
+          this.onRead({ ...told, ms: Date.now() - started, offices, read: read.read_id, queue: read.queue_id });
+        } catch { /* telemetry is never the problem */ }
       }
       this.answered.add(read.read_id);
       if (this.current === read) this.current = null;
