@@ -1,6 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { Booker, budgetMs } = require('../src/booker');
 
 const SITE = 'http://127.0.0.1:5000';
@@ -113,7 +114,7 @@ test('a booking brings back where its confirmation page was, and the picture the
   const { booker, calls } = world({ result: shown });
   booker.shotsDir = '/shots';
   const outcome = await booker.book(handoff());
-  assert.equal(calls.runs[0].opts.confirmationShot, '/shots/127.0.0.1_5000_rqp1-job-77-20260926.png',
+  assert.equal(calls.runs[0].opts.confirmationShot, path.join('/shots', '127.0.0.1_5000_rqp1-job-77-20260926.png'),
     'one picture per booking, named for it');
   assert.equal(outcome.url, `${PRACTICE}/portal/appointments/confirmation?ref=TS-12345678`);
   assert.equal(outcome.shot, '/shots/x.png');

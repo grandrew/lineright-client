@@ -1229,9 +1229,16 @@ test('the site asks for the app\'s trace on a sync, and gets it gzipped, with th
     assert.ok(autofill.fields.length >= 3, JSON.stringify(autofill));
 
     // And none of the person: not their name, their email, their phone, their licence.
-    for (const leak of ['Ada', 'Lovelace', 'ada@example.test', 'ada%40example.test', '5555550123', '555-0123', 'A1234567', '1815']) {
-      assert.ok(!up.text.includes(leak), `${leak} is in the upload`);
+    const around = (at) => `…${up.text.slice(Math.max(0, at - 200), at + 80)}…`;
+    for (const leak of ['Ada', 'Lovelace', 'ada@example.test', 'ada%40example.test', '5555550123', '555-0123', 'A1234567',
+      '12/10/1815', '12%2F10%2F1815', '1815-12-10', '12101815']) {
+      const at = up.text.indexOf(leak);
+      assert.ok(at < 0, `${leak} is in the upload: ${around(at)}`);
     }
+    // The year of birth on its own. A time in milliseconds, a size or the stream's
+    // hex id can have those four digits inside it by chance, and is not one.
+    const year = /(?<![0-9a-f])1815(?![0-9a-f])/i.exec(up.text);
+    assert.ok(!year, `1815 is in the upload: ${year && around(year.index)}`);
 
     // What the site said it has is gone from the app; numbering carries on.
     assert.equal(result.traces.sent, up.body.last, JSON.stringify(result.traces));
