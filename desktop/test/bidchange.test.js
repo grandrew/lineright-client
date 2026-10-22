@@ -58,13 +58,12 @@ test('how soon, and what each amount buys, in a few words', () => {
   assert.match(change.soon({ turns: 1, first_turn_s: 600, likely_s: 600, fitting: 2, thin: true }), /few openings seen/);
   assert.equal(change.soon({ turns: 0, fitting: 0 }), 'no opening that fits was seen lately');
   assert.equal(change.soon({ turns: 0, fitting: 9 }, 28), 'no turn in the next 28 days');
-  const opt = (label, standing) => ({ label, standing: { rivals_ahead: 2, in_pool: true, ...standing } });
+  const opt = (label, standing) => ({ label, standing: { rivals_ahead: 2, ...standing } });
   assert.equal(change.title(opt('current')), 'As now');
   assert.equal(change.title(opt('first', { rivals_ahead: 0 })), 'First for your offices');
   assert.equal(change.title(opt('less', { rivals_ahead: 0 })), 'First, for less');
   assert.equal(change.title(opt('less')), '2 ahead for your offices, for less');
-  assert.equal(change.title(opt('out', { in_pool: false })), 'Below the bids offered openings');
-  assert.equal(change.title(opt('out')), 'Your offices are not looked at');
+  assert.equal(change.title(opt('out')), 'None of your offices offers this line');
   assert.equal(change.title(opt('more', { rivals_ahead: 1 })), '1 ahead for your offices');
   assert.equal(change.deltaText(-89, coins), '⧗89 back');
   assert.equal(change.deltaText(16, coins), '+⧗16');

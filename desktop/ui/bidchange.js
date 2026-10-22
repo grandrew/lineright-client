@@ -118,7 +118,7 @@
     const s = o.standing || {};
     switch (o.label) {
       case 'current': return 'As now';
-      case 'out': return s.in_pool ? 'Your offices are not looked at' : 'Below the bids offered openings';
+      case 'out': return 'None of your offices offers this line';
       case 'first': return 'First for your offices';
       case 'less': return s.rivals_ahead === 0 ? 'First, for less' : `${s.rivals_ahead} ahead for your offices, for less`;
       case 'in': return 'Offered openings again';

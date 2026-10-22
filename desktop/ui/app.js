@@ -1255,7 +1255,7 @@
     return `<div class="note ${tone}" style="margin:6px 0 10px">${esc(pick.why || '')}${use}</div>
       <div class="quote-opts">${opts}</div>
       ${ahead.length ? `<p class="tiny muted" style="margin:6px 0 0">Ahead of you for these offices: ${ahead.map((r) => `${esc(r.nickname)} ${coins(r.amount)} (#${num(r.rank)})`).join(', ')}.</p>` : ''}
-      <p class="tiny muted" style="margin:6px 0 0">Worked out from the ${num(basis.openings)} openings found on this line in the last ${esc(String(basis.days || 0))} days, played against the board as it is now. Only the top ${num(basis.pool)} bids are offered an opening, and ${doc.lowers_left ? `this bid can be lowered ${num(doc.lowers_left)} more time${doc.lowers_left === 1 ? '' : 's'} today` : 'this bid cannot be lowered again today'}.</p>`;
+      <p class="tiny muted" style="margin:6px 0 0">Worked out from the ${num(basis.openings)} openings found on this line in the last ${esc(String(basis.days || 0))} days, played against the board as it is now. ${doc.lowers_left ? `This bid can be lowered ${num(doc.lowers_left)} more time${doc.lowers_left === 1 ? '' : 's'} today` : 'This bid cannot be lowered again today'}.</p>`;
   }
 
   function paintQuote(b) {

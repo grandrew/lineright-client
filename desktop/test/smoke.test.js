@@ -1004,7 +1004,7 @@ async function bidChangeStub() {
   const mine = { bid_id: 5, rank: 3, amount: 160, status: 'active', note: '', preferred_date: '2026-10-20',
     preferred_time: '11:30', if_passed: '1d', raises: 0, place };
   const option = (amount, label, rivals, first) => ({ amount, delta: amount - 160, label, afford: true,
-    standing: { amount, rank: rivals + 1, field: 4, rivals_ahead: rivals, in_pool: true, pool: 16, scouted: 1, offices: 1, running: true, above: rivals },
+    standing: { amount, rank: rivals + 1, field: 4, rivals_ahead: rivals, in_pool: true, scouted: 1, offices: 1, running: true, above: rivals },
     outlook: { turns: 4, fitting: 40, thin: false, first_turn_s: first, likely_s: first, chance: 1, office_name: 'Santa Clara', lead_s: 86400 } });
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -1044,7 +1044,7 @@ async function bidChangeStub() {
             why: wider ? `With this change, ⧗${pick} should get a booking in about 5 minutes, no later than ⧗160 does now, so ⧗${160 - pick} can come back.`
               : 'Lower it to ⧗71 and get ⧗89 back: you stay first for openings at your offices, and the wait stays the same.' },
           rivals: { ahead: [], behind: [{ nickname: 'di', amount: 70, rank: 4 }] },
-          basis: { days: 7, openings: 412, booked_share: 0.9, pool: 16, scout_cap: 12, horizon_days: 28 } });
+          basis: { days: 7, openings: 412, booked_share: 0.9, scout_cap: 12, horizon_days: 28 } });
       });
     }
     if (url.pathname === '/api/client/bids/5/change') {
