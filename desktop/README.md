@@ -9,8 +9,8 @@ the site's JSON API over one device token; its robots look for openings when the
 site asks, for everybody in line; and when the site says a slot is yours, the
 app opens the booking page in a tab, with your details filled in and a bar over
 it saying what to do — or, once you let it, its robot books it with the details
-kept here. Your personal details never leave this machine, and the app never
-sees your password.
+kept here. Your personal details stay on this machine and go only into the
+booking form they are for, and the app never sees your password.
 
 The first time it opens it offers to bring your details across from a browser
 you already use, then asks you to create your account on the site — or sign in —
@@ -47,7 +47,7 @@ details into the booking form for you.
 
 ┌────────────────────────────────────────────────────────────────────────┐
 │ [◉ regbot] [☞ Your turn — REAL ID ×] [+]                               │  browser mode:
-│ ‹ › ↻ ⌂  127.0.0.1:8787/portal/appointments/details  [✎ Fill form]     │  tabs, address
+│ ‹ › ↻ ⌂  www.dmv.ca.gov/portal/appointments/…        [✎ Fill form]     │  tabs, address
 │ ☞ Your turn · REAL ID — Poway … 4:12 left  [I booked it] [Pass]        │  the hand-off
 │   Book it on the booking page: choose Poway on 2026-10-06 at 10:00 …   │  what to do
 ├────────────────────────────────────────────────────────────────────────┤
@@ -58,8 +58,9 @@ details into the booking form for you.
 ## Running it
 
 ```bash
+cd dmq && npm ci && cd ..                    # the robots the app runs
 cd desktop
-npm install
+npm ci
 npm run bundle                               # once: the robots' browser, as an installer carries it
 npm start                                    # the site config.json names
 npm start -- --developer                     # developer mode, for one run
@@ -76,8 +77,9 @@ anywhere else), on that checkout's `regbot/.venv` and otherwise `python3`;
 `REGBOT_PYTHON` names another outright.
 
 Which server the app uses (`src/server-choice.js`): `config.json` names the
-public regbot site the build pairs with — set the real address there before
-`npm run dist`; empty means the app runs its own. Settings changes it on one
+public site a build pairs with, `https://lineright.org`; a build for another
+site names that one, and an empty one makes the app practise on its own (which
+needs a lineright-server checkout, below). Settings changes it on one
 machine, in developer mode: the site, Practice on this computer, or another
 server at an address.
 `--server=<url>` (or `REGBOT_SERVER_URL`) uses another for one run and
@@ -135,8 +137,8 @@ starts, in this order and each as its own process:
 and the processor runs the California DMV robots (`../dmq/bin/rqp-scout.js`,
 `rqp-handler.js`) exactly as it does on a server — through the connector,
 over RQP/1 on a pipe — except that the `node` it runs them with is the app's
-own binary and the browser they drive is the one in the bundle. The same
-topology as the server's `run.sh`; the app is the supervisor that script was.
+own binary and the browser they drive is the one in the bundle. The app is
+the supervisor.
 
 * **Only on loopback.** Every one binds `127.0.0.1`, on the port it had last
   time if that is free and any free one if not, and says so on one line when
@@ -242,7 +244,7 @@ your offices, and how soon you would likely book, worked out by playing the
 line's last week of found openings against the board as it is now. It suggests
 one amount, with the reason in a sentence: often less than you bid, with the
 difference back, because only the people who want your offices are in your way
-(`ui/bidchange.js`; the site's `regbot/quote.py`). Nothing changes until
+(`ui/bidchange.js`). Nothing changes until
 **Save**, which does all of it in one go. A bid can be lowered a few times a
 day, and not at all once it has been handed a turn.
 
@@ -349,7 +351,9 @@ version that keeps a trace. *Start over* deletes it and turns it back on.
 Everything the app does is written down on this computer, so that what
 happened on a booking site can be told exactly afterwards. It goes into
 `logs/` in the app's data folder (**Help → Open the logs folder**, or
-**Settings → Logs**), and nothing in it is sent anywhere.
+**Settings → Logs**), and the logs themselves are never sent anywhere. The
+trace the site asks for (above) is made from the same records, with the person
+taken out first.
 
 | What | Where |
 |---|---|
@@ -474,11 +478,10 @@ stops every robot.
 **Offered to a few, a few seconds apart.** A slot is not held for one person:
 the site offers it to the top few in line who would take it, the first at once
 and each next a few seconds later, and the first to book it has it; the others
-are told it went and keep their places (the server's `offering.py`). The bar says
-where you are in that — "offered to 3 people, you #2 in turn" — and, once
-somebody else booked it, that it went. How much a place in line is worth
-against speed is the site's to set; see *Offering a found slot* in the
-server's README.
+are told it went and keep their places. The bar says where you are in that —
+"offered to 3 people, you #2 in turn" — and, once somebody else booked it,
+that it went. How much a place in line is worth against speed is the site's to
+set.
 
 **Your connection.** The app pings the site (`POST /api/client/ping`) — every
 second or so when you are near the front of a line, so a slot released to you
@@ -505,8 +508,8 @@ blocked, and bookings open the page for you.
 
 **Credits for checking.** Every sync says whether this app is checking — reader
 on, robots aboard, and its person's yes (`agreed`) — and the site adds credits
-to the account for every hour one of its apps is (the server's `allowance.py`:
-⧗0.2 an hour, one app's time per account). The status line says *checking
+to the account for every hour one of its apps is (⧗0.2 an hour unless the
+site says otherwise, one app's time per account). The status line says *checking
 lines, +⧗0.2/h* while it counts, and **Credits** shows the hours, what they
 earned, and the weekly top-up back to ⧗35 that every account gets.
 
@@ -526,14 +529,16 @@ earned, and the weekly top-up back to ⧗35 that every account gets.
 | You click **Pass** | `POST …/handoffs/<job>/pass` — the slot cascades to the next bidder; you keep your place |
 | The tab shows the booking site's confirmation number | `POST …/handoffs/<job>/booked` with it, for you |
 | The clock runs out | Nothing to click: the server cascades it, and you leave the line with the share of your bid the site sets (the hand-off's `missed`) — Pass instead to keep your place. A slot your app never picked up costs nothing |
+| Near the front of a line, every second or so; otherwise now and then | `POST /api/client/ping` — the site times the round trip |
+| A sync's answer asks for the trace | `POST /api/client/traces` — the events after the site's mark, as many as it asked for, gzipped |
+| You press **Share now** (or every six hours, once you let it) | `POST /api/client/telemetry` — the numbers on the Advanced screen |
 | You click **⌕ Found a slot** | `POST /api/client/found` — the board says who gets it, and it is passed to them if not you |
 
 The last row is the part that makes people respect each other's positions.
 Finding a slot does not let you take it. The report becomes an offer like any
 the scout records, the same allocation walks the same board, and the reply
 says who it goes to — "passed to #1 quiet_otter — you are #3" — before the
-worker's next dispatch makes that the decision. See `regbot/client_api.py`
-for the server side and its reasons.
+worker's next dispatch makes that the decision.
 
 ## Your profile, and the form
 
@@ -755,15 +760,16 @@ tab at once.
 ## Tests
 
 ```bash
-npm test          # 337 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
+npm test          # 338 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
                   # the trace (what takes the person out of it — a random profile in every spelling — how it is kept,
                   # what it is made of, and a smoke run whose site asks for it), portal,
                   # updater, menu, profile, needs, autofill, what goes to the browser and the page's policy,
                   # the SQLite reader, browser discovery on all three
                   # systems, the OS key each one gives, what an import takes, the AppImage runtime swap, the Linux
                   # launcher, the server's supervision, its host run for real, what an installer carries, what a
-                  # reset deletes, and seven smoke runs (a first run that pairs by code, a read answered with the
-                  # real scout, a hand-off booked by the real booking handler, and one that resets through Settings)
+                  # reset deletes, and eleven smoke runs (among them a first run that pairs by code, a read answered
+                  # with the real scout, a hand-off booked by the real booking handler, a booking page written down,
+                  # a bid changed from its board, the trace asked for, and a reset through Settings)
 ```
 
 The smoke test launches the real app under a virtual display (`xvfb-run` on
@@ -869,7 +875,20 @@ Ubuntu does for Chrome in `/etc/apparmor.d/chrome`.
 
 The workflow in `.github/workflows/desktop-release.yml` does all three: push
 a tag such as `desktop-v0.1.1` (it must match `package.json`) and the
-installers and their update manifests land on a GitHub Release.
+installers and their update manifests land on a GitHub Release. Two things to
+know before pushing one:
+
+* electron-builder publishes to the release tagged **`v<version>`**, and a tag
+  it has to create goes on the default branch, not on the commit the workflow
+  built. Push `v<version>` on the same commit first, then `desktop-v<version>`.
+* The macOS leg needs the signing secrets below. Without `MAC_CERT_P12`,
+  `CSC_LINK` arrives empty and electron-builder reads it as a certificate path
+  and fails; the Windows and Linux legs publish regardless.
+
+Releases can equally be built by hand — `npx electron-builder --linux
+--publish never` here, `npm run dist:win` on Windows — and published with
+`gh release create v<version>` and the files from `dist/`: the installers, their
+`.blockmap`s and the `latest*.yml` manifests, which the update feed reads.
 
 ## Updates
 
@@ -883,9 +902,9 @@ Two feeds, one chosen at runtime:
 * **GitHub Releases** — the default. The `publish` block in
   `electron-builder.yml` (owner `grandrew`, repo `lineright-client`) is embedded in
   the app at build time as `app-update.yml`, and the release workflow
-  publishes there. A public repository needs no token at runtime. Until the
-  first release is published the feed answers 404, which the app reports as
-  "no release published yet", not as a fault.
+  publishes there. A public repository needs no token at runtime. A feed that
+  answers 404 — no release yet, or a repository that is not public — is
+  reported as "no release published yet", not as a fault.
 * **Self-hosted** — any static HTTP directory holding `latest.yml`,
   `latest-mac.yml`, `latest-linux.yml` and the installers they name, which is
   what `npm run dist` leaves in `dist/`. `npm run update-server releases 8788`
@@ -919,7 +938,12 @@ Two things about updates that are not this app's to fix:
 | `REGBOT_UPDATE_URL` | A generic update feed instead of the embedded one, for one run |
 | `REGBOT_CLIENT_NAME` | What this device calls itself when it signs in (default: the hostname) |
 | `REGBOT_FORCE_UPDATES` | `1` to run update checks unpackaged |
-| `REGBOT_TRACE` | A file to append a synchronous trace of the main process to |
+| `REGBOT_TRACE` | A file to append a synchronous debugging log of the main process to, for when stdout is not to hand (nothing to do with the trace the site asks for) |
+| `REGBOT_NO_GPU` | `1` to turn hardware acceleration off (smoke runs always do) |
+| `REGBOT_ROBOT_SIMULATE` | `1`, in a checkout only: the robots answer in their simulate mode, with no browser and no network (tests) |
+| `REGBOT_ROBOT_OUTCOME` / `REGBOT_ROBOT_DELAY_MS` | What a simulated booking ends with and how long it takes (`RQP_SIMULATE_OUTCOME`, `RQP_SIMULATE_DELAY_MS` in `../dmq`) |
+| `REGBOT_PING_DELAY_MS` | In a checkout only: hold back the echo the site times by this long, to try a slow connection |
+| `REGBOT_RUNTIME_CACHE` | Where `scripts/appimage-runtime.js` keeps the AppImage runtime it fetched (`~/.cache/regbot-desktop`) |
 | `REGBOT_NO_NOTIFY` / `REGBOT_NO_FLASH` | `1` to skip desktop notifications / frame flashing |
 
 Flags: `--server=<url>` uses that server for one run without saving it, and

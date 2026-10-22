@@ -9,9 +9,11 @@ made public.
 The app keeps a person's details on their own computer, encrypted where the
 operating system allows (`desktop/src/profile.js`), brings sign-ins across from
 their browser only when they tick them (`desktop/src/import.js`), and talks to
-the LineRight Regbot site with one device token. Anything that would let a web
-page, a booking site or another program read those, act as that device, or get
-the robots to book without the person's say-so is exactly what we want to hear
-about.
+the LineRight Regbot site with one device token. It sends the site a trace of
+what it did only with every detail of the profile, and anything shaped like
+one, taken out first (`desktop/src/scrub.js`). Anything that would let a web
+page, a booking site or another program read those, act as that device, get
+the robots to book without the person's say-so, or carry something personal
+past that scrubbing to the site is exactly what we want to hear about.
 
 Problems with the site itself, lineright.org, go the same way.

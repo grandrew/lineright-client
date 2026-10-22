@@ -2,6 +2,10 @@
 # with their update manifests, to a GitHub Release. Push a tag like
 # `desktop-v0.1.1` (matching desktop/package.json) and the release appears;
 # every installed copy then picks the new version up on its next check.
+# electron-builder publishes to the release tagged `v0.1.1`, and a tag it has
+# to make goes on the default branch: push `v0.1.1` on this commit first.
+# macOS needs the signing secrets below, or its leg fails (an empty CSC_LINK
+# is read as a certificate path); Windows and Linux publish regardless.
 name: desktop release
 
 on:
