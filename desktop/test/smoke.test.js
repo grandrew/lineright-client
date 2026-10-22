@@ -244,6 +244,8 @@ function devtools(wsUrl) {
           if (thrown) throw new Error(thrown.exception ? thrown.exception.description : thrown.text);
           return r.result.result.value;
         },
+        /** Any other DevTools command, its answer as it came. */
+        send: (method, params) => call(method, params),
         close: () => socket.destroy(),
       });
     });
@@ -991,6 +993,119 @@ test("the app's robot books the person's slot once they let it, and the page ope
   } finally {
     dmv.server.close();
   }
+});
+
+/**
+ * A site that hands this person turn after turn, on three lines, as a busy
+ * line does: three at once (lines A, B and C), then each over — B's gone from
+ * the sync, A's and C's to somebody else first — then the next turns on A and
+ * C. Times run from its first sync. Each turn's page names its job.
+ */
+async function turnsSite(dmvBase) {
+  const seen = { syncs: 0, t0: null };
+  const turn = (job, queueId, name, over) => ({
+    job_id: job, bid_id: job, queue_id: queueId, queue_name: name, queue_slug: name.toLowerCase(), site_slug: 'ca-dmv',
+    site_name: 'California DMV', connector: 'dmv.ca.gov.qmatic', phase: 'booking',
+    slot: { office_code: 'POWAY', office_name: 'Poway', date: '2026-10-06', time: '10:00', miles: 3.1 },
+    open_url: `${dmvBase}/portal/appointments/select-date?branch=POWAY&job=${job}`,
+    deadline: null, seconds_left: 280, since: null, rank_at: 1, amount: 200, message: 'Your turn', needs: [],
+    missed: { refund_percent: 70, refund: 140, kept: 60 },
+    wave: { place: 2, of: 3 }, over: over ? { kind: 'taken', message: '#1 booked it first.' } : null,
+  });
+  const server = http.createServer((req, res) => {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const json = (code, o) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
+    const url = new URL(req.url, base);
+    if (url.pathname === '/api/client/sites') return json(200, { protocol: 'RQP/1', sites: [] });
+    if (url.pathname !== '/api/client/sync') return json(404, { error: 'no' });
+    seen.syncs += 1;
+    if (seen.t0 === null) seen.t0 = Date.now();
+    const t = Date.now() - seen.t0;
+    const handoffs = t < 3000 ? [turn(83, 10, 'B'), turn(81, 9, 'A'), turn(84, 11, 'C')]
+      : t < 7000 ? [turn(81, 9, 'A', true), turn(84, 11, 'C', true)]
+        : [turn(82, 9, 'A'), turn(85, 11, 'C')];
+    return json(200, { protocol: 'RQP/1', kind: 'client.sync', poll_after_ms: 700, site_url: base,
+      user: { id: 1, nickname: 'ada', balance: 2300, escrow: 600 },
+      positions: [], handoffs, settled: [], reports: [], reads: [], reader: { mode: 'apps', last: null } });
+  });
+  const port = await listen(server);
+  return { server, seen, port };
+}
+
+test('turns\' tabs do not pile up: the next turn on a line takes the last one\'s unused tab, an unused one closes, a used one stays',
+  { timeout: 120000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+
+  const dmv = await dmvStub();
+  t.after(() => dmv.server.close());
+  const site = await turnsSite(dmv.base);
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-turns-'));
+  seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
+  // A spare tab closes 6 s after its turn here, not 15 minutes.
+  const run = startApp({ electron, display, port: site.port, userData, exitAfter: 20000,
+    extra: ['--remote-debugging-port=0'], extraEnv: { REGBOT_TURN_TAB_MS: '6000' } });
+  let page = null;
+  let result;
+  try {
+    // The person clicks in C's page while it is their turn there.
+    const devPort = Number(await until(() => fs.readFileSync(path.join(userData, 'DevToolsActivePort'), 'utf8').split('\n')[0], 30000, 'DevTools'));
+    page = await pageWhere(devPort, (u) => u.includes('job=84'), 'turn 84\'s page');
+    await until(() => page.evaluate("document.readyState === 'complete'"), 15000, 'turn 84\'s page loaded');
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await page.send('Input.dispatchMouseEvent', { type, x: 40, y: 40, button: 'left', clickCount: 1 });
+    }
+    result = await run.result;
+  } finally {
+    if (page) page.close();
+    if (run.child.exitCode === null) run.child.kill();
+    site.server.close();
+  }
+
+  const turns = result.tabs.filter((x) => x.kind === 'handoff');
+  // A's second turn in A's first turn's tab; B's tab closed; C's used tab kept beside C's second turn's.
+  assert.deepEqual(turns.map((x) => x.jobId).sort(), [82, 84, 85], JSON.stringify(result.tabs));
+  assert.equal(result.tabs.length, 3, JSON.stringify(result.tabs));
+  assert.equal(turns.find((x) => x.jobId === 84).touched, true, 'the click made C\'s first page the person\'s');
+  assert.equal(turns.find((x) => x.jobId === 82).touched, false);
+  assert.match(turns.find((x) => x.jobId === 82).url, /job=82$/, 'the reused tab is on the new turn\'s page');
+
+  const logs = path.join(userData, 'logs');
+  const pages = fs.readdirSync(logs).filter((f) => f.startsWith('pages-'))
+    .flatMap((f) => fs.readFileSync(path.join(logs, f), 'utf8').trim().split('\n')).map((l) => JSON.parse(l));
+  const tabOf = (job) => (pages.find((r) => r.type === 'opened' && r.job === job) || {}).tab;
+  const reused = pages.filter((r) => r.type === 'reused');
+  assert.deepEqual(reused.map((r) => [r.from, r.job, r.tab]), [[81, 82, tabOf(81)]], JSON.stringify(reused));
+  assert.equal(turns.find((x) => x.jobId === 82).id, tabOf(81), 'the same tab, not a new one');
+  assert.ok(!pages.some((r) => r.type === 'opened' && r.job === 82), 'no tab was opened for A\'s second turn');
+  assert.ok(pages.some((r) => r.type === 'opened' && r.job === 85), 'C\'s second turn has a tab of its own');
+  const closing = pages.filter((r) => r.type === 'closing');
+  assert.deepEqual(closing.map((r) => [r.job, r.tab]), [[83, tabOf(83)]], JSON.stringify(closing));
+  assert.ok(pages.some((r) => r.type === 'closed' && r.tab === tabOf(83)), 'B\'s tab went');
+  assert.ok(pages.some((r) => r.type === 'used' && r.job === 84));
+  assert.deepEqual(pages.filter((r) => r.type === 'over').map((r) => [r.job, r.how]).sort(),
+    [[81, 'taken'], [83, 'gone'], [84, 'taken']]);
+
+  // A turn this computer's robot booked: its page goes once the turn is over,
+  // and the DMV's confirmation, in a tab of its own, stays.
+  if (!fs.existsSync(path.join(DMQ, 'bin', 'rqp-handler.js'))) return t.diagnostic('no ../dmq checkout: the robot part is skipped');
+  const bookingStub = await bookingSite(dmv.base);
+  const robotData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-turns-robot-'));
+  seedProfile(robotData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
+  fs.writeFileSync(path.join(robotData, 'regbot.json'), JSON.stringify({ v: 2, robotBooking: true }));
+  let booked;
+  try {
+    booked = await runApp({ electron, display, port: bookingStub.port, userData: robotData, exitAfter: 16000,
+      extraEnv: { REGBOT_ROBOT_SIMULATE: '1', REGBOT_ROBOT_OUTCOME: 'BOOKED_SUCCESS', REGBOT_TURN_TAB_MS: '3000' } });
+  } finally {
+    bookingStub.server.close();
+  }
+  assert.equal(bookingStub.seen.booked.length, 1);
+  assert.deepEqual(booked.tabs.map((x) => x.kind), ['confirmation'], JSON.stringify(booked.tabs));
+  assert.match(booked.tabs[0].url, new RegExp(`confirmation\\?ref=${bookingStub.seen.booked[0].confirmation}$`));
+  return undefined;
 });
 
 /**

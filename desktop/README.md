@@ -431,9 +431,15 @@ the site sets (`missed` in the hand-off; 70% unless its operator says
 otherwise). When the tab shows the booking site's confirmation number — read
 the way the robot reads it — the app says "I booked it" with that number for
 you, so a booking made and never reported does not run out. When a turn ends,
-however it ended, the bar says so over the page, which stays open: booked and
-its number, gone on to the next person with your place kept, or run out and
-what came back.
+however it ended, the bar says so over the page for a quarter of an hour:
+booked and its number, gone on to the next person with your place kept, or run
+out and what came back. A page you used — clicked, typed or scrolled in, or
+steered from the address bar — stays open until you close it, and so does one
+showing a booking confirmation. One you had no use for does not pile up (a
+slot is offered to a few people at once, so a busy line hands you many turns
+somebody else books): the next turn on that line opens in its tab, and
+otherwise it closes when the bar stops saying how the turn ended — never while
+it is the page in front of you (`src/turntabs.js`).
 
 **Letting the app book for you.** Settings → *This computer's robots* → **Let
 the app book for me** — off until you tick it, on the real DMV and a practice
@@ -443,8 +449,10 @@ once the robot has booked, the card says **✓ Booked** with the confirmation
 number, and the DMV's confirmation opens in a tab of its own: its page, when its
 address carries the number and opens anywhere (the stand-in's does), otherwise
 the full-page picture the robot kept of it (`robots/confirmations/` in the
-user-data directory, the newest 40; `src/confirmations.js`). Another of your
-devices booking it covers the page the same way, naming that device.
+user-data directory, the newest 40; `src/confirmations.js`). That tab stays
+until you close it; with it open, the turn's own page goes once the turn is
+over, like any you did not use. Another of your devices booking it covers the
+page the same way, naming that device.
 
 A hand-off for a slot on a line the app has a robot for carries the
 booking request the site stored for it, the DMV to book it on, and which
@@ -523,7 +531,7 @@ earned, and the weekly top-up back to ⧗35 that every account gets.
 | You join a line, bid up, withdraw | `POST …/queues/<id>/bids`, `…/bids/<id>/raise`, `…/bids/<id>/withdraw` |
 | You open **Change range, time or amount…** on a line, and change any of them | `POST …/bids/<id>/quote` — what each amount worth paying would buy, and the one the site suggests (writes nothing) |
 | You click **Save** | `POST …/bids/<id>/change` — the amount, and only a wider range or time, in one write; a lower amount comes back to your balance |
-| A hand-off arrives | Desktop notification, a tab on the booking page and the bar over it with the clock and what to do; or, when you let the app book for you, the same tab under a "booking it for you" card while the robot claims it and books it (`…/claim`, then `…/booked` or `…/gone`), then the confirmation in a tab beside it |
+| A hand-off arrives | Desktop notification, a tab on the booking page (the tab of the line's last turn, when that one is over and went unused) and the bar over it with the clock and what to do; or, when you let the app book for you, the same tab under a "booking it for you" card while the robot claims it and books it (`…/claim`, then `…/booked` or `…/gone`), then the confirmation in a tab beside it |
 | The tab's page loads | Your profile is typed into the form (see below) |
 | You click **I booked it** | `POST …/handoffs/<job>/booked` — the worker captures your escrow |
 | You click **Pass** | `POST …/handoffs/<job>/pass` — the slot cascades to the next bidder; you keep your place |
@@ -701,7 +709,8 @@ each:
 |---|---|
 | `src/main.js` | The main process: window, menu, which server, sign-in, sync, autofill, IPC, updates, shutdown, smoke mode |
 | `src/stack.js` | Practice mode's server: where each part is (the robots with the app, the server in a lineright-server checkout), starting them in order, restarting one that falls over, and stopping them with everything they started |
-| `src/shell.js` | The window's two faces: the app view full-window, or a strip over one sandboxed `WebContentsView` per tab |
+| `src/shell.js` | The window's two faces: the app view full-window, or a strip over one sandboxed `WebContentsView` per tab, each knowing whether the person used it |
+| `src/turntabs.js` | Which turn's tab is spare once its turn is over — for the next turn on its line, or to close — and which always stays |
 | `src/menu.js` | The application menu, from plain data |
 | `src/sync.js` | The client API and the polling loop, plain Node, tested with a fake fetch |
 | `src/profile.js` | The person's own details, kept and (where possible) encrypted on this machine |
@@ -760,16 +769,17 @@ tab at once.
 ## Tests
 
 ```bash
-npm test          # 338 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
+npm test          # 347 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
                   # the trace (what takes the person out of it — a random profile in every spelling — how it is kept,
                   # what it is made of, and a smoke run whose site asks for it), portal,
                   # updater, menu, profile, needs, autofill, what goes to the browser and the page's policy,
                   # the SQLite reader, browser discovery on all three
                   # systems, the OS key each one gives, what an import takes, the AppImage runtime swap, the Linux
                   # launcher, the server's supervision, its host run for real, what an installer carries, what a
-                  # reset deletes, and eleven smoke runs (among them a first run that pairs by code, a read answered
-                  # with the real scout, a hand-off booked by the real booking handler, a booking page written down,
-                  # a bid changed from its board, the trace asked for, and a reset through Settings)
+                  # reset deletes, which turn's tab is spare, and twelve smoke runs (among them a first run that pairs
+                  # by code, a read answered with the real scout, a hand-off booked by the real booking handler, a
+                  # booking page written down, turns' tabs that do not pile up, a bid changed from its board, the
+                  # trace asked for, and a reset through Settings)
 ```
 
 The smoke test launches the real app under a virtual display (`xvfb-run` on
@@ -786,10 +796,14 @@ for an account and pairs by code, and *Start over* asks again. A read the stub
 hands out is answered by the real scout, and a hand-off it hands over is booked
 by the real booking handler — both in their simulate mode, so no browser starts:
 booked with no tab, a run that could not finish with the tab, a slot gone
-reported gone. And with `--practice` it checks that the app started its own —
-stand-in, site and processor running, signed in as an account made for the
-person, synced, the seeded sites listed, its data under the app's user data —
-and that nothing it started was still running after it quit. It skips itself
+reported gone. Turns handed out on three lines and then over show that the
+next turn on a line opens in the last one's unused tab, that an unused one
+closes (seconds after its turn, in a test), that one clicked in stays, and
+that a booked turn's page goes while the DMV's confirmation stays. And with
+`--practice` it checks that the app started its own — stand-in, site and
+processor running, signed in as an account made for the person, synced, the
+seeded sites listed, its data under the app's user data — and that nothing it
+started was still running after it quit. It skips itself
 where there is no Electron binary or no display, the robot runs where there is
 no `../dmq`, and the practice runs where there is no lineright-server checkout
 or no Python with Flask for it.

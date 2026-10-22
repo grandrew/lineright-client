@@ -45,6 +45,7 @@ const { buildFillScript, isBookingPage, originOf } = require('./autofill');
 const { webPage, paymentPage, approvalPage } = require('./links');
 const { prefillFromUrl } = require('./portal');
 const { outsideReach } = require('./reach');
+const turnTabs = require('./turntabs');
 const { guideScript } = require('./dmv-guide');
 const menu = require('./menu');
 const updater = require('./updater');
@@ -193,6 +194,7 @@ let autoShareAfter = 0;           // no automatic share before this (epoch ms): 
 let asked = null;                 // the lines this person asked for, as the last sync said: id -> answered_at
 let generation = 0;               // counts resets: a robot's answer from before one is dropped
 const opened = new Set();         // hand-off job ids a tab was opened for
+const confirmationTabs = new Map(); // hand-off job id -> the tab its DMV confirmation opened in
 const standingBack = new Set();   // hand-offs another of the person's devices is booking
 const bookingOrigins = new Set(); // origins the app itself sent the person to book at
 
@@ -814,6 +816,7 @@ function handleDoc(doc) {
   noteConnection(doc.latency);
   const current = new Set(doc.handoffs.map((h) => h.job_id));
   for (const id of [...standingBack]) if (!current.has(id)) standingBack.delete(id);
+  noteTurnsOver(doc);
   // A turn that ended while its page was covered — another device booked it,
   // or its time ran out — is uncovered; one this computer's robot booked says so.
   for (const [id, card] of [...turnCards]) {
@@ -893,12 +896,15 @@ function runGuide(tab) {
   tab.guideRunning = true;
   tab.guideAgain = false;
   const where = tab.guideWhere || 'this slot';
-  tab.view.webContents.executeJavaScript(guideScript(tab.guideSlot), true).then((status) => {
+  const slot = tab.guideSlot;
+  tab.view.webContents.executeJavaScript(guideScript(slot), true).then((status) => {
+    if (tab.guideSlot !== slot) return; // the tab went on to the next turn meanwhile
     tab.guideRunning = false;
     if (status === 'time') tab.guideDone = true;
     log(`booking page for ${where}: ${status}`);
     if (tab.guideAgain && !tab.guideDone) runGuide(tab);
   }).catch((err) => {
+    if (tab.guideSlot !== slot) return;
     tab.guideRunning = false;
     log(`booking page for ${where} could not be walked: ${err.message}`);
     if (tab.guideAgain && !tab.guideDone) runGuide(tab);
@@ -1045,6 +1051,7 @@ function afterBooking(h, outcome) {
       ? { kind: 'warn', ms: 20000, text: `Booked ${where} — confirmation ${outcome.confirmation}. The LineRight Regbot site did not record it: ${outcome.unreported}` }
       : { kind: 'ok', ms: 15000, text: `Booked ${where} — confirmation ${outcome.confirmation}.` });
     const shown = showConfirmation(h, outcome);
+    if (shown) confirmationTabs.set(h.job_id, shown);
     setCard(h.job_id, { kind: 'booked', title: '✓ Booked', where, reference: `Confirmation ${outcome.confirmation}`,
       text: (shown ? 'The DMV\'s confirmation is open in the next tab. ' : 'Keep this number: it is what the DMV knows the appointment by. ')
         + (outcome.unreported ? `LineRight Regbot has not recorded it yet: ${outcome.unreported}`
@@ -1185,6 +1192,7 @@ function fillActive(force) {
     send('toast', { kind: 'warn', text: 'Open a booking page first.' });
     return null;
   }
+  if (force) tabs.touch(current.id);
   return fill(current.id, force);
 }
 
@@ -1194,6 +1202,9 @@ function wireAutofill() {
     if (tab && tab.kind === 'handoff' && tab.guideSlot && !tab.guideDone) runGuide(tab);
   });
   tabs.on('loaded', ({ id, url, jobId }) => {
+    // A turn's tab is read for a confirmation again after every load (lookAtEnded).
+    const tab = tabs.tabs.get(id);
+    if (tab) { tab.loads = (tab.loads || 0) + 1; tab.endLook = null; }
     // The cover goes back over every page while the robot books; "booked" is
     // said once, and stays gone once the person has looked underneath.
     if (jobId && turnCards.has(jobId) && turnCards.get(jobId).kind === 'booking') paintCard(jobId);
@@ -1205,12 +1216,22 @@ function wireAutofill() {
   // A booking site that draws its pages itself changes them without loading
   // one, so the confirmation is looked for every few seconds as well.
   setInterval(() => {
-    for (const tab of tabs.tabs.values()) if (tab.kind === 'handoff') checkHandoffTab(tab.id);
+    for (const tab of tabs.tabs.values()) {
+      if (tab.kind !== 'handoff') continue;
+      checkHandoffTab(tab.id);
+      if (tab.endedAt && !tab.endLook) lookAtEnded(tab.id);
+    }
   }, 2000).unref();
+  // A turn's tab nobody had a use for closes a while after its turn (turntabs.js).
+  setInterval(sweepTurnTabs, Math.max(500, Math.min(30000, Math.round(turnTabCloseMs() / 4)))).unref();
 }
 
 // ------------------------------------------------------------ the turn's tab
-/** The turn's booking page, in a tab of its own: opened, or brought forward. */
+/**
+ * The turn's booking page, in a tab of its own: brought forward when it has
+ * one; loaded in the tab of the last turn on the same line, when that turn is
+ * over and its page went unused (turntabs.js); otherwise opened.
+ */
 function turnTab(h) {
   const existing = tabs.tabFor(h.job_id);
   if (existing) {
@@ -1218,7 +1239,128 @@ function turnTab(h) {
     return existing.id;
   }
   if (!h.open_url) return null;
-  return tabs.open(h.open_url, { kind: 'handoff', jobId: h.job_id, title: `Your turn — ${h.queue_name}` });
+  const title = `Your turn — ${h.queue_name}`;
+  const line = turnTabs.lineOf(h);
+  const spare = turnTabs.spareFor(turnTabList(), line);
+  let id;
+  if (spare) {
+    const tab = tabs.tabs.get(spare.id);
+    const was = tab.jobId;
+    log(`your turn: ${describeHandoff(h)} — its page opens in the tab of the turn before on this line `
+        + `(${tab.where || `job ${was}`}), which is over and was not used`);
+    pageNote(tab.id, 'reused', { from: was, job: h.job_id });
+    // The last turn's card and confirmation went with its page.
+    turnCards.delete(was);
+    confirmationTabs.delete(was);
+    Object.assign(tab, { endedAt: null, endLook: null, guideSlot: null, guideWhere: null,
+      guideDone: false, guideRunning: false, guideAgain: false });
+    id = tabs.reuse(tab.id, h.open_url, { jobId: h.job_id, title });
+  } else {
+    id = tabs.open(h.open_url, { kind: 'handoff', jobId: h.job_id, title });
+  }
+  Object.assign(tabs.tabs.get(id), { line, where: describeHandoff(h) });
+  return id;
+}
+
+/**
+ * How long a turn's tab nobody used stays open after the turn: as long as the
+ * bar says how the turn ended. Tests shorten it; an installed app never does.
+ */
+function turnTabCloseMs() {
+  const asked = app.isPackaged ? 0 : Number(process.env.REGBOT_TURN_TAB_MS || 0);
+  return asked > 0 ? asked : turnTabs.CLOSE_AFTER_MS;
+}
+
+/** What turntabs.js weighs about one turn's tab. */
+function turnTabFacts(tab) {
+  const h = lastDoc && lastDoc.handoffs.find((x) => x.job_id === tab.jobId);
+  const card = turnCards.get(tab.jobId);
+  const shown = confirmationTabs.get(tab.jobId);
+  return {
+    live: !tab.endedAt || Boolean(h && !h.over),
+    touched: Boolean(tab.touched),
+    booking: Boolean((card && card.kind === 'booking') || (booker && booker.running.has(tab.jobId))),
+    bookedByHand: bookedInTab.has(tab.jobId),
+    booked: Boolean(card && card.kind === 'booked'),
+    confirmationOpen: Boolean(shown && tabs.tabs.has(shown)),
+    looked: Boolean(tab.endLook),
+    shows: Boolean(tab.endLook && tab.endLook.ref),
+  };
+}
+
+function turnTabList() {
+  return [...tabs.tabs.values()].filter((t) => t.kind === 'handoff')
+    .map((t) => ({ id: t.id, line: t.line, endedAt: t.endedAt, facts: turnTabFacts(t) }));
+}
+
+/** Each turn's tab learns when its turn is over: gone from the sync, or gone to somebody else first. */
+function noteTurnsOver(doc) {
+  if (!tabs) return;
+  for (const tab of tabs.tabs.values()) {
+    if (tab.kind !== 'handoff' || !tab.jobId) continue;
+    const h = doc.handoffs.find((x) => x.job_id === tab.jobId);
+    if (h && !h.over) {
+      tab.endedAt = null;
+    } else if (!tab.endedAt) {
+      tab.endedAt = Date.now();
+      pageNote(tab.id, 'over', { job: tab.jobId, how: h ? h.over.kind : 'gone' });
+    }
+  }
+}
+
+const readingEnded = new Set();   // tab ids being read by lookAtEnded right now
+
+/**
+ * A turn's page, read for a booking confirmation once the turn is over, and
+ * again after every load since: a number there keeps the tab open.
+ */
+async function lookAtEnded(id) {
+  const tab = tabs.tabs.get(id);
+  if (!tab || readingEnded.has(id)) return;
+  readingEnded.add(id);
+  try {
+    const parse = await parseConfirmation();
+    const wc = tab.view.webContents;
+    if (wc.isDestroyed()) return;
+    const loads = tab.loads;
+    let ref = null;
+    if (parse) {
+      const text = await Promise.race([
+        wc.executeJavaScript('document.body ? document.body.innerText : ""'),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('the page did not answer')), 10000)),
+      ]);
+      ref = parse({ url: wc.getURL(), text: String(text || '').slice(0, 100000) }) || null;
+    }
+    if (tab.loads !== loads || !tab.endedAt) return; // loaded again, or taken by a turn, meanwhile
+    tab.endLook = { at: Date.now(), ref };
+    if (ref) {
+      if (scrubber) scrubber.learn('confirmation', ref);
+      pageNote(id, 'kept', { job: tab.jobId, why: 'confirmation', ref });
+      log(`the page of ${tab.where || `job ${tab.jobId}`} shows a booking confirmation, so its tab stays open`);
+    }
+  } catch {
+    // Not readable just now: read again in a moment.
+  } finally {
+    readingEnded.delete(id);
+  }
+}
+
+/** Close the turns' tabs that have been spare long enough, and not the page on screen. */
+function sweepTurnTabs() {
+  if (!tabs || closing) return;
+  const now = Date.now();
+  const after = turnTabCloseMs();
+  for (const t of turnTabList()) {
+    const tab = tabs.tabs.get(t.id);
+    const onScreen = t.id === tabs.active && win && win.isVisible() && win.isFocused();
+    if (!turnTabs.closeNow({ ...t, onScreen }, now, after)) continue;
+    const ago = now - t.endedAt;
+    log(`closing the page of ${tab.where || `job ${tab.jobId}`}: its turn ended `
+        + `${ago < 90000 ? `${Math.round(ago / 1000)} s` : `${Math.round(ago / 60000)} min`} ago, and it was not used`);
+    pageNote(t.id, 'closing', { job: tab.jobId, why: 'spare' });
+    tabs.close(t.id);
+  }
+  for (const [job, id] of [...confirmationTabs]) if (!tabs.tabs.has(id)) confirmationTabs.delete(job);
 }
 
 /**
@@ -1901,7 +2043,7 @@ function wireIpc() {
       });
     }
     if (h.open_url) {
-      tabs.open(h.open_url, { kind: 'handoff', jobId: job_id, title: `Your turn — ${h.queue_name}` });
+      turnTab(h);
       armGuide(h);
     }
     return undefined;
@@ -2175,6 +2317,7 @@ async function resetEverything() {
     if (booker) booker.forget();
     bookedInTab.clear();
     turnCards.clear();
+    confirmationTabs.clear();
     standingBack.clear();
     bookingOrigins.clear();
     offered = null;
@@ -2275,7 +2418,7 @@ function smoke() {
       synced: Boolean(lastDoc), handoffs: lastDoc ? lastDoc.handoffs.length : 0,
       positions: lastDoc ? lastDoc.positions.length : 0,
       mode: shellState.mode,
-      tabs: shellState.tabs.map((t) => ({ kind: t.kind, url: t.url, title: t.title, jobId: t.jobId })),
+      tabs: shellState.tabs.map((t) => ({ id: t.id, kind: t.kind, url: t.url, title: t.title, jobId: t.jobId, touched: t.touched })),
       chromeHeight: tabs.chromeHeight, packaged: app.isPackaged, updates: updateState,
       menu: menu.outline(Menu.getApplicationMenu().items.map((i) => ({ label: i.label, submenu: (i.submenu ? i.submenu.items : []).map((s) => ({ label: s.label, type: s.type, role: s.role })) }))),
       sites: sitesCache.length,
@@ -2432,6 +2575,8 @@ async function main() {
       log(`could not keep a log of tab ${tab.id}: ${err.message}`);
     }
   });
+  // Used by the person: a turn's tab is then theirs, and stays (turntabs.js).
+  tabs.on('touched', (tab) => pageNote(tab.id, 'used', { job: tab.jobId || undefined }));
   wireAutofill();
 
   // Handlers before the page: it asks for its state the moment it loads.

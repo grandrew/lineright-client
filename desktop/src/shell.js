@@ -19,9 +19,19 @@
  * sign-in survives a restart. The only thing that touches a page from here is
  * the autofill main.js runs on pages the app opened for booking, and the
  * page says when it has loaded.
+ *
+ * A tab knows whether the person has used it — clicked, typed, scrolled or
+ * touched in its page, or steered it from the strip — since a turn's tab
+ * nobody used is the one tab the app may load the next turn in, or close
+ * (turntabs.js). Only input from the person counts: a page loading, the
+ * autofill typing, and the app showing a tab do not.
  */
 const { EventEmitter } = require('node:events');
 const { WebContentsView } = require('electron');
+
+/** Input that is somebody at the page, rather than a pointer passing over it. */
+const USED = new Set(['mouseDown', 'contextMenu', 'mouseWheel', 'rawKeyDown', 'keyDown', 'char',
+  'touchStart', 'gestureTapDown', 'gestureScrollBegin']);
 
 class Shell extends EventEmitter {
   constructor(win, { chromeView, chromeHeight = 74, homeUrl, partition = 'persist:regbot' }) {
@@ -72,7 +82,7 @@ class Shell extends EventEmitter {
         partition: this.partition, spellcheck: false,
       },
     });
-    const tab = { id, view, url, title: title || url, kind, jobId, loading: true };
+    const tab = { id, view, url, title: title || url, kind, jobId, loading: true, touched: false };
     this.tabs.set(id, tab);
     this.order.push(id);
     this.win.contentView.addChildView(view);
@@ -104,6 +114,7 @@ class Shell extends EventEmitter {
     // The moment a booking form can be filled in. Said with the URL the page
     // actually ended up at, not the one the tab was opened with.
     wc.on('did-finish-load', () => this.emit('loaded', { id: tab.id, url: wc.getURL(), kind: tab.kind, jobId: tab.jobId }));
+    wc.on('input-event', (_event, input) => { if (input && USED.has(input.type)) this.touch(tab.id); });
     // A link that wants a new window gets a new tab here instead.
     wc.setWindowOpenHandler(({ url }) => {
       this.open(url, { activate: true });
@@ -143,6 +154,34 @@ class Shell extends EventEmitter {
     else this.changed();
   }
 
+  /**
+   * Load another page in a tab as though it had been opened for it: a turn's
+   * tab nobody used, handed to the next turn on its line (main.js). The old
+   * page's history goes with it, and the tab is unused again.
+   */
+  reuse(id, url, { jobId = null, title = '', activate = true } = {}) {
+    const tab = this.tabs.get(id);
+    if (!tab) return null;
+    Object.assign(tab, { url, title: title || url, jobId, loading: true, touched: false });
+    const wc = tab.view.webContents;
+    wc.once('did-navigate', () => {
+      try { wc.navigationHistory.clear(); } catch { /* gone */ }
+      this.changed();
+    });
+    wc.loadURL(url).catch(() => {});
+    if (activate) this.select(id);
+    else this.changed();
+    return id;
+  }
+
+  /** The person used this tab. Said once. */
+  touch(id) {
+    const tab = this.tabs.get(id);
+    if (!tab || tab.touched) return;
+    tab.touched = true;
+    this.emit('touched', tab);
+  }
+
   forget(id) {
     if (!this.tabs.has(id)) return;
     const at = this.order.indexOf(id);
@@ -159,16 +198,35 @@ class Shell extends EventEmitter {
     return this.active === null ? null : this.tabs.get(this.active) || null;
   }
 
+  // The address bar, back, forward and reload are the person steering the tab.
   navigate(url, id = null) {
     const tab = id === null ? this.current() : this.tabs.get(id);
     if (!tab) return this.open(url);
+    this.touch(tab.id);
     tab.view.webContents.loadURL(url).catch(() => {});
     return tab.id;
   }
 
-  back() { const t = this.current(); if (t && t.view.webContents.navigationHistory.canGoBack()) t.view.webContents.navigationHistory.goBack(); }
-  forward() { const t = this.current(); if (t && t.view.webContents.navigationHistory.canGoForward()) t.view.webContents.navigationHistory.goForward(); }
-  reload() { const t = this.current(); if (t) t.view.webContents.reload(); }
+  back() {
+    const t = this.current();
+    if (!t || !t.view.webContents.navigationHistory.canGoBack()) return;
+    this.touch(t.id);
+    t.view.webContents.navigationHistory.goBack();
+  }
+
+  forward() {
+    const t = this.current();
+    if (!t || !t.view.webContents.navigationHistory.canGoForward()) return;
+    this.touch(t.id);
+    t.view.webContents.navigationHistory.goForward();
+  }
+
+  reload() {
+    const t = this.current();
+    if (!t) return;
+    this.touch(t.id);
+    t.view.webContents.reload();
+  }
 
   home() {
     return this.showApp();
@@ -204,7 +262,7 @@ class Shell extends EventEmitter {
       const wc = t.view.webContents;
       return {
         id: t.id, url: t.url, title: t.title, kind: t.kind, jobId: t.jobId, loading: t.loading,
-        active: t.id === this.active,
+        active: t.id === this.active, touched: t.touched,
         canGoBack: wc.navigationHistory ? wc.navigationHistory.canGoBack() : false,
         canGoForward: wc.navigationHistory ? wc.navigationHistory.canGoForward() : false,
       };

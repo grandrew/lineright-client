@@ -97,6 +97,24 @@ test('a tab anywhere else says which site and nothing of what was on it or done 
   ]);
 });
 
+test('a turn\'s tab handed on to the next turn on its line names the new turn from then on', () => {
+  const w = world();
+  const page = (record) => w.taps.logbookEvent('pages', { tab: 4, kind: 'handoff', ...record });
+  page({ type: 'opened', job: 77, url: `${DMV}/portal/appointments/` });
+  page({ type: 'over', job: 77, how: 'taken' });
+  page({ type: 'reused', from: 77, job: 78 });
+  page({ type: 'navigating', job: 78, url: `${DMV}/portal/appointments/select-date` });
+  page({ type: 'closing', job: 78, why: 'spare' });
+  const got = w.events().map(w.strip);
+  assert.deepEqual(got, [
+    { k: 'tab.open', tab: 4, job: 77, kind: 'handoff', url: `${DMV}/portal/appointments/` },
+    { k: 'page.note', tab: 4, job: 77, type: 'over', how: 'taken' },
+    { k: 'page.note', tab: 4, job: 78, type: 'reused', from: 77 },
+    { k: 'page.go', tab: 4, job: 78, url: `${DMV}/portal/appointments/select-date` },
+    { k: 'page.note', tab: 4, job: 78, type: 'closing', why: 'spare' },
+  ]);
+});
+
 test('the site\'s exchanges: the routine ones counted elsewhere, the rest said without what was in them', () => {
   const w = world();
   w.taps.logbookEvent('site', { method: 'POST', path: '/api/client/sync', status: 200, ms: 40, body: { app_version: '1' }, reply: { positions: [] } });

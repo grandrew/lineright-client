@@ -128,6 +128,8 @@ class TraceTaps {
       this.tabs.set(r.tab, t);
     }
     if (r.job && !t.job) { t.job = r.job; t.booking = true; }
+    // A turn's tab handed on to the next turn on its line (main.js turnTab).
+    if (r.type === 'reused' && r.job) { t.job = r.job; t.booking = true; }
     return t;
   }
 
