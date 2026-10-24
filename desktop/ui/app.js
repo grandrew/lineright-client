@@ -26,7 +26,7 @@
     adviceGone: null,  // suggestion keys closed with ×, kept across syncs (advice.js)
     adviceNoted: '',
     situationPace: null,  // when the nearest-opening bar next comes back (situation.js)
-    situationNoted: '',
+    situationNoted: [],  // nearest-opening showings already announced (situation.js)
     situationPainted: '',
     adviceHold: null,     // last suggestion, kept across a short gap in sync (advice.js)
     situationTimer: null,
@@ -307,21 +307,27 @@
 
   function adviceGoneMap() {
     if (state.adviceGone) return state.adviceGone;
-    const gone = {};
+    let gone = {};
     try {
-      const raw = JSON.parse(localStorage.getItem('regbot.adviceGone') || '[]');
-      if (Array.isArray(raw)) for (const key of raw) if (typeof key === 'string') gone[key] = true;
+      gone = window.adviceBanner.loadGone(JSON.parse(localStorage.getItem('regbot.adviceGone') || '[]'));
     } catch { /* a dismiss this session still sticks in the map below */ }
     state.adviceGone = gone;
     return gone;
   }
 
-  function rememberAdviceGone(key) {
-    const gone = adviceGoneMap();
-    gone[key] = true;
+  /** Close this suggestion; it comes back if what it points to gets a day sooner (advice.js). */
+  function rememberAdviceGone(advice) {
+    state.adviceGone = window.adviceBanner.remember(adviceGoneMap(), advice);
     try {
-      localStorage.setItem('regbot.adviceGone', JSON.stringify(Object.keys(gone).slice(-40)));
+      localStorage.setItem('regbot.adviceGone', JSON.stringify(window.adviceBanner.saveGone(state.adviceGone)));
     } catch { /* still remembered until the page reloads */ }
+  }
+
+  /** The sync as the banner paints it: a suggestion that is closed or covered
+   *  is not there, so it does not hold back the nearest-opening bar. */
+  function paintedDoc() {
+    if (!window.adviceBanner || !window.adviceBanner.hold) return state.doc;
+    return window.adviceBanner.hold(state.doc, state.adviceHold, Date.now(), adviceGoneMap()).doc || state.doc;
   }
 
   function situationPace() {
@@ -334,6 +340,7 @@
           closed: Number(raw.closed) || 0,
           nextAt: Number(raw.nextAt),
           open: !!raw.open,
+          seen: raw.seen && typeof raw.seen === 'object' && !Array.isArray(raw.seen) ? raw.seen : {},
         };
         return state.situationPace;
       }
@@ -360,12 +367,12 @@
   function renderSituation(force, doc) {
     const box = $('situation');
     if (!box || !window.situationBar) return;
-    const decided = window.situationBar.visible(doc || state.doc, situationPace(), Date.now());
+    const decided = window.situationBar.visible(doc || paintedDoc(), situationPace(), Date.now());
     saveSituationPace(decided.pace);
     armSituation(decided.armIn);
     const show = decided.show;
     const news = window.situationBar.announced(state.situationNoted, show, decided.pace);
-    const painted = show ? news.noted : '';
+    const painted = show ? news.mark : '';
     if (!show) {
       if (!box.classList.contains('hidden')) {
         box.classList.add('hidden');
@@ -385,7 +392,6 @@
       <span class="actions"><button class="pill" data-act="dismiss" title="Dismiss">×</button></span>`;
     box.querySelector('[data-act=dismiss]').addEventListener('click', () => {
       saveSituationPace(window.situationBar.dismiss(situationPace(), Date.now()));
-      state.situationNoted = '';
       state.situationPainted = '';
       renderSituation(true, doc);
     });
@@ -446,7 +452,7 @@
         </span>`;
       row.querySelector('[data-act=apply]').addEventListener('click', () => doAdvice(advice));
       row.querySelector('[data-act=dismiss]').addEventListener('click', () => {
-        rememberAdviceGone(advice.key);
+        rememberAdviceGone(advice);
         renderBanner(true);
       });
       box.appendChild(row);
@@ -1390,7 +1396,7 @@
         }
       }
       toast('ok', reply.message || 'Updated.');
-      rememberAdviceGone(advice.key);
+      rememberAdviceGone(advice);
       renderBanner(true);
       if (state.route.page === 'board') renderBoard();
       if (state.route.page === 'console') renderConsole();

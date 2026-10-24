@@ -253,6 +253,29 @@ how many are missing; the join form warns before you send it, and a refusal
 opens the Credits screen with the pack that covers it marked and a way back to
 the line. On a practice server the packs are free, and say so.
 
+### A better opening, and the nearest one
+
+Every sync says, for your bids, the nearest opening the site knows of and,
+when one small change to a bid would take a sooner one, that change. The app
+shows them on two bars under the top one; neither changes anything by itself.
+
+* **A better opening** (`ui/advice.js`) names the change — a wider range, a
+  later reach, offices around the one you chose — and the opening it would
+  take, with a button that applies it. **×** closes it. It stays closed while
+  the same change is suggested, until the opening it points to is a day or
+  more sooner than the one it pointed to when you closed it; then it is back.
+* **Nearest opening** (`ui/situation.js`) says where and when, and why your
+  bid does not take it: outside your range, past your reach, another office,
+  or one you passed. It first appears 5 minutes after an opening becomes the
+  nearest, comes back 30 minutes after **×**, then every 5 hours. While it is
+  up, a new nearest opening takes its place at once. The nearest opening
+  changes back and forth as real ones come and go, so the app remembers the
+  last two dozen and their waits: one that comes back carries on where it
+  was, and is announced once.
+
+A turn, or a suggestion on the first bar, keeps the second bar out of the way
+without closing it. A suggestion you closed does not.
+
 ## Advanced: telemetry and diagnostics
 
 **Help → Advanced** (or **Settings → Advanced**) is how this app is doing, kept
@@ -769,7 +792,7 @@ tab at once.
 ## Tests
 
 ```bash
-npm test          # 347 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
+npm test          # 355 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
                   # the trace (what takes the person out of it — a random profile in every spelling — how it is kept,
                   # what it is made of, and a smoke run whose site asks for it), portal,
                   # updater, menu, profile, needs, autofill, what goes to the browser and the page's policy,

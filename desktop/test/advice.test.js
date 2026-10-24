@@ -52,3 +52,58 @@ test('the words name the change and the opening, and the button names the change
   assert.match(banner.sentence(offices), /within 15 miles of Santa Clara/);
   assert.equal(banner.actionLabel(offices), 'Add offices within 15 miles');
 });
+
+const later = {
+  bid_id: 2, kind: 'time', key: '2:time:2w', queue_name: 'Driver licence or ID card',
+  if_passed: '2w', from_if_passed: '5d', office_name: 'Los Gatos',
+  slot_date: '2026-11-03', slot_time: '09:40', miles: 8.2,
+};
+
+test('a closed suggestion leaves the nearest-opening bar free', () => {
+  const bar = require('../ui/situation');
+  const situation = { key: '2:LG:2026-11-03:09:40:t', queue_name: 'Driver licence or ID card', office_name: 'Los Gatos',
+    slot_date: '2026-11-03', slot_time: '09:40', outside_reach: true };
+  const doc = { advice: later, situation, handoffs: [] };
+  const shown = banner.hold(doc, null, 1000, {});
+  assert.equal(shown.doc.advice, later, 'a suggestion on the banner holds the second bar back');
+  const gone = banner.remember({}, later);
+  const painted = banner.hold(doc, null, 1000, gone);
+  assert.equal(painted.advice, null);
+  assert.equal(painted.doc.advice, null, 'closed, it is not in the sync as painted');
+  assert.equal(painted.doc.situation, situation);
+  const pace = { key: situation.key, closed: 0, nextAt: 0, open: true };
+  assert.equal(bar.visible(painted.doc, pace, 1000).show, situation);
+  assert.equal(doc.advice, later, 'the sync itself is left as it came');
+});
+
+test('a closed suggestion comes back when the opening it points to is a day sooner', () => {
+  const gone = banner.remember({}, later);
+  assert.equal(gone[later.key], banner.moment(later));
+  assert.equal(banner.visible({ advice: later, handoffs: [] }, gone), null, 'the same, still closed');
+  const hours = { ...later, slot_date: '2026-11-02', slot_time: '12:00' };
+  assert.equal(banner.visible({ advice: hours, handoffs: [] }, gone), null, '22 hours sooner is not enough');
+  const latest = { ...later, slot_date: '2026-11-05' };
+  assert.equal(banner.visible({ advice: latest, handoffs: [] }, gone), null, 'later stays closed');
+  const sooner = { ...later, office_name: 'San Jose', slot_date: '2026-10-26', slot_time: '10:50' };
+  assert.equal(banner.visible({ advice: sooner, handoffs: [] }, gone), sooner, 'eight days sooner comes back');
+  const again = banner.remember(gone, sooner);
+  assert.equal(banner.visible({ advice: sooner, handoffs: [] }, again), null, 'closed again, at the sooner one');
+  assert.equal(banner.visible({ advice: later, handoffs: [] }, again), null);
+  const undated = { ...later, slot_date: '' };
+  assert.equal(banner.visible({ advice: undated, handoffs: [] }, banner.remember({}, undated)), null);
+  assert.equal(banner.visible({ advice: sooner, handoffs: [] }, { [later.key]: true }), null, 'closed with no opening known');
+});
+
+test('what is closed is saved with its opening; a bare key saved before is forgotten', () => {
+  const gone = banner.remember(banner.remember({}, radius), later);
+  const saved = JSON.parse(JSON.stringify(banner.saveGone(gone)));
+  assert.deepEqual(saved, [[radius.key, banner.moment(radius)], [later.key, banner.moment(later)]]);
+  assert.deepEqual(banner.loadGone(saved), gone);
+  assert.deepEqual(banner.loadGone(['2:time:2w']), {}, 'saved before 0.3.8: shown once more');
+  assert.deepEqual(banner.loadGone([['2:time:2w', null], 'x', [3, 1], null]), { '2:time:2w': null });
+  assert.deepEqual(banner.loadGone({}), {});
+  let many = {};
+  for (let i = 0; i < 50; i += 1) many = banner.remember(many, { ...radius, key: `2:radius:${i}` });
+  assert.equal(Object.keys(many).length, 40);
+  assert.ok(many['2:radius:49'] && !('2:radius:9' in many), 'the latest are kept');
+});

@@ -99,3 +99,60 @@ test('a turn or a suggestion hides the notice and does not close it', () => {
   assert.equal(held.pace.open, true);
   assert.equal(bar.visible({ situation: both, handoffs: [], advice: null }, held.pace, now).show, both);
 });
+
+const sooner = { ...both, key: '2:CAP:2026-10-22:09:30:mt', office_name: 'Capitola', slot_time: '09:30' };
+
+test('an opening that comes back carries on with its own wait', () => {
+  const minute = 60 * 1000;
+  const a = bar.visible({ situation: both, handoffs: [] }, null, now);
+  assert.equal(a.pace.nextAt, now + bar.GAPS_MS[0]);
+  const b = bar.visible({ situation: sooner, handoffs: [] }, a.pace, now + 3 * minute);
+  assert.equal(b.show, null);
+  assert.equal(b.pace.nextAt, now + 3 * minute + bar.GAPS_MS[0], 'a new one waits its own 5 minutes');
+  const back = bar.visible({ situation: both, handoffs: [] }, b.pace, now + 4 * minute);
+  assert.equal(back.pace.nextAt, now + bar.GAPS_MS[0], 'back where it was, not 5 minutes from now');
+  assert.equal(bar.visible({ situation: both, handoffs: [] }, back.pace, now + 5 * minute).show, both);
+});
+
+test('while the bar is up, a new nearest opening takes its place at once', () => {
+  const up = bar.visible({ situation: both, handoffs: [] }, null, now);
+  const due = bar.visible({ situation: both, handoffs: [] }, up.pace, up.pace.nextAt);
+  assert.equal(due.show, both);
+  const moved = bar.visible({ situation: sooner, handoffs: [] }, due.pace, due.pace.nextAt + 1000);
+  assert.equal(moved.show, sooner);
+  assert.equal(moved.pace.closed, 0);
+});
+
+test('an opening closed and seen again keeps its longer wait', () => {
+  const due = bar.visible({ situation: both, handoffs: [] }, { key: both.key, closed: 0, nextAt: now, open: true }, now);
+  const closed = bar.dismiss(due.pace, now);
+  const other = bar.visible({ situation: sooner, handoffs: [] }, closed, now + 1000);
+  assert.equal(other.show, null, 'the bar was closed, so a new one waits');
+  const back = bar.visible({ situation: both, handoffs: [] }, other.pace, now + 2000);
+  assert.equal(back.show, null);
+  assert.equal(back.pace.closed, 1);
+  assert.equal(back.pace.nextAt, now + bar.GAPS_MS[1]);
+  const seen = JSON.parse(JSON.stringify(back.pace));
+  assert.equal(bar.visible({ situation: both, handoffs: [] }, seen, now + bar.GAPS_MS[1]).show, both, 'and it is saved');
+});
+
+test('openings changing back and forth are announced once each', () => {
+  const a = { key: both.key, closed: 0, nextAt: now, open: true };
+  const b = { key: sooner.key, closed: 0, nextAt: now, open: true };
+  const first = bar.announced([], both, a);
+  const second = bar.announced(first.noted, sooner, b);
+  const third = bar.announced(second.noted, both, a);
+  assert.deepEqual([first.log, second.log, third.log], [true, true, false]);
+  assert.equal(third.mark, `${both.key}:0`);
+  assert.equal(bar.announced(third.noted, both, { ...a, closed: 1 }).log, true, 'shown again after a close is news');
+  assert.equal(bar.announced('', both, a).log, true, 'a mark saved by an older app is read as one');
+});
+
+test('only the latest openings are remembered', () => {
+  let pace = null;
+  for (let i = 0; i < 40; i += 1) {
+    pace = bar.visible({ situation: { ...both, key: `k${i}` }, handoffs: [] }, pace, now + i).pace;
+  }
+  assert.ok(Object.keys(pace.seen).length <= 24);
+  assert.ok(pace.seen.k38 && !pace.seen.k0);
+});
