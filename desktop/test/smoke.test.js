@@ -27,8 +27,8 @@ function electronPath() {
 }
 
 function xvfb() {
-  // Windows always has a desktop to draw on, even for a session over SSH.
-  if (process.platform === 'win32') return { ok: true, prefix: [] };
+  // Windows and macOS always have a desktop to draw on, even for a session over SSH.
+  if (process.platform === 'win32' || process.platform === 'darwin') return { ok: true, prefix: [] };
   if (process.platform !== 'linux') return { ok: Boolean(process.env.DISPLAY), prefix: [] };
   if (spawnSync('which', ['xvfb-run']).status === 0) return { ok: true, prefix: ['xvfb-run', '-a'] };
   return { ok: Boolean(process.env.DISPLAY), prefix: [] };
@@ -298,7 +298,14 @@ test('the app opens the booking page when a hand-off arrives, and fills the form
   for (const want of ['File', 'Sites', 'View', 'Help']) assert.ok(labels.includes(want), `menu ${want} in ${labels}`);
   const file = result.menu.find((m) => /File/.test(m.label));
   assert.ok(file.items.some((i) => /Sign out/.test(i)), `signed in, so File offers Sign out: ${file.items}`);
-  assert.ok(file.items.some((i) => /E&?xit|close/.test(i)), `File ends with Exit: ${file.items}`);
+  // File ends with Exit on Windows and Linux; on macOS it closes the window, and
+  // quitting is in the app's own menu, first.
+  if (process.platform === 'darwin') {
+    assert.ok(file.items.some((i) => /Close Window/.test(i)), `File ends with Close Window: ${file.items}`);
+    assert.ok(result.menu[0].items.some((i) => /^Quit /.test(i)), `the app menu offers Quit: ${result.menu[0].items}`);
+  } else {
+    assert.ok(file.items.some((i) => /E&?xit|close/.test(i)), `File ends with Exit: ${file.items}`);
+  }
   assert.ok(file.items.some((i) => /Import from your browser/.test(i)), `File offers the import: ${file.items}`);
   // A profile with details already in it is not asked to import one, whatever
   // browsers this machine happens to have.
