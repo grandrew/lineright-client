@@ -1,8 +1,10 @@
-/* One suggestion on the banner. The server decides it (regbot/advice.py);
-   this only says whether it is still the row to show, and how to say it.
-   Dismissing one key leaves a later, different suggestion visible. A key
-   names the change, not the opening, so a closed one comes back when the
-   opening it points to is at least a day sooner than when it was closed. */
+/* One suggestion on the banner, and the best way to ask beside it. The
+   server decides both (regbot/advice.py); this only says whether each is
+   still a row to show, and how to say it. Dismissing one key leaves a later,
+   different suggestion visible. A key names the change, not the opening, so a
+   closed one comes back when the opening it points to is at least a day
+   sooner than when it was closed. A suggestion the server words itself
+   (`title`, `text`, `action`) is shown in its words. */
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -10,7 +12,13 @@
 })(typeof window !== 'undefined' ? window : globalThis, function () {
   'use strict';
 
-  const KINDS = { radius: true, time: true, offices: true };
+  // The three an opening open now is reached by, and the rest of the
+  // server's matrix: what would have caught the openings missed lately, the
+  // best way to ask, and turns that went unbooked.
+  const KINDS = {
+    radius: true, time: true, offices: true,
+    reach: true, date: true, range: true, nearby: true, raise: true, config: true, turns: true,
+  };
   // A sync that drops the suggestion for a moment does not take the bar down.
   // Two minutes is long enough for the board to flicker and short enough that
   // a suggestion which has really gone gets out of the way.
@@ -90,6 +98,17 @@
     return gone;
   }
 
+  /** The best way to ask, as its own bar: not when a turn owns the banner, not
+   *  when it is the suggestion already shown, and not once closed. */
+  function best(doc, gone, shown) {
+    const it = doc && doc.best;
+    if (!it || typeof it.key !== 'string' || !it.key || !KINDS[it.kind]) return null;
+    if (doc.handoffs && doc.handoffs.length) return null;
+    if (shown && shown.key === it.key) return null;
+    if (closed(it, gone)) return null;
+    return it;
+  }
+
   /** The suggestion to paint, keeping the last one across a short gap in sync.
    *  `doc` is the sync as painted: with no suggestion when none is shown, so a
    *  closed one does not hold back the nearest-opening bar (situation.js). */
@@ -103,7 +122,12 @@
     return { advice: null, at: 0, doc: doc && doc.advice ? Object.assign({}, doc, { advice: null }) : doc };
   }
 
+  function title(advice) {
+    return (advice && typeof advice.title === 'string' && advice.title) || 'A better opening';
+  }
+
   function sentence(advice, formatDate) {
+    if (advice && typeof advice.text === 'string' && advice.text) return advice.text;
     const date = formatDate ? formatDate(advice.slot_date) : (advice.slot_date || '');
     const when = `${date} at ${advice.slot_time || ''}`.replace(/\s+/g, ' ').trim();
     const away = advice.miles == null || advice.miles === '' ? '' : ` (${miles(advice.miles)} mi)`;
@@ -121,11 +145,17 @@
 
   function actionLabel(advice) {
     if (!advice) return '';
+    if (typeof advice.action === 'string' && advice.action) return advice.action;
     if (advice.kind === 'radius') return `Widen to ${miles(advice.radius_miles)} miles`;
     if (advice.kind === 'time') return `Look ${REACH_SHORT[advice.if_passed] || advice.if_passed || ''} out`;
     if (advice.kind === 'offices') return `Add offices within ${miles(advice.radius_miles)} miles`;
     return '';
   }
 
-  return { visible, hold, remember, saveGone, loadGone, moment, HOLD_MS, SOONER_MS, sentence, actionLabel, miles };
+  /** Whether applying it is a change to the bid the site makes (not a setting here). */
+  function changes(advice) {
+    return Boolean(advice && (advice.change || ['radius', 'time', 'offices'].includes(advice.kind)));
+  }
+
+  return { visible, best, hold, remember, saveGone, loadGone, moment, HOLD_MS, SOONER_MS, title, sentence, actionLabel, changes, miles };
 });

@@ -256,14 +256,27 @@ the line. On a practice server the packs are free, and say so.
 ### A better opening, and the nearest one
 
 Every sync says, for your bids, the nearest opening the site knows of and,
-when one small change to a bid would take a sooner one, that change. The app
-shows them on two bars under the top one; neither changes anything by itself.
+when a change to a bid would do better, that change. The app shows them on
+bars under the top one; none changes anything by itself.
 
-* **A better opening** (`ui/advice.js`) names the change — a wider range, a
-  later reach, offices around the one you chose — and the opening it would
-  take, with a button that applies it. **×** closes it. It stays closed while
-  the same change is suggested, until the opening it points to is a day or
-  more sooner than the one it pointed to when you closed it; then it is back.
+* **Your bid widened by itself** (`ui/widened.js`) comes first when it has: a
+  bid whose time passed with nothing booked looks a step further — 5 hours
+  becomes a day, 5 days two weeks — and again each day it stays unbooked (the
+  site's `widen.py`). It says how far it looks now and up to when, and that
+  **Settings → Bidding → Widen my bids by themselves** turns it off. A bid's own
+  board has the same switch for that bid alone, and so does the join form.
+* **A better opening**, and the rest of the site's suggestions
+  (`ui/advice.js`), name a change and why, with a button that applies it: an
+  opening open now that a wider range, a longer reach or the offices around
+  the one you chose would take; or, looking back over the last two days, what
+  would have caught the openings the bid missed — a longer reach, a later
+  date, a wider range, a higher bid; or that the bid takes nothing now; or
+  that turns came and went unbooked (its button opens Settings, where the app
+  can book by itself). **×** closes one. It stays closed while the same change
+  is suggested, until what it points to is a day or more sooner than when you
+  closed it; then it is back.
+* **Best bet** is the way of asking most likely to book, with its chance and
+  your bid's, when it is clearly likelier. **Use this** makes that change.
 * **Nearest opening** (`ui/situation.js`) says where and when, and why your
   bid does not take it: outside your range, past your reach, another office,
   or one you passed. It first appears 5 minutes after an opening becomes the
@@ -275,6 +288,17 @@ shows them on two bars under the top one; neither changes anything by itself.
 
 A turn, or a suggestion on the first bar, keeps the second bar out of the way
 without closing it. A suggestion you closed does not.
+
+### Three ways to ask
+
+The join form shows three ways to ask for the line, each with its chance of
+an appointment by the date it ends: the soonest with an even chance, the best
+bet, and the surest (`ui/options.js`). The site works them out from the
+openings its apps have seen on the line over the last week, at your offices
+and a little wider, against the bids ahead of yours (the site's `chances.py`).
+Picking one fills the form in; nothing is placed until you bid. Above them it
+says the chance of the form as you filled it in. It is an estimate: next week
+is taken to be like last week, so the app says "about".
 
 ## Advanced: telemetry and diagnostics
 
@@ -792,7 +816,7 @@ tab at once.
 ## Tests
 
 ```bash
-npm test          # 355 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
+npm test          # 368 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
                   # the trace (what takes the person out of it — a random profile in every spelling — how it is kept,
                   # what it is made of, and a smoke run whose site asks for it), portal,
                   # updater, menu, profile, needs, autofill, what goes to the browser and the page's policy,

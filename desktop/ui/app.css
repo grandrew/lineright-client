@@ -112,6 +112,7 @@ body.has-tabs #tabbar{display:flex}
 .banner-row .steps{display:inline-block; margin-top:2px}
 .banner-row.ended-ok .mark, .banner-row.ended-ok .text b{color:var(--ok)}
 .banner-row.ended-bad .mark, .banner-row.ended-bad .text b{color:var(--bad)}
+.banner-row.widened .mark, .banner-row.widened .text b{color:var(--accent)}
 #situation{display:flex; align-items:center; gap:12px; padding:6px 14px; background:var(--surface-2); border-bottom:1px solid var(--line)}
 #situation .mark{font-size:16px; color:var(--muted)}
 #situation .text{flex:1; min-width:0; font-size:13px; color:var(--text)}
@@ -354,3 +355,15 @@ body.mode-tab #statusline{display:none}
 .quote-opt .q-what{font-size:12.5px}
 .quote-opt .q-delta{font-family:var(--mono); font-size:12px; color:var(--muted); text-align:right}
 .quote-opt .q-when{grid-column:2 / 4; font-size:11.5px; color:var(--muted)}
+/* Three ways to ask, beside the join form (options.js) */
+.bid-options{margin:4px 0 12px}
+.bid-opts{display:flex; flex-direction:column; gap:6px}
+.bid-opt{display:grid; grid-template-columns:1fr auto; gap:1px 10px; align-items:baseline; text-align:left; padding:8px 10px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:var(--surface); color:var(--text); font:inherit; cursor:pointer}
+.bid-opt:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.bid-opt .bo-label{font-weight:700; font-size:12.5px}
+.bid-opt .bo-chance{font-family:var(--mono); font-weight:700; text-align:right}
+.bid-opt .bo-chance.ok{color:var(--ok)} .bid-opt .bo-chance.warn{color:var(--gold)} .bid-opt .bo-chance.bad{color:var(--bad)}
+.bid-opt .bo-by{grid-column:1 / 3; font-size:11.5px; color:var(--muted); text-align:right}
+.bid-opt .bo-asks{grid-column:1 / 3; font-size:12px}
+.bid-opt .bo-likely{grid-column:1 / 3; font-size:11.5px; color:var(--muted)}
+b.ok{color:var(--ok)} b.warn{color:var(--gold)} b.bad{color:var(--bad)}

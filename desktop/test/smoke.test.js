@@ -1238,6 +1238,140 @@ test('a bid is changed from its board: priced as it is, priced wider, then saved
 });
 
 /**
+ * A regbot site whose bid widened by itself, with a suggestion and a best way
+ * to ask for it, and a second line to join, where the form gets three ways to
+ * ask (the site's widen.py, advice.py and outlook.py).
+ */
+async function outlookStub() {
+  const seen = { options: [], prefs: [], advice: [] };
+  let autoWiden = true;
+  const widened = { key: 'w:7', bid_id: 5, queue_id: 8, queue_name: 'REAL ID application', from_if_passed: '5d',
+    if_passed: '2w', until: '2026-11-03 11:30', at: '2026-10-25T18:31:00Z', chance: 0.99, chance_until: '2026-11-03 11:30' };
+  const advice = { bid_id: 5, queue_id: 8, queue_name: 'REAL ID application', kind: 'reach', key: '5:reach:1mo',
+    title: 'What would have worked', action: 'Look 1 month out', change: { if_passed: '1mo' }, if_passed: '1mo',
+    text: 'In the last 2 days, 4 openings from Mon Oct 26 to Thu Oct 29 came up at your offices, later than your reach.',
+    office_name: 'San Jose', slot_date: '2026-10-26', slot_time: '10:50' };
+  const best = { bid_id: 5, queue_id: 8, queue_name: 'REAL ID application', kind: 'config', key: '5:config:v1:2w',
+    title: 'Best bet', action: 'Use this', text: 'Within 15 mi of 95050, anything up to Thu Oct 29 at 12:00, then 2 weeks more: about 97%.',
+    change: { preferred_date: '2026-10-29', preferred_time: '12:00', if_passed: '2w' }, slot_date: '2026-10-29', slot_time: '12:00' };
+  const option = (label, date, time, chance, place) => ({ key: `v0:${date}T${time}:1d`, label, place, preferred_date: date, preferred_time: time,
+    if_passed: '1d', until: `${date} ${time}`, chance, likely_by: null, place_text: place ? 'Within 15 mi of 95050' : 'Within 10 mi of 95050' });
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    const read = () => new Promise((resolve) => { let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => resolve(b ? JSON.parse(b) : {})); });
+    if (url.pathname === '/api/client/sites') return json(200, { protocol: 'RQP/1', sites: [] });
+    if (url.pathname === '/api/client/sync') {
+      return json(200, { protocol: 'RQP/1', poll_after_ms: 1500, user: { id: 1, nickname: 'ada', balance: 455, escrow: 45 },
+        positions: [{ bid_id: 5, queue_id: 8, queue_name: 'REAL ID application', site_slug: 'ca-dmv', site_name: 'California DMV', rank: 1, field_size: 1,
+          amount: 45, status: 'active', note: '', preferred_date: '2026-10-20', preferred_time: '11:30', if_passed: '2w', auto_widen: autoWiden,
+          widened_at: '2026-10-25T18:31:00Z', window: ['2026-10-01', '2026-12-31'], hours: ['08:00', '17:00'] }],
+        handoffs: [], settled: [], reports: [], advice, best, widened: [widened], prefs: { auto_widen: autoWiden } });
+    }
+    if (url.pathname === '/api/client/queues/9') {
+      return json(200, { protocol: 'RQP/1', kind: 'client.board',
+        queue: { id: 9, slug: 'license-id', name: 'Driver licence or ID card', description: '', status: 'open', window: ['2026-10-01', '2026-12-31'],
+          hours: ['08:00', '17:00'], weekdays: 'Mon–Fri', timezone: 'America/Los_Angeles', min_bid: 45, slots_per_cycle: 2, cycle_seconds: 80,
+          dispatch: 'offers', site_slug: 'ca-dmv', site_name: 'California DMV', accent: '#0b63d6', connector: 'dmv.ca.gov.qmatic', mock: false, next_dispatch_in: 30 },
+        bids: [], mine: null, handoff: null, field_size: 0, to_lead: 45, min_raise: 5, default_date: '2026-10-27',
+        fields: [
+          { key: 'office_mode', label: 'Which offices will you accept?', type: 'select', required: true,
+            options: [{ label: 'One specific office', value: 'specific' }, { label: 'Any office within range of me', value: 'radius' }] },
+          { key: 'origin', label: 'Measure the range from', type: 'text', required: true, when: { key: 'office_mode', equals: 'radius' } },
+          { key: 'radius_miles', label: 'Within', type: 'number', required: true, when: { key: 'office_mode', equals: 'radius' } }],
+        kept_on_device: [], prefs: { auto_widen: autoWiden }, portal_url: 'http://127.0.0.1:9/' });
+    }
+    if (url.pathname === '/api/client/queues/9/options') {
+      return read().then((body) => {
+        seen.options.push(body);
+        json(200, { protocol: 'RQP/1', kind: 'client.options', queue_id: 9,
+          draft: { chance: 0.04, until: '2026-10-28 17:00', likely_by: null, place_text: 'Within 10 mi of 95050', offices: 3 },
+          options: [option('Soonest likely', '2026-10-29', '09:00', 0.83, null), option('Best bet', '2026-10-29', '12:00', 0.87, null),
+            option('Surest', '2026-10-30', '09:00', 0.99, { office_mode: 'radius', origin: '95050', radius_miles: 15 })],
+          basis: { days: 7, openings: 198, offices: 3, offices_seen: 3, rough: false } });
+      });
+    }
+    if (url.pathname === '/api/client/preferences') {
+      return read().then((body) => {
+        seen.prefs.push(body);
+        autoWiden = Boolean(body.auto_widen);
+        json(200, { ok: true, prefs: { auto_widen: autoWiden }, bids_changed: 1,
+          message: autoWiden ? 'Your bids widen by themselves once their time passes.' : 'Your bids no longer widen by themselves.' });
+      });
+    }
+    if (url.pathname === '/api/client/bids/5/advice') {
+      return read().then((body) => { seen.advice.push(body); json(200, { ok: true, bid_id: 5, queue_id: 8, message: 'Now then within 1 month.' }); });
+    }
+    res.writeHead(404); res.end();
+    return undefined;
+  });
+  const port = await listen(server);
+  return { server, seen, port };
+}
+
+test('a bid that widened by itself says so on top, with the suggestion and the best bet under it; the join form offers three ways; Settings switches it',
+  { timeout: 120000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+  const { server, seen, port } = await outlookStub();
+  t.after(() => server.close());
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-outlook-'));
+  const run = startApp({ electron, display, port, userData, exitAfter: 25000,
+    extra: ['--remote-debugging-port=0', '--page=board:9'] });
+  let ui = null;
+  try {
+    const devPort = Number(await until(() => fs.readFileSync(path.join(userData, 'DevToolsActivePort'), 'utf8').split('\n')[0], 30000, 'DevTools'));
+    ui = await pageWhere(devPort, (u) => u.endsWith('/ui/index.html'), 'the app page');
+
+    // The bars, in order: what happened, then what to do, then the best way to ask.
+    const rows = await until(async () => {
+      const got = await ui.evaluate("[...document.querySelectorAll('#banner .banner-row')].map((r) => r.querySelector('.text b').textContent)");
+      return got.length === 3 && got;
+    }, 30000, 'three bars');
+    assert.deepEqual(rows, ['Your bid widened by itself', 'What would have worked', 'Best bet']);
+    const top = await ui.evaluate("document.querySelector('#banner .banner-row.widened').innerText");
+    assert.match(top, /looks 2 weeks past your time instead of 5 days/);
+    assert.match(top, /about 99% chance of an appointment/);
+    assert.match(top, /Settings → Bidding/);
+
+    // The join form asks how each way would do, and one fills it in.
+    const box = () => ui.evaluate("(document.getElementById('bidOptions') || {}).innerText || ''");
+    assert.match(await until(async () => { const s = await box(); return /Surest/.test(s) && s; }, 15000, 'three ways to ask'),
+      /under 5%[\s\S]*Soonest likely[\s\S]*about 83%[\s\S]*Best bet[\s\S]*Surest[\s\S]*about 99%/);
+    assert.deepEqual(Object.keys(seen.options[0]).sort(), ['amount', 'fields', 'if_passed', 'preferred_date', 'preferred_time']);
+    assert.equal(await ui.evaluate("document.getElementById('join-autowiden').checked"), true, 'on, as the person chose');
+    await ui.evaluate("document.querySelectorAll('#bidOptions [data-option]')[2].click()");
+    const filled = await ui.evaluate("(() => { const f = document.getElementById('bidForm'); return ['office_mode', 'origin', 'radius_miles', 'preferred_date', 'preferred_time', 'if_passed'].map((n) => f.querySelector(`[name=${n}]`).value); })()");
+    assert.deepEqual(filled, ['radius', '95050', '15', '2026-10-30', '09:00', '1d']);
+    await until(() => seen.options.some((o) => o.preferred_date === '2026-10-30' && o.fields.radius_miles === '15'), 10000, 'the filled form asked about');
+
+    // The suggestion is applied by its key.
+    await ui.evaluate("[...document.querySelectorAll('#banner .banner-row')][1].querySelector('[data-act=apply]').click()");
+    await until(() => seen.advice.length === 1, 10000, 'the suggestion applied');
+    assert.deepEqual(seen.advice[0], { key: '5:reach:1mo' });
+
+    // Settings → Bidding, from the bar, turns it off for every bid.
+    await ui.evaluate("document.querySelector('#banner .banner-row.widened [data-act=settings]').click()");
+    await until(() => ui.evaluate("Boolean(document.getElementById('s-autowiden'))"), 10000, 'Settings → Bidding');
+    assert.equal(await ui.evaluate("document.getElementById('s-autowiden').checked"), true);
+    await ui.evaluate("document.getElementById('s-autowiden').click()");
+    await until(() => seen.prefs.length === 1, 10000, 'the choice sent');
+    assert.deepEqual(seen.prefs[0], { auto_widen: false });
+
+    // Closing the widening bar keeps it closed.
+    await ui.evaluate("document.querySelector('#banner .banner-row.widened [data-act=dismiss]').click()");
+    await new Promise((r) => setTimeout(r, 2500));
+    assert.equal(await ui.evaluate("document.querySelectorAll('#banner .banner-row.widened').length"), 0);
+  } finally {
+    if (ui) ui.close();
+  }
+  const result = await run.result;
+  assert.equal(result.server, `http://127.0.0.1:${port}`);
+});
+
+/**
  * A regbot site that asks for the app's trace: every sync answers how far it has
  * it, and once the app has a turn's worth written down, asks for it — once —
  * and takes the gzipped answer, as lineright-server's traces.py does.

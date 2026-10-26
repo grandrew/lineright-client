@@ -44,7 +44,7 @@ const needs = require('./needs');
 const { buildFillScript, isBookingPage, originOf } = require('./autofill');
 const { webPage, paymentPage, approvalPage } = require('./links');
 const { prefillFromUrl } = require('./portal');
-const { outsideReach } = require('./reach');
+const { outsideReach, reachFor } = require('./reach');
 const turnTabs = require('./turntabs');
 const { guideScript } = require('./dmv-guide');
 const menu = require('./menu');
@@ -862,7 +862,7 @@ function rememberReach(bidId, code) {
 function chosenReach(h) {
   const remembered = (store.get('reaches') || {})[String(h.bid_id)];
   const pos = lastDoc && (lastDoc.positions || []).find((p) => p.bid_id === h.bid_id);
-  return remembered || (pos && pos.if_passed) || '';
+  return reachFor(pos, remembered);
 }
 
 /**
@@ -1905,6 +1905,13 @@ function wireIpc() {
     return r;
   });
   handle('server:quote', ({ bid_id, change }) => client.quoteBid(bid_id, change));
+  handle('server:options', ({ queue_id, draft }) => client.bidOptions(queue_id, draft));
+  handle('server:widen-options', ({ bid_id }) => client.widenOptions(bid_id));
+  handle('server:prefs', async (prefs) => {
+    const r = await client.setPreferences(prefs);
+    loop.poke();
+    return r;
+  });
   handle('server:change', async ({ bid_id, change }) => {
     const r = await client.changeBid(bid_id, change);
     // The reach the app passes openings by is the one just saved.

@@ -16,6 +16,46 @@ test('a suggestion is shown, and a turn on the banner hides it', () => {
   assert.equal(banner.visible({ advice: { kind: 'other', key: 'x' } }, {}), null);
 });
 
+// The server's matrix (regbot/advice.py) words its own suggestions.
+const reach = {
+  bid_id: 2, kind: 'reach', key: '2:reach:2w', queue_name: 'Driver licence',
+  title: 'What would have worked',
+  text: 'In the last 2 days, 35 openings from Mon Oct 26 to Tue Nov 3 came up at your offices after your bid had stopped taking that late.',
+  action: 'Look 2 weeks out', change: { if_passed: '2w' }, if_passed: '2w',
+  office_name: 'Santa Clara', slot_date: '2026-10-26', slot_time: '08:00',
+};
+const best = {
+  bid_id: 2, kind: 'config', key: '2:config:v0:5d', title: 'Best bet',
+  text: 'Within 10 mi of 95050, anything up to Sun Oct 25 at 12:00, then 5 days more: about 99%.',
+  action: 'Use this', change: { preferred_date: '2026-10-25', preferred_time: '12:00', if_passed: '5d' },
+  slot_date: '2026-10-25', slot_time: '12:00', chance: 0.99, chance_now: 0,
+};
+
+test('a suggestion the site words itself is shown in its words', () => {
+  assert.equal(banner.visible({ advice: reach, handoffs: [] }, {}), reach);
+  assert.equal(banner.title(reach), 'What would have worked');
+  assert.equal(banner.sentence(reach), reach.text);
+  assert.equal(banner.actionLabel(reach), 'Look 2 weeks out');
+  assert.ok(banner.changes(reach));
+  assert.equal(banner.title(radius), 'A better opening', 'one from before keeps its title');
+  assert.match(banner.sentence(radius), /Widen the range from 5 to 15 miles/);
+  const turns = { bid_id: 2, kind: 'turns', key: '2:turns:2', text: 'Two went unbooked.', action: 'Open Settings', change: null };
+  assert.equal(banner.visible({ advice: turns, handoffs: [] }, {}), turns);
+  assert.equal(banner.changes(turns), false, 'a setting here, not a change to the bid');
+});
+
+test('the best way to ask is its own bar, unless it is the suggestion or closed', () => {
+  const doc = { advice: reach, best, handoffs: [] };
+  assert.equal(banner.best(doc, {}, reach), best);
+  assert.equal(banner.best({ ...doc, best: { ...best, key: reach.key } }, {}, reach), null, 'not twice');
+  assert.equal(banner.best({ ...doc, handoffs: [{ job_id: 1 }] }, {}, reach), null, 'a turn owns the banner');
+  assert.equal(banner.best(doc, banner.remember({}, best), reach), null);
+  const sooner = { ...best, slot_date: '2026-10-23' };
+  assert.equal(banner.best({ ...doc, best: sooner }, banner.remember({}, best), reach), sooner,
+    'back when what it asks for is two days sooner');
+  assert.equal(banner.best({ advice: null, best: null }, {}, null), null);
+});
+
 test('a suggestion that drops out of one sync stays up for two minutes', () => {
   const doc = { advice: radius, handoffs: [] };
   const first = banner.hold(doc, null, 1000, {});

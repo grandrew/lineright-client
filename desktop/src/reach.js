@@ -66,4 +66,15 @@ function outsideReach({ preferredDate, preferredTime, code, slotDate, slotTime, 
   return slot > end || slot < now;
 }
 
-module.exports = { CODES, wall, reachEnd, outsideReach };
+/**
+ * The reach a turn is held to: the bid's own as the server sends it, which
+ * may have widened by itself since it was chosen here (the regbot site's
+ * widen.py), and the one remembered on this computer only when the server
+ * sends none (a server from before the choice existed).
+ */
+function reachFor(position, remembered) {
+  const sent = position && CODES.includes(position.if_passed) ? position.if_passed : '';
+  return sent || (CODES.includes(remembered) ? remembered : '') || '';
+}
+
+module.exports = { CODES, wall, reachEnd, outsideReach, reachFor };

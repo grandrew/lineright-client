@@ -29,6 +29,9 @@
     situationNoted: [],  // nearest-opening showings already announced (situation.js)
     situationPainted: '',
     adviceHold: null,     // last suggestion, kept across a short gap in sync (advice.js)
+    bestNoted: '',
+    widenedGone: null, // widening notices closed with × (widened.js)
+    options: null,     // the join form's three ways to ask: {queueId, key, doc, busy, error} (options.js)
     situationTimer: null,
     ended: [],         // turns that ended lately, and how: [{job_id, at, kind, text}] (endedTurns)
     consoleTab: 'positions',
@@ -70,6 +73,11 @@
   function prettyDate(iso) {
     const d = new Date(`${iso}T00:00:00`);
     return Number.isNaN(d.getTime()) ? (iso || '—') : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  /** A date this year without the year: "Tue, Nov 3". */
+  function shortDate(iso) {
+    const d = new Date(`${iso}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? (iso || '—') : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
   }
   const REACHES = [
     ['1h', 'Book in the nearest 1 hour'],
@@ -323,6 +331,23 @@
     } catch { /* still remembered until the page reloads */ }
   }
 
+  function widenedGoneList() {
+    if (state.widenedGone) return state.widenedGone;
+    let gone = [];
+    try {
+      gone = window.widenedBar.loadGone(JSON.parse(localStorage.getItem('regbot.widenedGone') || '[]'));
+    } catch { /* a close this session still sticks in the list below */ }
+    state.widenedGone = gone;
+    return gone;
+  }
+
+  function rememberWidenedGone(key) {
+    state.widenedGone = window.widenedBar.remember(widenedGoneList(), key);
+    try {
+      localStorage.setItem('regbot.widenedGone', JSON.stringify(state.widenedGone));
+    } catch { /* still remembered until the page reloads */ }
+  }
+
   /** The sync as the banner paints it: a suggestion that is closed or covered
    *  is not there, so it does not hold back the nearest-opening bar. */
   function paintedDoc() {
@@ -418,13 +443,19 @@
     state.adviceHold = kept.advice ? { advice: kept.advice, at: kept.at } : null;
     const advice = kept.advice;
     renderSituation(false, kept.doc || state.doc);
-    const adviceMark = advice ? `${advice.key}|${advice.office_code || ''}|${advice.slot_date || ''}|${advice.slot_time || ''}` : '';
+    // A bid that widened by itself says so on top, and the likeliest way to
+    // ask sits under the suggestion (the site's widen.py and advice.py).
+    const widened = window.widenedBar ? window.widenedBar.visible(state.doc, widenedGoneList()) : [];
+    const best = window.adviceBanner && window.adviceBanner.best
+      ? window.adviceBanner.best(state.doc, adviceGoneMap(), advice) : null;
+    const adviceMark = advice ? `${advice.key}|${advice.office_code || ''}|${advice.slot_date || ''}|${advice.slot_time || ''}|${advice.text || ''}` : '';
     const key = handoffs.map((h) => `${h.job_id}:${h.phase}:${h.booker ? `${h.booker.name}:${h.booker.silent}` : ''}:${h.over ? h.over.kind : ''}`).join(',')
-      + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}|${adviceMark}`;
+      + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}|${adviceMark}`
+      + `|${widened.map((w) => w.key).join(',')}|${best ? `${best.key}|${best.text || ''}` : ''}`;
     if (!force && key === state.bannerKey) { tickClocks(); return; }
     state.bannerKey = key;
     box.innerHTML = '';
-    if (!handoffs.length && !state.ended.length && !advice) { box.classList.add('hidden'); fit(); return; }
+    if (!handoffs.length && !state.ended.length && !advice && !widened.length && !best) { box.classList.add('hidden'); fit(); return; }
     box.classList.remove('hidden');
     for (const e of state.ended) {
       const row = document.createElement('div');
@@ -438,29 +469,50 @@
       });
       box.appendChild(row);
     }
-    if (advice) {
+    for (const w of widened) {
       const row = document.createElement('div');
-      row.className = 'banner-row advice';
-      const line = advice.queue_name ? `${advice.queue_name} — ` : '';
-      const said = window.adviceBanner.sentence(advice, prettyDate);
-      row.innerHTML = `<span class="mark">↑</span>
-        <span class="text"><b>A better opening</b> · ${esc(line + said)}
-          <br><span class="tiny">Nothing changes until you apply this.</span></span>
+      row.className = 'banner-row widened';
+      const said = window.widenedBar.sentence(w, shortDate);
+      row.innerHTML = `<span class="mark">↔</span>
+        <span class="text"><b>Your bid widened by itself</b> · ${esc(said)}
+          <br><span class="tiny">To stop this, turn off “Widen my bids by themselves” in Settings → Bidding.</span></span>
         <span class="actions">
-          <button class="pill primary" data-act="apply">${esc(window.adviceBanner.actionLabel(advice))}</button>
+          <button class="pill" data-act="settings">Settings</button>
           <button class="pill" data-act="dismiss" title="Dismiss">×</button>
         </span>`;
-      row.querySelector('[data-act=apply]').addEventListener('click', () => doAdvice(advice));
+      row.querySelector('[data-act=settings]').addEventListener('click', () => go('settings'));
       row.querySelector('[data-act=dismiss]').addEventListener('click', () => {
-        rememberAdviceGone(advice);
+        rememberWidenedGone(w.key);
         renderBanner(true);
       });
       box.appendChild(row);
-      if (state.adviceNoted !== advice.key) {
-        state.adviceNoted = advice.key;
-        uiNote('banner', `recommendation ${advice.key} — ${said}`);
-      }
     }
+    const suggestionRow = (item, mark, noted) => {
+      const row = document.createElement('div');
+      row.className = `banner-row advice${item.kind === 'config' ? ' best' : ''}`;
+      const line = item.queue_name ? `${item.queue_name} — ` : '';
+      const said = window.adviceBanner.sentence(item, prettyDate);
+      const changes = window.adviceBanner.changes(item);
+      row.innerHTML = `<span class="mark">${mark}</span>
+        <span class="text"><b>${esc(window.adviceBanner.title(item))}</b> · ${esc(line + said)}
+          <br><span class="tiny">${changes ? 'Nothing changes until you apply this.' : 'This is a setting on this computer.'}</span></span>
+        <span class="actions">
+          <button class="pill primary" data-act="apply">${esc(window.adviceBanner.actionLabel(item))}</button>
+          <button class="pill" data-act="dismiss" title="Dismiss">×</button>
+        </span>`;
+      row.querySelector('[data-act=apply]').addEventListener('click', () => doAdvice(item));
+      row.querySelector('[data-act=dismiss]').addEventListener('click', () => {
+        rememberAdviceGone(item);
+        renderBanner(true);
+      });
+      box.appendChild(row);
+      if (state[noted] !== item.key) {
+        state[noted] = item.key;
+        uiNote('banner', `recommendation ${item.key} — ${said}`);
+      }
+    };
+    if (advice) suggestionRow(advice, advice.kind === 'config' ? '★' : '↑', 'adviceNoted');
+    if (best) suggestionRow(best, '★', 'bestNoted');
     for (const h of handoffs) {
       const row = document.createElement('div');
       row.className = 'banner-row';
@@ -1087,6 +1139,9 @@
         : !byOffers(q) && m.rank <= q.slots_per_cycle ? '<p class="small ok" style="margin:4px 0 0">✓ In the hand-off window — your turn comes on the next cycle.</p>'
         : `<p class="small muted" style="margin:4px 0 0"><span id="toLead">${coins(b.to_lead)}</span> takes the lead right now.</p>`}
       ${m.status === 'active' ? reachSelect(shownReach(m), m.bid_id) : ''}
+      ${m.status === 'active' && typeof m.auto_widen === 'boolean' ? `<div class="check" style="margin:8px 0 0"><input type="checkbox" id="mine-autowiden" data-auto-widen="${num(m.bid_id)}" ${m.auto_widen ? 'checked' : ''}>
+        <label for="mine-autowiden"><span class="small">Widen by itself until it books</span>
+        <span class="field-help">Once that time passes with nothing booked, the reach climbs a step, and again each day after.${m.widened_at ? ` It last widened ${esc(ago(m.widened_at))}.` : ''}</span></label></div>` : ''}
       ${inner}
     </div>`;
   }
@@ -1122,8 +1177,13 @@
             ${REACHES.map(([value, label]) => `<option value="${esc(value)}"${value === '1d' ? ' selected' : ''}>${esc(label)}</option>`).join('')}
           </select>
           <span class="field-help">Until that moment, an earlier opening is taken. Once it has passed, the nearest later opening within this reach is taken. Nothing farther out is offered.</span></label>
+        ${b.prefs && typeof b.prefs.auto_widen === 'boolean' ? `<div class="check"><input type="checkbox" name="auto_widen" id="join-autowiden" ${b.prefs.auto_widen ? 'checked' : ''}>
+          <label for="join-autowiden"><span class="small"><b>Widen by itself until it books</b></span>
+          <span class="field-help">If that time passes with nothing booked, the reach climbs a step — 5 hours to a day, 5 days to two weeks — and again each day after, until a booking comes. It keeps its amount and its place. Settings → Bidding turns this off for every bid.</span></label></div>` : ''}
         ${b.fields.length ? `<div class="sep"></div><div class="panel-title" style="margin-bottom:10px">${esc(q.site_name)} needs to know</div>${b.fields.map((f) => fieldHtml(f, values)).join('')}` : ''}
         ${kept.length ? `<div class="sep"></div><div class="panel-title" style="margin-bottom:10px">Kept on this machine</div>${keptList(b)}<p class="tiny muted" style="margin:8px 0 0">Typed into the booking form from <a id="join-profile">your profile</a>, never sent to LineRight Regbot.</p>` : ''}
+        <div class="sep"></div>
+        <div id="bidOptions" class="bid-options"></div>
         <button class="btn btn-accent btn-block" type="submit" style="margin-top:12px">${gap.length ? 'Add your details to join' : 'Pay bid &amp; take a position'}</button>
         <p class="tiny muted" style="margin:8px 0 0; text-align:center">You have ${coins(state.doc && state.doc.user ? state.doc.user.balance : 0)} to spend · <a data-go-credits>buy credits</a></p>
         <div id="bidError" class="note bad hidden" style="margin-top:10px"></div>
@@ -1149,6 +1209,19 @@
     for (const sel of page.querySelectorAll('[data-if-passed]')) {
       sel.addEventListener('change', () => { if (sel.value) doIfPassed(Number(sel.dataset.ifPassed), sel.value); });
     }
+    for (const box of page.querySelectorAll('[data-auto-widen]')) {
+      box.addEventListener('change', async () => {
+        const bidId = Number(box.dataset.autoWiden);
+        try {
+          const r = await call('server:change', { bid_id: bidId, change: { auto_widen: box.checked } });
+          toast('ok', r.message);
+          if (state.board && state.board.mine && state.board.mine.bid_id === bidId) state.board.mine.auto_widen = box.checked;
+        } catch (err) {
+          box.checked = !box.checked;
+          toast('bad', err.message, 9000);
+        }
+      });
+    }
     on('#withdraw', async () => {
       if (!window.confirm(`Withdraw and get ${coins(b.mine.amount)} back?`)) return;
       try { const r = await call('server:withdraw', { bid_id: b.mine.bid_id }); toast('ok', r.message); state.board = null; renderBoard(); }
@@ -1160,6 +1233,12 @@
     if (form) {
       applyWhen(form, b.fields);
       form.addEventListener('change', () => applyWhen(form, b.fields));
+      // The three ways to ask follow the form, a moment after it stops changing.
+      let optionsTimer = null;
+      const again = () => { clearTimeout(optionsTimer); optionsTimer = setTimeout(() => requestOptions(b, form), 600); };
+      form.addEventListener('input', again);
+      form.addEventListener('change', again);
+      requestOptions(b, form);
       // Said before it is sent: the site refuses a bid the credits do not cover
       // (and is the one that decides — this is only the balance it last sent).
       const shortBox = form.querySelector('#bidShort');
@@ -1182,6 +1261,7 @@
           fields[f.key] = el.type === 'checkbox' ? el.checked : el.value;
         }
         const body = { queue_id: b.queue.id, amount: Number(form.amount.value), preferred_date: form.preferred_date.value, preferred_time: form.preferred_time.value, if_passed: form.if_passed.value, fields, needs_of_line: b.kept_on_device || [] };
+        if (form.auto_widen) body.auto_widen = form.auto_widen.checked;
         const errBox = form.querySelector('#bidError');
         errBox.classList.add('hidden');
         // Keep what they typed either way: a trip to the profile must not cost
@@ -1209,6 +1289,93 @@
         }
       });
     }
+  }
+
+  // ------------------------------------------------------- three ways to ask
+  // Beside the join form: each way with its chance of an appointment by its
+  // own end, worked out by the site from the openings seen on the line
+  // (regbot/outlook.py). Picking one fills the form in; nothing is placed.
+  const BO = window.bidOptions;
+  const PLACE_KEYS = ['office_mode', 'office', 'origin', 'radius_miles'];
+
+  function formDraft(form) {
+    const values = {
+      preferred_date: form.preferred_date.value, preferred_time: form.preferred_time.value,
+      if_passed: form.if_passed.value, amount: form.amount.value,
+    };
+    for (const k of PLACE_KEYS) {
+      const el = form.querySelector(`[name="${k}"]`);
+      if (el) values[k] = el.value;
+    }
+    return BO.body(values, PLACE_KEYS);
+  }
+
+  function requestOptions(b, form) {
+    if (!BO || !$('bidOptions')) return;
+    const draft = formDraft(form);
+    const key = BO.key(draft);
+    if (!state.options || state.options.queueId !== b.queue.id) {
+      state.options = { queueId: b.queue.id, key: '', doc: null, busy: false, error: '', off: false, seq: 0 };
+    }
+    const o = state.options;
+    if (o.off) { paintOptions(b, form); return; }
+    if (o.key === key && (o.doc || o.busy)) { paintOptions(b, form); return; }
+    o.key = key; o.busy = true; o.seq += 1;
+    const seq = o.seq;
+    paintOptions(b, form);
+    call('server:options', { queue_id: b.queue.id, draft }).then((doc) => {
+      if (state.options !== o || seq !== o.seq) return;
+      o.doc = doc; o.busy = false; o.error = '';
+      paintOptions(b, form);
+    }).catch((err) => {
+      if (state.options !== o || seq !== o.seq) return;
+      o.busy = false;
+      // A site from before the options has no such route: say nothing.
+      if (err.status === 404 || err.status === 405) o.off = true;
+      else o.error = err.message;
+      paintOptions(b, form);
+    });
+  }
+
+  function paintOptions(b, form) {
+    const box = $('bidOptions');
+    const o = state.options;
+    if (!box || !o) return;
+    if (o.off) { box.innerHTML = ''; return; }
+    if (o.error) { box.innerHTML = `<p class="tiny muted" style="margin:0">${esc(o.error)}</p>`; return; }
+    const doc = o.doc;
+    if (!doc) { box.innerHTML = '<p class="tiny muted" style="margin:0">Working out your chances…</p>'; return; }
+    if (!doc.options || !doc.options.length) {
+      box.innerHTML = doc.note ? `<p class="tiny muted" style="margin:0">${esc(doc.note)}</p>` : '';
+      return;
+    }
+    const now = Date.now();
+    const draft = doc.draft;
+    box.innerHTML = `<div class="panel-title" style="margin:2px 0 8px">Three ways to ask</div>
+      ${draft ? `<p class="small" style="margin:0 0 8px">As filled in: <b class="${BO.tone(draft.chance)}">${esc(BO.chance(draft.chance))}</b> chance of an appointment by ${esc(BO.moment(draft.until, undefined, shortDate))}.</p>` : ''}
+      <div class="bid-opts">${doc.options.map((opt, i) => {
+        const d = BO.describe(opt, shortDate, now);
+        return `<button type="button" class="bid-opt" data-option="${i}" title="Fill the form in with this">
+          <span class="bo-label">${esc(d.label)}</span><span class="bo-chance ${d.tone}">${esc(d.chance)}</span>
+          <span class="bo-by">${esc(d.by)}</span>
+          <span class="bo-asks">${esc(d.place)} · ${esc(d.asks)}</span>
+          ${d.likely ? `<span class="bo-likely">${esc(d.likely)}</span>` : ''}</button>`;
+      }).join('')}</div>
+      <p class="tiny muted" style="margin:6px 0 0">${esc(BO.basis(doc))}</p>`;
+    for (const btn of box.querySelectorAll('[data-option]')) {
+      btn.addEventListener('click', () => useOption(b, form, doc.options[Number(btn.dataset.option)]));
+    }
+  }
+
+  function useOption(b, form, opt) {
+    if (!opt) return;
+    for (const [k, v] of Object.entries(BO.apply(opt))) {
+      const el = form.querySelector(`[name="${k}"]`);
+      if (el && v !== undefined && v !== null) el.value = String(v);
+    }
+    applyWhen(form, b.fields);
+    requestOptions(b, form);
+    toast('ok', `Filled in: ${opt.label} — ${BO.chance(opt.chance)} chance.`);
   }
 
   // ------------------------------------------------------- changing a bid
@@ -1384,9 +1551,15 @@
   }
 
   async function doAdvice(advice) {
+    if (advice.kind === 'turns') {
+      // Booking by itself is this computer's to switch on, in Settings.
+      go('settings');
+      return;
+    }
+    if (advice.kind === 'raise' && !window.confirm(`Raise your bid on ${advice.queue_name || 'this line'} to ${coins(advice.amount)}? The difference is held from your credits until it settles.`)) return;
     try {
       const reply = await call('server:advice', { bid_id: advice.bid_id, key: advice.key });
-      if (advice.kind === 'time' && advice.if_passed) {
+      if (advice.if_passed && ['time', 'reach', 'config'].includes(advice.kind)) {
         chosenReach[advice.bid_id] = advice.if_passed;
         const positions = state.doc && state.doc.positions;
         const pos = positions && positions.find((p) => p.bid_id === advice.bid_id);
@@ -1398,7 +1571,7 @@
       toast('ok', reply.message || 'Updated.');
       rememberAdviceGone(advice);
       renderBanner(true);
-      if (state.route.page === 'board') renderBoard();
+      if (state.route.page === 'board') { state.board = null; renderBoard(); }
       if (state.route.page === 'console') renderConsole();
     } catch (err) {
       toast('bad', err.message, 9000);
@@ -2651,6 +2824,16 @@
   // This computer's robots, working for the regbot site: looking for openings
   // when the site asks, for everybody in line, and booking this person's slot.
   // On the real DMV neither happens until the person has said yes.
+  // What the site does with this person's bids by itself (its widen.py).
+  function biddingPanel() {
+    const prefs = state.doc && state.doc.prefs;
+    if (!paired() || !prefs || typeof prefs.auto_widen !== 'boolean') return '';
+    return `<div class="panel" id="s-bidding"><div class="panel-title">Bidding</div>
+      <div class="check" style="margin-bottom:0"><input type="checkbox" id="s-autowiden" ${prefs.auto_widen ? 'checked' : ''}>
+        <label for="s-autowiden"><span class="small"><b>Widen my bids by themselves</b></span>
+        <span class="field-help">When a bid's time passes with nothing booked, its reach climbs a step — 5 hours becomes a day, 5 days two weeks — and again each day after, until a booking comes. It keeps its amount and its place in line. This sets every bid you have now and the ones you place next; a bid's own board can still switch it for that bid.</span></label></div></div>`;
+  }
+
   function robotsPanel(s) {
     if (s.serverMode === 'builtin') return '';
     const r = s.robots || {};
@@ -2776,6 +2959,7 @@
       <h1 style="font-size:24px; margin-bottom:14px">Settings</h1>
       <div id="settingsForm" class="stack">
         ${serverPanel(s)}
+        ${biddingPanel()}
         <div class="panel"><div class="panel-title">Updates</div>
           <p class="small" style="margin:0 0 10px"><span id="s-update-text">${esc(updateText(s.updates))}</span> <button class="btn btn-sm" id="s-check" ${s.updates && s.updates.phase === 'disabled' ? 'disabled' : ''} style="margin-left:8px">Check now</button></p>
           ${dev() ? `<label class="field"><span class="field-label">Update feed <span class="test-badge">Developer</span></span><div class="row"><input id="s-feed" value="${esc(s.updateUrl || '')}" placeholder="blank = the feed this build was published to (GitHub Releases)" style="flex:1"><button class="btn" id="s-feed-save">Save</button></div>
@@ -2818,6 +3002,19 @@
     on('s-feed-save', guarded(async () => { settle(await call('settings:set', { updateUrl: $('s-feed').value })); toast('ok', 'Update feed saved — it is followed from the next start.'); }));
     on('s-use-public', guarded(async () => { settle(await call('settings:set', { serverMode: 'public' })); toast('ok', 'Using the LineRight Regbot site. Create your account or sign in next.'); }));
     on('s-check', () => api.call('update:check'));
+    const widenBox = $('s-autowiden');
+    if (widenBox) {
+      widenBox.addEventListener('change', async () => {
+        try {
+          const r = await call('server:prefs', { auto_widen: widenBox.checked });
+          if (state.doc) state.doc.prefs = r.prefs;
+          toast('ok', r.message);
+        } catch (err) {
+          widenBox.checked = !widenBox.checked;
+          toast('bad', err.message, 9000);
+        }
+      });
+    }
     on('s-signout', () => api.call('pair:forget'));
     on('s-signin', () => go('signin'));
     on('s-advanced', () => go('advanced'));

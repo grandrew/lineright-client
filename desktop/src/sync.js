@@ -288,6 +288,21 @@ class SyncClient {
     return this.request(`/api/client/bids/${Number(bidId)}/change`, { body: change || {} });
   }
 
+  /** Three ways to ask for a new bid on this line, each with its chance. Writes nothing. */
+  async bidOptions(queueId, draft) {
+    return this.request(`/api/client/queues/${Number(queueId)}/options`, { body: draft || {} });
+  }
+
+  /** Three ways to widen a bid already in line, each with its chance. Writes nothing. */
+  async widenOptions(bidId) {
+    return this.request(`/api/client/bids/${Number(bidId)}/options`, { body: {} });
+  }
+
+  /** The person's own choices the site acts on: `auto_widen` for every bid of theirs. */
+  async setPreferences(prefs) {
+    return this.request('/api/client/preferences', { body: prefs || {} });
+  }
+
   async withdrawBid(bidId) {
     return this.request(`/api/client/bids/${Number(bidId)}/withdraw`, { body: {} });
   }

@@ -37,3 +37,12 @@ test('before the moment a later slot is outside and an earlier one is not', () =
   assert.equal(outsideReach({ ...early, slotDate: '2026-10-19', slotTime: '10:00' }), false);
   assert.equal(outsideReach({ ...early, slotDate: '2026-10-19', slotTime: '12:00' }), true);
 });
+
+test('a turn is held to the reach the server sends, which may have widened by itself', () => {
+  const { reachFor } = require('../src/reach');
+  assert.equal(reachFor({ if_passed: '2w' }, '5d'), '2w', 'widened on the site since it was chosen here');
+  assert.equal(reachFor({ if_passed: null }, '5d'), '5d', 'a server that sends none');
+  assert.equal(reachFor(undefined, '1d'), '1d');
+  assert.equal(reachFor({ if_passed: 'later' }, 'nonsense'), '');
+  assert.equal(reachFor(null, undefined), '');
+});
