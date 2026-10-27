@@ -54,7 +54,7 @@
   // ------------------------------------------------------------ helpers
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clock = (secs) => { const s = Math.max(0, Math.floor(secs)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-  const coins = (n) => `⧗${Number(n || 0).toLocaleString()}`;
+  const coins = (n) => `⧗${Number(n || 0).toLocaleString('en-US')}`;
   // A number the site sent, as text: a count, a rank, an id — never markup,
   // whatever arrived in its place.
   const num = (v) => { const x = Number(v); return Number.isFinite(x) ? String(x) : ''; };
@@ -75,12 +75,12 @@
   }
   function prettyDate(iso) {
     const d = new Date(`${iso}T00:00:00`);
-    return Number.isNaN(d.getTime()) ? (iso || '—') : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    return Number.isNaN(d.getTime()) ? (iso || '—') : d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   }
   /** A date this year without the year: "Tue, Nov 3". */
   function shortDate(iso) {
     const d = new Date(`${iso}T00:00:00`);
-    return Number.isNaN(d.getTime()) ? (iso || '—') : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+    return Number.isNaN(d.getTime()) ? (iso || '—') : d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
   }
   const REACHES = [
     ['1h', 'Book in the nearest 1 hour'],
@@ -2050,7 +2050,7 @@
     const t = a.topup || {};
     const k = a.checking || {};
     const r = state.robots || {};
-    const next = t.next_at ? new Date(t.next_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+    const next = t.next_at ? new Date(t.next_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
     const weekly = t.to ? `<div class="free-row"><span class="k">Every ${t.every_days === 7 ? 'week' : `${num(t.every_days)} days`}</span>
       <span class="small">Back to <b>${coins(t.to)}</b> to spend${next ? ` — next on ${esc(next)}` : ''}. Credits staked on your places do not count, so the longer you wait, the more you can stake.</span></div>` : '';
     const now = k.counting ? '<span class="ok">This app is checking lines now.</span>'
@@ -2338,7 +2338,7 @@
     if (!t.events.length) return '<div class="empty">Nothing has happened yet.</div>';
     const words = (e) => Object.entries(e).filter(([k]) => !['t', 'kind', 'status', 'ms'].includes(k)).map(([k, v]) => `${k.replace(/_/g, ' ')} ${v}`).join(' · ');
     return `<table class="data"><thead><tr><th>When</th><th>What</th><th>How</th><th class="right">Took</th><th></th></tr></thead><tbody>
-      ${t.events.map((e) => `<tr><td class="muted num">${esc(new Date(e.t * 1000).toLocaleTimeString())}</td><td>${esc(e.kind.replace(/_/g, ' '))}</td><td class="muted">${esc((e.status || '').replace(/_/g, ' '))}</td>
+      ${t.events.map((e) => `<tr><td class="muted num">${esc(new Date(e.t * 1000).toLocaleTimeString('en-US'))}</td><td>${esc(e.kind.replace(/_/g, ' '))}</td><td class="muted">${esc((e.status || '').replace(/_/g, ' '))}</td>
         <td class="right num muted">${e.ms !== undefined ? esc(e.ms >= 60000 ? `${Math.round(e.ms / 6000) / 10} min` : e.ms >= 1000 ? `${Math.round(e.ms / 100) / 10} s` : `${e.ms} ms`) : ''}</td>
         <td class="tiny muted">${esc(words(e))}</td></tr>`).join('')}
     </tbody></table>`;
@@ -2349,7 +2349,7 @@
     const last = t.lastShare;
     const offline = !t.paired;
     const refused = accepted && accepted.accepts === false;
-    const history = (t.shares || []).map((x) => `<div class="kv"><dt>${esc(new Date(x.at * 1000).toLocaleString())}${x.auto ? ' · automatic' : ''}</dt><dd class="${x.ok ? 'ok' : 'bad'}" style="font-family:var(--sans)">${x.ok ? 'shared' : 'refused'} — ${esc(x.message)}</dd></div>`).join('');
+    const history = (t.shares || []).map((x) => `<div class="kv"><dt>${esc(new Date(x.at * 1000).toLocaleString('en-US'))}${x.auto ? ' · automatic' : ''}</dt><dd class="${x.ok ? 'ok' : 'bad'}" style="font-family:var(--sans)">${x.ok ? 'shared' : 'refused'} — ${esc(x.message)}</dd></div>`).join('');
     return `<div class="panel"><div class="panel-title">Share with LineRight Regbot</div>
       <p class="small" style="margin:0 0 8px">Sharing sends this app's numbers to <b>${esc(t.server || 'the LineRight Regbot site')}</b>, where the people running it can see how the apps are doing — how long syncs take, how often they fail, how fast round trips are, what the robots managed, and how much memory and CPU the app uses.</p>
       <p class="tiny muted" style="margin:0 0 12px">What goes is numbers and a short list of words — kinds of event, how they ended — plus this app's version and operating system. Nothing from your profile, no line, office, date or booking reference, no page you opened. The site keeps it for a few months. <a id="adv-preview">${state.advPreview ? 'Hide' : 'See'} exactly what would be sent</a></p>
@@ -2360,7 +2360,7 @@
         <button class="btn btn-accent btn-sm" id="adv-share-now" ${offline || refused ? 'disabled' : ''}>Share now</button>
         <label class="small row" style="gap:6px; margin:0; cursor:pointer"><input type="checkbox" id="adv-auto" ${t.autoShare ? 'checked' : ''}> Share automatically, every six hours</label>
       </div>
-      <p class="tiny muted" style="margin:0 0 8px">${last ? `Last shared ${esc(new Date(last.at * 1000).toLocaleString())}.` : 'Never shared.'}</p>
+      <p class="tiny muted" style="margin:0 0 8px">${last ? `Last shared ${esc(new Date(last.at * 1000).toLocaleString('en-US'))}.` : 'Never shared.'}</p>
       ${history}
     </div>`;
   }
@@ -2376,13 +2376,13 @@
     const kb = Math.round((x.bytes || 0) / 102.4) / 10;
     const lines = (x.recent || []).slice(-40).reverse().map((e) => {
       const { s: n, t, k, ...rest } = e;
-      return `${new Date(t).toLocaleTimeString()}  ${k}  ${JSON.stringify(rest)}`;
+      return `${new Date(t).toLocaleTimeString('en-US')}  ${k}  ${JSON.stringify(rest)}`;
     }).join('\n');
     return `<div class="panel"><div class="panel-title">A trace for LineRight Regbot</div>
       <p class="small" style="margin:0 0 8px">This app writes down what it does — the booking pages it opens and how long each request takes, what its robots saw, how each of your turns went, and what it told you — with you taken out of it: your name, date of birth, licence, passport and Social Security numbers, address, phone and email, in every way a page could spell them; any confirmation number; and nothing you type into a form. <b>${esc(x.server || 'The LineRight Regbot site')}</b> asks for it now and then, so the people running it can see why a booking did or did not work.</p>
       <label class="small row" style="gap:6px; margin:0 0 8px; cursor:pointer"><input type="checkbox" id="adv-trace-on" ${x.on ? 'checked' : ''}> Keep a trace, and send it when the site asks</label>
       ${x.on ? `<p class="tiny muted" style="margin:0 0 8px">${num(x.kept)} event${x.kept === 1 ? '' : 's'} kept here (${kb} KB) · ${num(x.sent)} sent so far · the site asks for ${esc(LEVEL_WORDS[x.level] || x.level)}${x.lost ? ` · ${num(x.lost)} too old to send, deleted` : ''}.
-        ${last ? `Last upload ${esc(new Date(last.at).toLocaleString())}: ${last.ok ? `${num(last.events)} events` : `<span class="bad">refused — ${esc(last.message)}</span>`}.` : 'Nothing sent yet.'}</p>
+        ${last ? `Last upload ${esc(new Date(last.at).toLocaleString('en-US'))}: ${last.ok ? `${num(last.events)} events` : `<span class="bad">refused — ${esc(last.message)}</span>`}.` : 'Nothing sent yet.'}</p>
         <div class="row" style="flex-wrap:wrap; margin-bottom:8px"><button class="btn btn-sm" id="adv-trace-see">${state.advTrace ? 'Hide' : 'See'} the last events</button>
           <button class="btn btn-sm btn-danger" id="adv-trace-clear">Delete what is kept</button></div>
         ${state.advTrace ? `<pre class="json-box" style="max-height:340px; overflow:auto">${esc(lines || 'Nothing yet.')}</pre>` : ''}`
@@ -2708,7 +2708,7 @@
       <span class="field-help">${esc(s.origin)}</span></label></div>`).join('')
       + (rest.count ? `<div class="check">
         <input type="checkbox" id="i-s-rest" data-others="1" checked>
-        <label for="i-s-rest"><span class="small"><b>Everywhere else you are signed in</b> — ${rest.count.toLocaleString()} cookie${rest.count === 1 ? '' : 's'} across ${rest.hosts.toLocaleString()} site${rest.hosts === 1 ? '' : 's'}</span>
+        <label for="i-s-rest"><span class="small"><b>Everywhere else you are signed in</b> — ${rest.count.toLocaleString('en-US')} cookie${rest.count === 1 ? '' : 's'} across ${rest.hosts.toLocaleString('en-US')} site${rest.hosts === 1 ? '' : 's'}</span>
         <span class="field-help">A sign-in does not always stay on the site you signed in to: a portal that hands you to an identity provider
         leaves half of it on a host LineRight Regbot has never heard of, and there is no list of those to keep. So the jar comes across whole unless you say
         otherwise — untick this to bring only the sites named above.</span></label></div>` : '');
@@ -2773,7 +2773,7 @@
         }
         if (done.refused) toast('warn', `${done.refused} cookie${done.refused === 1 ? '' : 's'} would not go in — that site may have to be signed in to here.`, 9000);
         else if (!done.cookies && onOffer && !origins.length && !others) {
-          toast('warn', `The ${onOffer.toLocaleString()} sign-ins were left unticked, so none came across — you will sign in to booking sites here yourself.`, 9000);
+          toast('warn', `The ${onOffer.toLocaleString('en-US')} sign-ins were left unticked, so none came across — you will sign in to booking sites here yourself.`, 9000);
         }
         // First run: the details are in; the account the app pairs with is next.
         if (!paired() && state.route.first) go('signin');
@@ -3106,7 +3106,7 @@
     const last = t.lastShare;
     return `<div class="panel"><div class="panel-title">Advanced</div>
       <p class="small" style="margin:0 0 10px">Telemetry and diagnostics: how this app's conversation with the site is going, the round trips the site timed, what the robots did, and the memory and CPU the app uses — plotted over the last day, kept on this computer.</p>
-      <p class="tiny muted" style="margin:0 0 10px">${t.autoShare ? 'Shared with the site automatically every six hours.' : 'Shared with the site only when you press Share.'}${last ? ` Last shared ${esc(new Date(last.at * 1000).toLocaleString())}.` : ''}</p>
+      <p class="tiny muted" style="margin:0 0 10px">${t.autoShare ? 'Shared with the site automatically every six hours.' : 'Shared with the site only when you press Share.'}${last ? ` Last shared ${esc(new Date(last.at * 1000).toLocaleString('en-US'))}.` : ''}</p>
       <p class="tiny muted" style="margin:0 0 10px">${s.traces && s.traces.on ? 'A trace of what the app does, with your details taken out, goes to LineRight Regbot when the site asks.' : 'The trace for LineRight Regbot is off.'} Advanced shows it, and turns it ${s.traces && s.traces.on ? 'off' : 'on'}.</p>
       <button class="btn btn-sm" id="s-advanced">Open Advanced</button></div>`;
   }

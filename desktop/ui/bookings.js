@@ -69,8 +69,8 @@
   function atWords(ms) {
     if (!Number.isFinite(ms)) return '';
     const d = new Date(ms);
-    const day = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    const day = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     return `${day} at ${time}`;
   }
 

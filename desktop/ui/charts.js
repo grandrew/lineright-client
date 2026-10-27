@@ -40,7 +40,7 @@
     if (v === null || v === undefined || Number.isNaN(v)) return '—';
     const abs = Math.abs(v);
     let text;
-    if (unit === '$') return `$${abs >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(2)}`;
+    if (unit === '$') return `$${abs >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(2)}`;
     if (abs >= 1e6) text = `${(v / 1e6).toFixed(1)}M`;
     else if (abs >= 1e4) text = `${(v / 1e3).toFixed(0)}k`;
     else if (abs >= 1000) text = `${(v / 1e3).toFixed(1)}k`;
@@ -52,8 +52,8 @@
 
   function when(t, span) {
     const d = new Date(t * 1000);
-    if (span <= 2 * 86400) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    if (span <= 2 * 86400) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
   function stackedTotals(series, n) {
@@ -172,7 +172,7 @@
       cursor.setAttribute('visibility', 'visible');
       const rows = series.map((s) => `<div><i style="background:${s.color}"></i>${escapeHtml(s.label)} <b>${fmt(s.values[i], chart.unit)}</b></div>`).join('');
       const end = points[i] + (data.step || 0);
-      tip.innerHTML = `<div class="rc-tip-t">${new Date(points[i] * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${data.step > 60 ? ` – ${new Date(end * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</div>${rows}`;
+      tip.innerHTML = `<div class="rc-tip-t">${new Date(points[i] * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${data.step > 60 ? ` – ${new Date(end * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>${rows}`;
       tip.hidden = false;
       const px = x(i) / scale;
       tip.style.left = `${Math.min(rect.width - tip.offsetWidth - 4, Math.max(4, px + 10))}px`;

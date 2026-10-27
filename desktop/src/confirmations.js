@@ -18,7 +18,7 @@ const esc = (v) => String(v == null ? '' : v)
  */
 function page({ shot, url = null, confirmation, where = '' }) {
   if (!shot || !fs.existsSync(shot)) return null;
-  const when = fs.statSync(shot).mtime.toLocaleString();
+  const when = fs.statSync(shot).mtime.toLocaleString('en-US');
   const live = url && /^https?:\/\//i.test(url) ? ` — <a href="${esc(url)}">open it on the DMV's site</a>` : '';
   const file = `${shot.replace(/\.png$/i, '')}.html`;
   fs.writeFileSync(file, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Confirmation ${esc(confirmation)}</title>

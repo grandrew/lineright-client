@@ -93,6 +93,11 @@ const argv = parseArgs(process.argv.slice(app.isPackaged ? 1 : 2));
 app.setName('regbot');
 if (argv['user-data']) app.setPath('userData', path.resolve(argv['user-data']));
 if (argv.smoke || process.env.REGBOT_NO_GPU) app.disableHardwareAcceleration();
+// The app is in English, and so is every date and time in it: the native date
+// and time boxes, and what a page in a tab asks a site for, too — the booking
+// sites are American. Left to the system, a Russian Mac drew "вт, 6 окт." among
+// English words. The app's own formatting names en-US as well (english.test.js).
+app.commandLine.appendSwitch('lang', 'en-US');
 
 function log(...parts) {
   console.log(new Date().toISOString().slice(11, 19), ...parts);
