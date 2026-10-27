@@ -332,7 +332,10 @@ once.
 "View/Cancel Appointment" page in a tab (`src/dmv-cancel.js`). There it:
 1. types in the name and phone number from your profile, and looks your
    appointments up;
-2. finds this one by its confirmation number, and only this one;
+2. finds this one, and only this one. The DMV lists each appointment under an
+   id of its own, not the confirmation number, so the app looks for the one
+   at its office on its day at its time. If two could be it, it touches
+   neither;
 3. answers the DMV's "Are you sure?" (for a drive test, with the licence number
    and date of birth it asks for);
 4. waits for "Your appointment has been canceled."

@@ -8,14 +8,19 @@
  *   1. the form "View Your Appointment Information" (#appointment-info-form):
  *      the first and last name and the phone number the appointment was booked
  *      under, from the profile kept on this computer; then "View Appointment";
- *   2. "Current Appointments": the one item whose `data-appt-id` is this
- *      appointment's confirmation number, and its "Cancel Appointment";
+ *   2. "Current Appointments": the one item that is this appointment, and its
+ *      "Cancel Appointment". On the live site an item's `data-appt-id` is the
+ *      DMV's own 64-character id, not the confirmation number its confirmation
+ *      page shows, so the item is known by what it says: the office ("SAN
+ *      JOSE"), and "10/27/26, 10:00 AM, …" (pickItem). An item whose id is the
+ *      confirmation number is taken first, should a site use that;
  *   3. the dialog (#delete-confirmation) — for a drive test, the licence number
  *      and date of birth it asks for too — and its "Cancel Appointment";
  *   4. "Your appointment has been canceled.", and that item gone: done.
  *
- * Only that one appointment is ever touched: an item is pressed only when its
- * confirmation number is exactly the one asked for. A human check the DMV puts
+ * Only that one appointment is ever touched: an item is pressed only when it
+ * is the only one listed on that day at that time (at that office, when more
+ * than one is). A human check the DMV puts
  * up is the person's to answer in the page; the script waits for it, up to its
  * time. The DMV's live page and the stand-in (lineright-server testsite,
  * apptEditPage) share these ids and words.
@@ -23,6 +28,7 @@
  * The script answers:
  *   'cancelled'      the DMV said so
  *   'not-listed'     appointments are listed under that name and number, but not this one
+ *   'ambiguous'      more than one is listed on that day at that time: none is touched
  *   'none'           none at all are listed under them
  *   'error: …'       the DMV answered with an error
  *   'stopped …'      it ran out of time; where it got to
@@ -42,9 +48,49 @@ function cancelValues(profile) {
   };
 }
 
-/** The script the cancel tab runs, for appointment `confirmation`. */
-function cancelScript(confirmation, values, { timeoutMs = 150000 } = {}) {
-  const want = { confirmation: String(confirmation || ''), ...values };
+/** "10/27/26" and "10:00 AM", as the DMV's list says them, from "2026-10-27" and "10:00". */
+function listWords(date, time) {
+  const [y, m, d] = String(date || '').split('-');
+  const [hh, mm] = String(time || '').split(':').map(Number);
+  const day = y && m && d ? `${m}/${d}/${y.slice(2)}` : '';
+  const at = Number.isFinite(hh) && Number.isFinite(mm)
+    ? `${hh % 12 || 12}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'AM' : 'PM'}` : '';
+  return { day, at };
+}
+
+/**
+ * Which listed item is this appointment: `items` are [{id, text}] as the page
+ * lists them. Its confirmation number as the id; else the one item on its day
+ * at its time; else, of several then, the one at its office. Returns
+ * {id} or {ambiguous: n} or {}. Runs in the page too (cancelScript), so it
+ * uses nothing from outside itself.
+ */
+function pickItem(items, want) {
+  const flat = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9:/]+/g, ' ').trim();
+  const exact = items.find((item) => want.confirmation && item.id === want.confirmation);
+  if (exact) return { id: exact.id };
+  if (!want.day || !want.at) return {};
+  const at = flat(want.at);
+  const when = items.filter((item) => {
+    const text = ` ${flat(item.text)} `;
+    return text.includes(` ${want.day}`) && text.includes(` ${at} `);
+  });
+  if (when.length === 1) return { id: when[0].id };
+  if (!when.length) return {};
+  const office = flat(want.office);
+  const there = office ? when.filter((item) => (` ${flat(item.text)} `).includes(` ${office} `)) : [];
+  return there.length === 1 ? { id: there[0].id } : { ambiguous: when.length };
+}
+
+/**
+ * The script the cancel tab runs, for one appointment:
+ * `booking` is {confirmation, date, time, office_name}.
+ */
+function cancelScript(booking, values, { timeoutMs = 150000 } = {}) {
+  const b = booking || {};
+  const words = listWords(b.date, b.time);
+  const want = { confirmation: String(b.confirmation || ''), day: words.day, at: words.at,
+    office: String(b.office_name || ''), ...values };
   return `(async () => {
     const want = ${JSON.stringify(want)};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -70,11 +116,17 @@ function cancelScript(confirmation, values, { timeoutMs = 150000 } = {}) {
     };
     const button = (root, pattern) => [...(root || document).querySelectorAll('button')]
       .find((b) => pattern.test(text(b)) && shown(b));
-    const state = window.__lrCancel || (window.__lrCancel = { looked: 0, pressed: 0, confirmed: 0 });
+    const pickItem = ${pickItem.toString()};
+    const state = window.__lrCancel || (window.__lrCancel = { looked: 0, pressed: 0, confirmed: 0, target: '' });
+    const listed = () => [...document.querySelectorAll('[data-appt-id]')]
+      .map((el) => ({ el, id: el.getAttribute('data-appt-id') || '', text: text(el) }));
     const deadline = Date.now() + ${Number(timeoutMs)};
     while (Date.now() < deadline) {
-      const esc = window.CSS && CSS.escape ? CSS.escape(want.confirmation) : want.confirmation.replace(/"/g, '\\\\"');
-      const item = document.querySelector('[data-appt-id="' + esc + '"]');
+      const items = listed();
+      // Once pressed, it is that one item to the end, whatever the list does.
+      const picked = state.target ? { id: state.target } : pickItem(items, want);
+      const hit = picked.id ? items.find((i) => i.id === picked.id) : null;
+      const item = hit ? hit.el : null;
       const canceled = [...document.querySelectorAll('p')].some((p) => shown(p) && /your appointment has been cancel+ed/i.test(text(p)));
       if (state.confirmed && !item && canceled) return 'cancelled';
       const dialog = document.querySelector('#delete-confirmation');
@@ -99,6 +151,7 @@ function cancelScript(confirmation, values, { timeoutMs = 150000 } = {}) {
       if (item && !state.confirmed && (!state.pressed || Date.now() - state.pressed > 4000)) {
         const cancel = item.querySelector('.btn--appt-cancel') || button(item, /cancel appointment/i);
         if (cancel) {
+          state.target = picked.id;
           cancel.click();
           state.pressed = Date.now();
           await sleep(900);
@@ -110,7 +163,7 @@ function cancelScript(confirmation, values, { timeoutMs = 150000 } = {}) {
       // Not there: said only when the page has shown it twice, a moment apart,
       // well after the lookup — not while the answer is still on its way.
       const verdict = !state.looked || item || state.confirmed || Date.now() - state.lookedAt < 4000 ? ''
-        : document.querySelectorAll('[data-appt-id]').length ? 'not-listed' : none ? 'none' : '';
+        : picked.ambiguous ? 'ambiguous' : items.length ? 'not-listed' : none ? 'none' : '';
       if (verdict && state.seen === verdict && Date.now() - state.seenAt >= 1500) return verdict;
       if (verdict !== state.seen) { state.seen = verdict; state.seenAt = Date.now(); }
       const form = document.querySelector('#appointment-info-form');
@@ -136,4 +189,4 @@ function cancelScript(confirmation, values, { timeoutMs = 150000 } = {}) {
   })()`;
 }
 
-module.exports = { cancelValues, cancelScript };
+module.exports = { cancelValues, cancelScript, pickItem, listWords };

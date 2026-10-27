@@ -919,9 +919,6 @@ function cancelBooking(id) {
   if (!b.manage_url) {
     throw new Error(`The app cannot cancel appointments on ${b.site_name || 'this site'}. Cancel it on that site, then mark it cancelled here.`);
   }
-  if (!b.confirmation) {
-    throw new Error('There is no confirmation number for this appointment, so the app cannot tell it from your others. Cancel it on the DMV page, then mark it cancelled here.');
-  }
   const values = profile.values();
   const missing = (b.cancel_needs || []).filter((k) => !String(values[k] || '').trim());
   if (missing.length) {
@@ -954,7 +951,7 @@ function runCancel(tab) {
   g.again = false;
   g.runs += 1;
   const b = g.booking;
-  tab.view.webContents.executeJavaScript(cancelScript(b.confirmation, g.values), true).then((status) => {
+  tab.view.webContents.executeJavaScript(cancelScript(b, g.values), true).then((status) => {
     g.running = false;
     finishCancel(tab, b, String(status || ''));
   }).catch((err) => {
@@ -986,7 +983,11 @@ function finishCancel(tab, b, status) {
   if (status === 'none' || status === 'not-listed') {
     cancelProgress(b.id, 'not-listed', status === 'none'
       ? 'The DMV lists no appointments under your name and phone number. If this one was cancelled already, mark it cancelled here.'
-      : `The DMV lists appointments under your name and phone number, but not confirmation ${b.confirmation}. If this one was cancelled already, mark it cancelled here.`);
+      : `The DMV lists appointments under your name and phone number, but none at ${b.office_name} on ${b.date} at ${b.time}. If this one was cancelled already, mark it cancelled here.`);
+    return;
+  }
+  if (status === 'ambiguous') {
+    cancelProgress(b.id, 'not-listed', `The DMV lists more than one appointment on ${b.date} at ${b.time} under your name and phone number, so the app touched none of them. Cancel the right one on the DMV page.`);
     return;
   }
   if (status.startsWith('error:')) {
