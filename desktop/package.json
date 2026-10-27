@@ -1,7 +1,7 @@
 {
   "name": "regbot-desktop",
   "productName": "LineRight Regbot",
-  "version": "0.3.11",
+  "version": "0.4.0-beta.1",
   "description": "LineRight Regbot",
   "main": "src/main.js",
   "private": true,
