@@ -7,10 +7,30 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+// The browser the build bundles for the robots (scripts/bundle.js), when there
+// is no other: a build machine has that one and none in Playwright's own cache.
+const OS = { linux: 'linux', darwin: 'mac', win32: 'win' }[process.platform] || process.platform;
+const BUNDLED = path.join(__dirname, '..', 'vendor', `${OS}-${process.arch}`, 'browsers');
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH && fs.existsSync(BUNDLED)) process.env.PLAYWRIGHT_BROWSERS_PATH = BUNDLED;
 
 let chromium = null;
 try { ({ chromium } = require('playwright')); } catch { /* no browser to test with */ }
 const { READ_PAGE, refSelector, locateScript } = require('../src/agent/pagekit');
+
+/** A browser, or the reason there is none: these tests then skip rather than fail. */
+let browserProblem = chromium ? null : 'no Playwright';
+test.before(async () => {
+  if (!chromium) return;
+  try {
+    const b = await chromium.launch({ headless: true });
+    await b.close();
+  } catch (err) {
+    browserProblem = `no browser to run: ${String(err.message).split('\n')[0]}`;
+  }
+});
 
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Your details</title>
 <header><nav><a href="/portal/">Home</a> <a href="https://elsewhere.example/x">Elsewhere</a></nav></header>
@@ -37,7 +57,8 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>Your details</title>
 
 const read = (page, arg) => page.evaluate(`(${READ_PAGE})(${JSON.stringify(arg || {})})`);
 
-test('a page as the AI reads it', { skip: !chromium && 'no Playwright' }, async (t) => {
+test('a page as the AI reads it', async (t) => {
+  if (browserProblem) return t.skip(browserProblem);
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -83,7 +104,8 @@ test('a page as the AI reads it', { skip: !chromium && 'no Playwright' }, async 
   assert.ok(where.x > 0 && where.y > 0 && where.tag === 'BUTTON');
 });
 
-test('a captcha showing a challenge is a human check', { skip: !chromium && 'no Playwright' }, async (t) => {
+test('a captcha showing a challenge is a human check', async (t) => {
+  if (browserProblem) return t.skip(browserProblem);
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -94,7 +116,8 @@ test('a captcha showing a challenge is a human check', { skip: !chromium && 'no 
   assert.match((await read(page)).text, /\[a human check \(captcha\) is showing on this page: it is for the person to answer\]/);
 });
 
-test('a long page keeps its controls and drops plain text', { skip: !chromium && 'no Playwright' }, async (t) => {
+test('a long page keeps its controls and drops plain text', async (t) => {
+  if (browserProblem) return t.skip(browserProblem);
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage();
