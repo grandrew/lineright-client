@@ -11,6 +11,7 @@
  *   node scripts/oversight-live.js --drift=offices,labels  how the stand-in has changed (pages.js DRIFTED)
  *   node scripts/oversight-live.js --case=task             no robot: the AI alone checks a calendar it is told about in words
  *   node scripts/oversight-live.js --server=URL --token-file=F   a site of your own, as a paired device
+ *   node scripts/oversight-live.js --app=dist-X/linux-unpacked   the robots a packaged build carries, on its own binary
  *
  * A private site is the lineright server from LINERIGHT_SERVER_DIR (default
  * ../../lineright-server), on a free port with a database of its own in a
@@ -152,8 +153,17 @@ async function main() {
     say(`the site says: ${terms.available ? `available, about ${terms.step_credits} credits a step, ${terms.can_spend} to spend` : terms.message}`);
     if (!terms.available) throw new Error(terms.message);
     robotsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-oversight-'));
-    const runner = new RobotRunner({ paths: { dmq: DMQ, browsers: process.env.PLAYWRIGHT_BROWSERS_PATH || null, host: path.join(ROOT, 'host'), packaged: false },
-      node: process.execPath, stateDir: path.join(robotsDir, 'robots'),
+    // A packaged build: its own robots and browser, run on its own binary as Node, as the installed app runs them.
+    const built = args.app ? path.resolve(String(args.app)) : null;
+    const binary = built ? ['regbot', 'regbot.exe', 'LineRight Regbot'].map((n) => path.join(built, n)).find((f) => fs.existsSync(f)) : null;
+    if (built && !binary) throw new Error(`no app binary in ${built}`);
+    const paths = built
+      ? { dmq: path.join(built, 'resources', 'stack', 'dmq'), host: path.join(built, 'resources', 'stack', 'host'),
+        browsers: path.join(built, 'resources', 'browsers'), packaged: true }
+      : { dmq: DMQ, browsers: process.env.PLAYWRIGHT_BROWSERS_PATH || null, host: path.join(ROOT, 'host'), packaged: false };
+    if (built) say(`the robots of the packaged build in ${built}`);
+    const runner = new RobotRunner({ paths,
+      node: binary || process.execPath, stateDir: path.join(robotsDir, 'robots'),
       env: { PATH: process.env.PATH, HOME: process.env.HOME }, log: (m) => say('robots:', m) });
     const started = Date.now();
     let sessionId = null;
