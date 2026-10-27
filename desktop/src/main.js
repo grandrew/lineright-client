@@ -47,6 +47,8 @@ const { prefillFromUrl } = require('./portal');
 const { outsideReach, reachFor } = require('./reach');
 const turnTabs = require('./turntabs');
 const { guideScript } = require('./dmv-guide');
+const { cancelValues, cancelScript } = require('./dmv-cancel');
+const { Reminders } = require('./bookings');
 const menu = require('./menu');
 const updater = require('./updater');
 const { Stack, locate, NO_SERVER } = require('./stack');
@@ -174,6 +176,9 @@ let resetting = false;            // Settings → Start over is under way
 let robots = null;                // the DMV robots this app runs for the regbot site (robots.js)
 let reader = null;                // looking for openings when the site asks (reader.js)
 let booker = null;                // booking the person's own slot (booker.js)
+let reminders = null;             // the person's appointments, and a reminder before each (bookings.js)
+const cancelling = new Map();     // booking id -> how cancelling it on the booking site goes: {phase, text, tabId}
+const cancelsUnsaid = new Map();  // booking id -> how it was cancelled, until the site has heard
 let pinger = null;                // presence, timing, and hearing of a slot at once (pinger.js)
 let connection = null;            // how this app's connection stands, as the site last said
 let telemetry = null;             // this app's own numbers, kept here (telemetry.js)
@@ -358,6 +363,7 @@ function resetSession(message) {
   turnCards.clear();
   standingBack.clear();
   sitesCache = [];
+  forgetBookings();
   send('sync:doc', null);
   setPair({ paired: false, user: null, pending: null, message });
 }
@@ -772,6 +778,7 @@ async function signOut() {
   bookedInTab.clear();
   turnCards.clear();
   standingBack.clear();
+  forgetBookings();
   setPair({ paired: false, user: null, pending: null, message: 'Signed out.' });
   send('sync:doc', null);
   navigate('signin');
@@ -796,6 +803,199 @@ function notify(title, body, handoff) {
   }
 }
 
+// ----------------------------------------------------------------- bookings
+/**
+ * A reminder before an appointment (bookings.js), on the desktop: clicking it
+ * opens My Bookings. The sound is the app page's (bookings:chime).
+ */
+function remindNote({ title, body, booking, kind }) {
+  if (traces) traces.add('booking.remind', { booking: booking && booking.id, kind });
+  if (process.env.REGBOT_NO_NOTIFY === '1' || !Notification.isSupported()) return;
+  try {
+    const note = new Notification({ title, body, silent: false,
+      urgency: kind === 'hour' || kind === 'test' ? 'critical' : 'normal' });
+    note.on('click', () => {
+      if (win) { win.show(); win.focus(); }
+      navigate('bookings');
+    });
+    note.show();
+  } catch (err) {
+    log('notification failed:', err.message);
+  }
+}
+
+function reminderChime(kind) {
+  if (store.get('reminderSound', true) === false && kind !== 'test') return;
+  send('bookings:chime', { kind });
+}
+
+/** The picture this computer's robot kept of an appointment's confirmation page, if it kept one. */
+function confirmationShot(b) {
+  if (!b || !b.job_id || !client) return null;
+  const dir = path.join(app.getPath('userData'), 'robots', 'confirmations');
+  let host = '';
+  try { host = new URL(client.serverUrl).host.replace(/[^A-Za-z0-9._-]+/g, '_'); } catch { return null; }
+  try {
+    const hit = fs.readdirSync(dir)
+      .filter((f) => f.endsWith('.png') && f.startsWith(`${host}_`) && f.includes(`-job-${Number(b.job_id)}-`))
+      .sort().pop();
+    return hit ? path.join(dir, hit) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What My Bookings shows: every appointment with its next reminder, and how a cancel is going. */
+function bookingsView() {
+  const v = reminders ? reminders.view() : { list: [], coming: 0 };
+  return {
+    ...v,
+    list: v.list.map((b) => ({ ...b, shot: Boolean(confirmationShot(b)), cancelling: cancelling.get(b.id) || null })),
+    sound: store.get('reminderSound', true) !== false,
+  };
+}
+
+function sendBookings() {
+  send('bookings:state', bookingsView());
+}
+
+/** Another account, or another site: its appointments go with it. */
+function forgetBookings() {
+  cancelling.clear();
+  cancelsUnsaid.clear();
+  if (reminders) reminders.update([]);
+}
+
+/** What the site says the appointments are, with the cancellations it has not heard of yet. */
+function noteBookings(list) {
+  if (!reminders || !Array.isArray(list)) return;
+  reminders.update(list);
+  for (const id of cancelsUnsaid.keys()) reminders.cancelled(id);
+  sendBookings();
+  // Said again, until the site has heard.
+  for (const [id, how] of [...cancelsUnsaid]) {
+    const b = list.find((x) => x.id === id);
+    if (b && b.status === 'cancelled') { cancelsUnsaid.delete(id); continue; }
+    client.bookingCancelled(id, how).then(() => cancelsUnsaid.delete(id))
+      .catch((err) => log(`the site did not hear that booking ${id} is cancelled: ${err.message}`));
+  }
+}
+
+/** This appointment is cancelled: no more reminders for it, and the site is told. */
+async function bookingGone(b, how) {
+  reminders.cancelled(b.id);
+  cancelsUnsaid.set(b.id, how);
+  try {
+    await client.bookingCancelled(b.id, how);
+    cancelsUnsaid.delete(b.id);
+  } catch (err) {
+    log(`the site did not hear that booking ${b.id} is cancelled: ${err.message} — said again on the next sync`);
+  }
+  if (loop) loop.poke();
+}
+
+const FIELD_WORDS = { first_name: 'first name', last_name: 'last name', phone: 'phone number',
+  email: 'email address', dl_number: 'licence number', dob: 'date of birth' };
+
+function whereBooked(b) {
+  return `${b.office_name || b.queue_name} on ${b.date} at ${b.time}`;
+}
+
+function cancelProgress(id, phase, text = '', tabId = null) {
+  const was = cancelling.get(id) || {};
+  cancelling.set(id, { phase, text, tabId: tabId || was.tabId || null, at: Date.now() });
+  sendBookings();
+}
+
+/**
+ * Cancel an appointment on the booking site's own page, in a tab the person
+ * watches: the cancel guide (dmv-cancel.js) types in the name and phone number
+ * it was booked under, finds it by its confirmation number, and answers the
+ * site's "Are you sure?". The person said yes in the app first.
+ */
+function cancelBooking(id) {
+  const b = reminders && reminders.find(id);
+  if (!b || b.status !== 'booked') throw new Error('That appointment is not among your bookings any more.');
+  if (!b.manage_url) {
+    throw new Error(`The app cannot cancel appointments on ${b.site_name || 'this site'}. Cancel it on that site, then mark it cancelled here.`);
+  }
+  if (!b.confirmation) {
+    throw new Error('There is no confirmation number for this appointment, so the app cannot tell it from your others. Cancel it on the DMV page, then mark it cancelled here.');
+  }
+  const values = profile.values();
+  const missing = (b.cancel_needs || []).filter((k) => !String(values[k] || '').trim());
+  if (missing.length) {
+    const words = missing.map((k) => FIELD_WORDS[k] || k);
+    const err = new Error(`To find your appointment, the DMV asks for your ${words.join(' and ')}. Add ${missing.length === 1 ? 'it' : 'them'} to your profile first.`);
+    err.body = { missing };
+    throw err;
+  }
+  const was = cancelling.get(b.id);
+  if (was && was.phase === 'cancelling' && was.tabId && tabs.tabs.has(was.tabId)) {
+    tabs.select(was.tabId);
+    return { tab: was.tabId, already: true };
+  }
+  const tabId = tabs.open(b.manage_url, { kind: 'page', title: `Cancel — ${b.office_name} ${b.date}` });
+  const tab = tabs.tabs.get(tabId);
+  tab.cancelGuide = { booking: b, values: cancelValues(values), runs: 0, done: false };
+  log(`cancelling booking ${b.id} (${whereBooked(b)}, confirmation ${b.confirmation}) on ${b.manage_url}`);
+  if (traces) traces.add('booking.cancel', { booking: b.id, step: 'start' });
+  cancelProgress(b.id, 'cancelling', 'Cancelling it on the DMV page… If the DMV asks you to prove you are a person, do it in the page.', tabId);
+  if (!tab.loading) runCancel(tab);
+  return { tab: tabId };
+}
+
+function runCancel(tab) {
+  const g = tab && tab.cancelGuide;
+  if (!g || g.done) return;
+  if (g.running) { g.again = true; return; }
+  if (g.runs >= 8) return;
+  g.running = true;
+  g.again = false;
+  g.runs += 1;
+  const b = g.booking;
+  tab.view.webContents.executeJavaScript(cancelScript(b.confirmation, g.values), true).then((status) => {
+    g.running = false;
+    finishCancel(tab, b, String(status || ''));
+  }).catch((err) => {
+    g.running = false;
+    if (!tabs.tabs.has(tab.id)) {
+      g.done = true;
+      log(`cancelling booking ${b.id}: its page was closed`);
+      cancelProgress(b.id, 'stopped', 'The DMV page was closed before the appointment was cancelled.');
+      return;
+    }
+    // The page went to another address part way: it runs again once that has loaded.
+    log(`cancelling booking ${b.id}: the page moved on (${err.message})`);
+    if (g.again && !tab.loading) runCancel(tab);
+  });
+}
+
+function finishCancel(tab, b, status) {
+  const g = tab.cancelGuide;
+  g.done = true;
+  log(`cancelling booking ${b.id}: ${status}`);
+  if (traces) traces.add('booking.cancel', { booking: b.id, step: status.split(/[:,]/)[0].slice(0, 40) });
+  if (status === 'cancelled') {
+    cancelProgress(b.id, 'cancelled', `Cancelled on the DMV: ${whereBooked(b)}.`);
+    send('toast', { kind: 'ok', ms: 15000, text: `Cancelled: ${b.queue_name} — ${whereBooked(b)}. The DMV has given the time back.` });
+    remindNote({ title: 'Appointment cancelled', body: `${b.queue_name} — ${whereBooked(b)}. Confirmation ${b.confirmation}.`, booking: b, kind: 'cancelled' });
+    bookingGone(b, 'app');
+    return;
+  }
+  if (status === 'none' || status === 'not-listed') {
+    cancelProgress(b.id, 'not-listed', status === 'none'
+      ? 'The DMV lists no appointments under your name and phone number. If this one was cancelled already, mark it cancelled here.'
+      : `The DMV lists appointments under your name and phone number, but not confirmation ${b.confirmation}. If this one was cancelled already, mark it cancelled here.`);
+    return;
+  }
+  if (status.startsWith('error:')) {
+    cancelProgress(b.id, 'error', `The DMV said: ${status.slice(6).trim()} Try again in a few minutes, or finish on its page.`);
+    return;
+  }
+  cancelProgress(b.id, 'stopped', `The app stopped part way (${status.replace(/^stopped /, '')}). Finish on the DMV page, or try again.`);
+}
+
 function handleDoc(doc) {
   const { arrived, gone, kept } = diffHandoffs(lastDoc ? lastDoc.handoffs : [], doc.handoffs);
   noteTraces(doc, { arrived, gone, kept, before: lastDoc });
@@ -807,6 +1007,7 @@ function handleDoc(doc) {
     setPair({ paired: true, user: doc.user, pending: null, message: '' });
   }
   send('sync:doc', withNeeds(doc));
+  noteBookings(doc.bookings);
   noteAppsPolicy(doc.apps);
   if (reader && !builtin()) {
     if (doc.reader) reader.notePace(doc.reader);
@@ -1200,6 +1401,7 @@ function wireAutofill() {
   tabs.on('loaded', ({ id }) => {
     const tab = tabs.tabs.get(id);
     if (tab && tab.kind === 'handoff' && tab.guideSlot && !tab.guideDone) runGuide(tab);
+    if (tab && tab.cancelGuide && !tab.cancelGuide.done) runCancel(tab);
   });
   tabs.on('loaded', ({ id, url, jobId }) => {
     // A turn's tab is read for a confirmation again after every load (lookAtEnded).
@@ -1790,6 +1992,8 @@ function settingsView() {
     // may book a slot that is the person's (booker.js) — anywhere.
     readerEnabled: store.get('readerEnabled', true) !== false,
     robotBooking: mayBook(store),
+    // A sound with each reminder before an appointment (bookings.js).
+    reminderSound: store.get('reminderSound', true) !== false,
     realDmvChecks: reader ? reader.mayLookAtRealDmv() : false,
     // Checking lines for everybody, which earns credits on the site.
     checking: reader ? reader.enabled() : false,
@@ -1833,7 +2037,7 @@ function wireIpc() {
   handle('chrome:height', ({ px }) => tabs.setChromeHeight(px));
   // The window draws these and then they are gone. The app log keeps the sequence.
   handle('ui:note', ({ kind, text }) => {
-    if (kind !== 'notice' && kind !== 'banner') return;
+    if (kind !== 'notice' && kind !== 'banner' && kind !== 'sound') return;
     const line = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 800);
     if (line) log(`ui ${kind}: ${line}`);
   });
@@ -2037,6 +2241,46 @@ function wireIpc() {
     loop.poke();
     return reply;
   });
+  // -- My Bookings: the person's appointments (bookings.js)
+  handle('bookings:get', () => bookingsView());
+  // All of them, past and cancelled too, from the site.
+  handle('bookings:all', async () => {
+    if (!client.paired) return { list: [] };
+    const reply = await client.bookings();
+    return { list: Array.isArray(reply.bookings) ? reply.bookings : [] };
+  });
+  handle('bookings:cancel', ({ id }) => cancelBooking(Number(id)));
+  // Cancelled somewhere the app did not see: no more reminders for it.
+  handle('bookings:mark', async ({ id }) => {
+    const b = reminders.find(Number(id));
+    if (!b) throw new Error('That appointment is not among your bookings any more.');
+    cancelling.delete(b.id);
+    log(`booking ${b.id} (${whereBooked(b)}) marked cancelled by hand`);
+    await bookingGone(b, 'elsewhere');
+    return { message: `Marked as cancelled: ${whereBooked(b)}. No more reminders for it.` };
+  });
+  // The booking site's own page for it, or the picture of its confirmation.
+  handle('bookings:open', ({ id, what }) => {
+    const b = reminders.find(Number(id));
+    if (!b) throw new Error('That appointment is not among your bookings any more.');
+    if (what === 'confirmation') {
+      const shot = confirmationShot(b);
+      if (!shot) throw new Error('No picture of its confirmation page was kept on this computer.');
+      const page = confirmations.page({ shot, confirmation: b.confirmation, where: `${b.queue_name} — ${whereBooked(b)}` });
+      if (!page) throw new Error('The picture of its confirmation page could not be shown.');
+      return { id: tabs.open(pathToFileURL(page).href, { kind: 'confirmation', title: `Confirmation ${b.confirmation}` }) };
+    }
+    if (!b.manage_url) throw new Error('This booking site has no page for it.');
+    return { id: tabs.open(b.manage_url, { kind: 'page', title: `${b.office_name} ${b.date}` }) };
+  });
+  // How a reminder sounds and looks.
+  handle('bookings:try', () => {
+    const b = reminders.coming()[0];
+    remindNote({ title: 'This is how a reminder looks', kind: 'test', booking: b || null,
+      body: b ? `Before ${b.queue_name} — ${whereBooked(b)}: a day before, six hours before (8 am–7 pm) and an hour before.`
+        : 'One comes a day before each appointment, six hours before (8 am–7 pm) and an hour before.' });
+    reminderChime('test');
+  });
   handle('handoff:open', ({ job_id, anyway }) => {
     const existing = tabs.tabFor(job_id);
     if (existing) return tabs.select(existing.id);
@@ -2135,7 +2379,7 @@ function wireIpc() {
   // -- the rest
   handle('settings:get', () => settingsView());
   handle('settings:set', async ({ serverMode: mode, serverUrl, updateUrl, clientName, readerEnabled, robotBooking,
-    checking, realDmvChecks, reimportRemind, logKeepDays }) => {
+    checking, realDmvChecks, reimportRemind, logKeepDays, reminderSound }) => {
     // Another server, practice and an update feed of the app's own are for the
     // people who work on regbot: developer mode's, wherever the asking came from.
     const elsewhere = mode === 'builtin' || mode === 'remote'
@@ -2167,6 +2411,10 @@ function wireIpc() {
     if (logKeepDays !== undefined && logbook) {
       store.set('logKeepDays', logbook.setKeepDays(logKeepDays));
       logbook.prune();
+    }
+    if (typeof reminderSound === 'boolean') {
+      store.set('reminderSound', reminderSound);
+      sendBookings();
     }
     if (typeof robotBooking === 'boolean') {
       // A yes is kept with when it was said: it is the person agreeing to
@@ -2538,6 +2786,12 @@ async function main() {
     },
   });
 
+  reminders = new Reminders({
+    store, notify: remindNote, chime: reminderChime,
+    onChange: () => sendBookings(),
+    log: (message) => log(`bookings: ${message}`),
+  });
+
   win = new BaseWindow({
     width: 1280, height: 860, minWidth: 760, minHeight: 480,
     title: 'LineRight Regbot', backgroundColor: '#f4f6fb', show: true,
@@ -2590,6 +2844,9 @@ async function main() {
   wireIpc();
   await chromeContents.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
   wireSync();
+  // The page is there to sound a reminder: one due while the app was closed comes now.
+  reminders.start();
+  sendBookings();
   wireUpdates();
   rebuildMenu();
   send('pair:state', pairState);

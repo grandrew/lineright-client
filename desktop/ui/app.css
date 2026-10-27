@@ -367,3 +367,38 @@ body.mode-tab #statusline{display:none}
 .bid-opt .bo-asks{grid-column:1 / 3; font-size:12px}
 .bid-opt .bo-likely{grid-column:1 / 3; font-size:11.5px; color:var(--muted)}
 b.ok{color:var(--ok)} b.warn{color:var(--gold)} b.bad{color:var(--bad)}
+/* My Bookings (bookings.js): the counter on the bar, the appointments, asking before cancelling one */
+.bk-count{display:inline-flex; align-items:center; justify-content:center; min-width:19px; height:19px; padding:0 6px; margin-left:6px;
+  border-radius:999px; background:#16a34a; color:#fff; font-size:11.5px; font-weight:800; line-height:1; vertical-align:1px;
+  animation:bk-flash 1.6s ease-in-out infinite}
+.bk-count.soon{animation-duration:.8s}
+.bk-count.hidden{display:none}
+@keyframes bk-flash{0%,100%{opacity:1; box-shadow:0 0 0 0 rgba(22,163,74,.55)} 50%{opacity:.4; box-shadow:0 0 0 5px rgba(22,163,74,0)}}
+@media (prefers-reduced-motion: reduce){.bk-count{animation:none}}
+.bk-list{display:flex; flex-direction:column; gap:12px}
+.bk-card{display:grid; grid-template-columns:150px 1fr auto; gap:16px; align-items:start; padding:16px 18px; background:var(--surface);
+  border:1px solid var(--line-soft); border-left:4px solid #16a34a; border-radius:var(--r-lg); box-shadow:var(--lift)}
+.bk-card.soon{border-left-color:var(--gold); background:color-mix(in srgb,var(--gold-soft) 45%,var(--surface))}
+.bk-card.gone{border-left-color:var(--line); opacity:.75}
+.bk-when .bk-day{font-weight:800; font-size:15px}
+.bk-when .bk-time{font-family:var(--mono); font-weight:800; font-size:22px; letter-spacing:-.02em}
+.bk-when .bk-left{font-size:12px; color:var(--muted); margin-top:2px}
+.bk-card.soon .bk-left{color:var(--gold); font-weight:700}
+.bk-what h3{font-size:16px; margin:0 0 3px}
+.bk-what p{margin:2px 0; font-size:13px}
+.bk-what .bk-ref{font-family:var(--mono); font-weight:700}
+.bk-actions{display:flex; flex-direction:column; gap:6px; align-items:stretch; min-width:180px}
+.bk-progress{margin-top:8px; padding:7px 10px; border-radius:var(--r-sm); font-size:12.5px; background:var(--surface-2); color:var(--muted)}
+.bk-progress.cancelled{background:var(--ok-soft); color:var(--ok)}
+.bk-progress.error, .bk-progress.stopped, .bk-progress.not-listed{background:var(--gold-soft); color:var(--gold)}
+table.bk-rest td{font-size:12.5px}
+#askbox{position:fixed; inset:0; z-index:41; display:flex; align-items:center; justify-content:center; padding:16px;
+  background:color-mix(in srgb,var(--ink-base) 38%,transparent)}
+#askbox.hidden{display:none}
+#askbox .modal{width:100%; max-width:520px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
+  box-shadow:0 24px 60px -20px rgba(16,26,45,.45); padding:24px 26px}
+#askbox h2{font-size:19px; margin:0 0 10px}
+#askbox p{margin:0 0 8px}
+.btn-danger.solid{background:var(--bad); border-color:transparent; color:#fff}
+.btn-danger.solid:hover{background:color-mix(in srgb,var(--bad) 86%,#fff)}
+@media (max-width: 900px){.bk-card{grid-template-columns:1fr} .bk-actions{flex-direction:row; flex-wrap:wrap}}

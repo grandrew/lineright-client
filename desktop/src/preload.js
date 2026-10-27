@@ -11,6 +11,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 const EVENTS = new Set([
   'shell:state', 'sync:doc', 'sync:status', 'update:state', 'pair:state', 'toast',
   'app:navigate', 'autofill:done', 'stack:state', 'robots:state', 'import:due', 'developer:state',
+  // the person's appointments and how cancelling one goes (bookings.js), and a reminder's sound
+  'bookings:state', 'bookings:chime',
 ]);
 const CALLS = new Set([
   // the browser half
@@ -39,6 +41,8 @@ const CALLS = new Set([
   'import:again', 'import:again-state', 'import:later', 'import:forget',
   // hand-offs and reports
   'handoff:booked', 'handoff:pass', 'handoff:open',
+  // My Bookings: the appointments, all of them, cancelling one on the DMV's page, saying one is gone
+  'bookings:get', 'bookings:all', 'bookings:cancel', 'bookings:mark', 'bookings:open', 'bookings:try',
   'found:submit', 'found:places', 'found:prefill',
   // the server this app runs on this computer
   'stack:status', 'stack:restart', 'stack:dmv', 'stack:open',

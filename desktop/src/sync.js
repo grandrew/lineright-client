@@ -311,6 +311,16 @@ class SyncClient {
     return this.request('/api/client/account', { method: 'GET' });
   }
 
+  /** Every appointment this person's bids ended in, the latest first (the site's bookings.py). */
+  async bookings() {
+    return this.request('/api/client/bookings', { method: 'GET' });
+  }
+
+  /** The booking site says this appointment is cancelled: `how` is app, page or elsewhere. */
+  async bookingCancelled(bookingId, how = 'app') {
+    return this.request(`/api/client/bookings/${Number(bookingId)}/cancelled`, { body: { how } });
+  }
+
   /** Buy a pack of credits: a payment page to open, or (practice) credited now. The
    *  older route, which every regbot site has; /credits/checkout is its new name. */
   async topup(pack) {

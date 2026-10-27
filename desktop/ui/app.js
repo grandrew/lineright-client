@@ -46,6 +46,9 @@
     advRange: '1h', advTimer: null, advPreview: null, advTrace: false,
     again: null,       // the weekly re-import, when it is asking: {due, sources, busy, result} (reimport.js)
     againKey: '',
+    bookings: null,    // the appointments, each with its next reminder and how a cancel goes (src/bookings.js)
+    bookingsAll: null, bookingsAllAt: 0, bookingsLoading: false, bookingsPainted: 0,
+    bookingAsk: null,  // asking before cancelling one, or marking one cancelled: {kind, id, busy, error}
   };
 
   // ------------------------------------------------------------ helpers
@@ -253,7 +256,7 @@
     const link = (label, page, params) => `<a data-go="${esc(JSON.stringify({ page, params: params || {} }))}">${esc(label)}</a>`;
     const here = (label) => `<span class="here">${esc(label)}</span>`;
     // The two top-level screens are already named by the buttons beside the crumbs.
-    if (r.page === 'sites' || r.page === 'console') { /* nothing */ }
+    if (r.page === 'sites' || r.page === 'console' || r.page === 'bookings') { /* nothing */ }
     else if (r.page === 'site') { const d = state.siteDocs[r.slug]; parts.push(link('Sites', 'sites'), here(d ? d.site.name : r.slug)); }
     else if (r.page === 'board') {
       const b = state.board && state.board.queue.id === Number(r.id) ? state.board : null;
@@ -671,6 +674,7 @@
       case 'site': return renderSite();
       case 'board': return renderBoard();
       case 'console': return renderConsole();
+      case 'bookings': return renderBookings();
       case 'profile': return renderProfile();
       case 'import': return renderImport();
       case 'settings': state.resetAsk = false; return renderSettings(true);
@@ -1622,6 +1626,189 @@
   async function loadAccount() {
     state.account = await call('server:account');
     return state.account;
+  }
+
+  // ---------------------------------------------------------- my bookings
+  const bk = () => window.bookingsPage;
+
+  /** The counter on the bar: the appointments still to come, flashing green; faster within a day. */
+  function renderBookingsCount() {
+    const el = $('bk-count');
+    if (!el) return;
+    const c = bk().counter(state.bookings ? state.bookings.list : [], Date.now());
+    el.textContent = c.count ? String(c.count) : '';
+    el.classList.toggle('hidden', !c.count);
+    el.classList.toggle('soon', c.soon);
+    $('nav-bookings').title = c.count
+      ? `${c.count} appointment${c.count === 1 ? '' : 's'} coming up${c.soon ? ', one within a day' : ''}: see them, or cancel one`
+      : 'Your appointments, and cancelling one';
+  }
+
+  /** A reminder's sound: three rising notes, twice for the last hour. Made here: no file to fetch. */
+  let audio = null;
+  function chime(kind) {
+    uiNote('sound', `reminder ${kind}`);
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+      const notes = kind === 'hour' ? [784, 988, 1175, 1568] : [659, 831, 988];
+      let at = audio.currentTime + 0.05;
+      for (let round = 0; round < (kind === 'hour' ? 2 : 1); round += 1) {
+        for (const freq of notes) {
+          const osc = audio.createOscillator();
+          const gain = audio.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.0001, at);
+          gain.gain.exponentialRampToValueAtTime(0.3, at + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.7);
+          osc.connect(gain).connect(audio.destination);
+          osc.start(at);
+          osc.stop(at + 0.75);
+          at += 0.2;
+        }
+        at += 0.6;
+      }
+    } catch { /* no sound on this computer: the notification still came */ }
+  }
+
+  async function loadAllBookings() {
+    state.bookingsLoading = true;
+    try {
+      const r = await call('bookings:all');
+      state.bookingsAll = Array.isArray(r.list) ? r.list : [];
+    } catch {
+      state.bookingsAll = state.bookingsAll || [];
+    } finally {
+      state.bookingsLoading = false;
+      state.bookingsAllAt = Date.now();
+    }
+    if (state.route.page === 'bookings') renderBookings();
+  }
+
+  const PROGRESS = { cancelling: '…', cancelled: '✓', 'not-listed': '!', error: '!', stopped: '!' };
+
+  function bookingCard(b, now) {
+    const P = bk();
+    const left = P.startsAt(b) - now;
+    const soon = left < 24 * 3600000;
+    const where = [b.address].filter(Boolean).join('');
+    const c = b.cancelling;
+    const busy = c && c.phase === 'cancelling';
+    const next = P.nextWords(b);
+    return `<div class="bk-card${soon ? ' soon' : ''}" data-booking="${num(b.id)}" style="--accent-raw:${esc(b.accent || '')}">
+      <div class="bk-when">
+        <div class="bk-day">${esc(prettyDate(b.date))}</div>
+        <div class="bk-time">${esc(P.timeLabel(b.time))}</div>
+        <div class="bk-left">${esc(P.untilWords(left))}</div>
+      </div>
+      <div class="bk-what">
+        <h3>${esc(b.office_name || b.queue_name)} <span class="muted" style="font-weight:500">· ${esc(b.queue_name)}</span></h3>
+        ${where ? `<p>${esc(where)}</p>` : ''}
+        <p class="small">${b.confirmation ? `Confirmation <span class="bk-ref">${esc(b.confirmation)}</span> · ` : ''}${esc(P.viaWords(b) || 'booked')} · ${esc(b.site_name || '')}</p>
+        ${next ? `<p class="small muted">Next reminder: ${esc(next)}</p>` : ''}
+        ${c ? `<div class="bk-progress ${esc(c.phase)}">${esc(PROGRESS[c.phase] || '')} ${esc(c.text || '')}${busy && c.tabId ? ' <a data-bk-tab="' + num(c.tabId) + '">Show the DMV page</a>' : ''}</div>` : ''}
+      </div>
+      <div class="bk-actions">
+        <button class="btn btn-danger" data-bk-cancel="${num(b.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Cancelling…' : 'Cancel appointment…'}</button>
+        ${b.manage_url ? `<button class="btn btn-ghost btn-sm" data-bk-open="${num(b.id)}">View it on the DMV</button>` : ''}
+        ${b.shot ? `<button class="btn btn-ghost btn-sm" data-bk-shot="${num(b.id)}">Confirmation picture</button>` : ''}
+        <a class="tiny" data-bk-mark="${num(b.id)}" style="text-align:center">Cancelled it some other way?</a>
+      </div>
+    </div>`;
+  }
+
+  function renderBookings() {
+    const page = $('page');
+    if (!paired()) return needSignin('My Bookings');
+    const now = Date.now();
+    const P = bk();
+    const v = state.bookings || { list: [], sound: true };
+    const { coming } = P.split(v.list, now);
+    // What is over or cancelled is the site's whole list; fetched on the visit, and again a minute on.
+    if (!state.bookingsLoading && (!state.bookingsAll || now - state.bookingsAllAt > 60000)) loadAllBookings();
+    const byId = new Map((state.bookingsAll || []).map((b) => [b.id, b]));
+    for (const b of v.list) byId.set(b.id, b);
+    const rest = P.split([...byId.values()], now).rest;
+    state.bookingsPainted = now;
+    page.innerHTML = `<div class="wrap" style="max-width:980px">
+      <div class="between" style="margin-bottom:6px"><h1 style="font-size:24px">My bookings</h1>
+        <button class="btn btn-sm btn-ghost" id="bk-try">Try the reminder</button></div>
+      <p class="small muted" style="margin:0 0 16px">A reminder comes before each appointment: a day before, six hours before (kept between 8 am and 7 pm) and an hour before — a desktop notification${v.sound === false ? '' : ' and a sound'}. ${v.sound === false ? 'The sound is off in <a data-go-settings>Settings</a>.' : 'Turn the sound off in <a data-go-settings>Settings</a>.'}</p>
+      ${coming.length ? `<div class="bk-list">${coming.map((b) => bookingCard(b, now)).join('')}</div>`
+        : `<div class="panel"><div class="empty">No appointments coming up. When the app books one for you, it shows here, with a reminder before it.</div></div>`}
+      ${rest.length ? `<h2 style="font-size:16px; margin:24px 0 8px">Earlier and cancelled</h2>
+        <div class="panel" style="padding:6px 14px"><table class="data bk-rest"><tbody>${rest.slice(0, 30).map((b) => `<tr>
+          <td>${esc(prettyDate(b.date))} ${esc(P.timeLabel(b.time))}</td>
+          <td><b>${esc(b.office_name || '')}</b> · ${esc(b.queue_name || '')}</td>
+          <td class="num">${esc(b.confirmation || '')}</td>
+          <td>${b.status === 'cancelled' ? `<span class="bad">Cancelled</span>${b.cancelled_how === 'app' ? ' by the app' : ''}` : '<span class="muted">Over</span>'}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    </div>`;
+    page.querySelectorAll('[data-bk-cancel]').forEach((el) => el.addEventListener('click', () => askBooking('cancel', Number(el.dataset.bkCancel))));
+    page.querySelectorAll('[data-bk-mark]').forEach((el) => el.addEventListener('click', () => askBooking('mark', Number(el.dataset.bkMark))));
+    page.querySelectorAll('[data-bk-open]').forEach((el) => el.addEventListener('click', () => call('bookings:open', { id: Number(el.dataset.bkOpen), what: 'manage' }).catch((err) => toast('bad', err.message, 9000))));
+    page.querySelectorAll('[data-bk-shot]').forEach((el) => el.addEventListener('click', () => call('bookings:open', { id: Number(el.dataset.bkShot), what: 'confirmation' }).catch((err) => toast('bad', err.message, 9000))));
+    page.querySelectorAll('[data-bk-tab]').forEach((el) => el.addEventListener('click', () => api.call('tabs:select', { id: Number(el.dataset.bkTab) })));
+    page.querySelectorAll('[data-go-settings]').forEach((el) => el.addEventListener('click', () => go('settings')));
+    $('bk-try').addEventListener('click', () => api.call('bookings:try'));
+  }
+
+  function askBooking(kind, id) {
+    state.bookingAsk = { kind, id, busy: false, error: '' };
+    renderAsk();
+  }
+
+  /** Asked before an appointment is cancelled, or marked cancelled: neither can be undone here. */
+  function renderAsk() {
+    const box = $('askbox');
+    const a = state.bookingAsk;
+    const b = a && state.bookings && state.bookings.list.find((x) => x.id === a.id);
+    if (!a || !b) { box.classList.add('hidden'); box.innerHTML = ''; state.bookingAsk = null; return; }
+    const P = bk();
+    const what = `<p><b>${esc(b.queue_name)}</b> — ${esc(b.office_name)}, ${esc(prettyDate(b.date))} at ${esc(P.timeLabel(b.time))}${b.confirmation ? `. Confirmation <span class="num">${esc(b.confirmation)}</span>` : ''}.</p>`;
+    const profileGap = a.error && /^To find your appointment/.test(a.error);
+    const body = a.kind === 'cancel'
+      ? `<h2 id="ask-title">Cancel this appointment?</h2>${what}
+        <p class="small">The app opens the DMV's own View/Cancel page in a tab, looks your appointments up under your name and phone number, and cancels this one — the confirmation number tells it apart. The DMV gives the time to somebody else. It cannot be undone, and the credits your bid spent are not returned.</p>
+        ${a.error ? `<div class="note bad" style="margin:8px 0">${esc(a.error)}</div>` : ''}
+        <div class="row" style="margin-top:14px">
+          ${profileGap ? '<button class="btn btn-accent" id="ask-profile">Open your profile</button>'
+            : `<button class="btn btn-danger solid" id="ask-yes" ${a.busy ? 'disabled' : ''}>${a.busy ? 'Opening the DMV page…' : 'Cancel the appointment'}</button>`}
+          <button class="btn btn-ghost" id="ask-no">Keep it</button></div>`
+      : `<h2 id="ask-title">Mark it cancelled?</h2>${what}
+        <p class="small">Only if it is cancelled already — on the DMV's site, by phone, or at the office. The app stops reminding you of it, and the DMV is not asked anything.</p>
+        ${a.error ? `<div class="note bad" style="margin:8px 0">${esc(a.error)}</div>` : ''}
+        <div class="row" style="margin-top:14px"><button class="btn btn-danger" id="ask-yes" ${a.busy ? 'disabled' : ''}>It is cancelled</button>
+          <button class="btn btn-ghost" id="ask-no">Keep it</button></div>`;
+    box.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="ask-title">${body}</div>`;
+    box.classList.remove('hidden');
+    const close = () => { state.bookingAsk = null; renderAsk(); };
+    $('ask-no').addEventListener('click', close);
+    box.onclick = (e) => { if (e.target === box && !a.busy) close(); };
+    if ($('ask-profile')) $('ask-profile').addEventListener('click', () => { close(); go('profile'); });
+    if ($('ask-yes')) {
+      $('ask-yes').addEventListener('click', async () => {
+        a.busy = true; a.error = ''; renderAsk();
+        try {
+          if (a.kind === 'cancel') {
+            await call('bookings:cancel', { id: a.id });
+          } else {
+            const r = await call('bookings:mark', { id: a.id });
+            toast('ok', r.message, 9000);
+          }
+          close();
+        } catch (err) {
+          a.busy = false; a.error = err.message; renderAsk();
+        }
+      });
+    }
+  }
+
+  function tickBookings() {
+    if (Date.now() - (state.bookingsTicked || 0) < 30000) return;
+    state.bookingsTicked = Date.now();
+    renderBookingsCount();
+    if (state.route.page === 'bookings' && !state.bookingAsk) renderBookings();
   }
 
   function renderConsole() {
@@ -2834,6 +3021,13 @@
         <span class="field-help">When a bid's time passes with nothing booked, its reach climbs a step — 5 hours becomes a day, 5 days two weeks — and again each day after, until a booking comes. It keeps its amount and its place in line. This sets every bid you have now and the ones you place next; a bid's own board can still switch it for that bid.</span></label></div></div>`;
   }
 
+  function remindersPanel(s) {
+    return `<div class="panel" id="s-reminders"><div class="panel-title">Appointment reminders</div>
+      <div class="check" style="margin-bottom:0"><input type="checkbox" id="s-remsound" ${s.reminderSound !== false ? 'checked' : ''}>
+        <label for="s-remsound"><span class="small"><b>Play a sound with each reminder</b></span>
+        <span class="field-help">Before each appointment in My Bookings: a day before, six hours before (kept between 8 am and 7 pm) and an hour before, each a desktop notification. <a id="s-remtry">Try it</a></span></label></div></div>`;
+  }
+
   function robotsPanel(s) {
     if (s.serverMode === 'builtin') return '';
     const r = s.robots || {};
@@ -2960,6 +3154,7 @@
       <div id="settingsForm" class="stack">
         ${serverPanel(s)}
         ${biddingPanel()}
+        ${remindersPanel(s)}
         <div class="panel"><div class="panel-title">Updates</div>
           <p class="small" style="margin:0 0 10px"><span id="s-update-text">${esc(updateText(s.updates))}</span> <button class="btn btn-sm" id="s-check" ${s.updates && s.updates.phase === 'disabled' ? 'disabled' : ''} style="margin-left:8px">Check now</button></p>
           ${dev() ? `<label class="field"><span class="field-label">Update feed <span class="test-badge">Developer</span></span><div class="row"><input id="s-feed" value="${esc(s.updateUrl || '')}" placeholder="blank = the feed this build was published to (GitHub Releases)" style="flex:1"><button class="btn" id="s-feed-save">Save</button></div>
@@ -3002,6 +3197,14 @@
     on('s-feed-save', guarded(async () => { settle(await call('settings:set', { updateUrl: $('s-feed').value })); toast('ok', 'Update feed saved — it is followed from the next start.'); }));
     on('s-use-public', guarded(async () => { settle(await call('settings:set', { serverMode: 'public' })); toast('ok', 'Using the LineRight Regbot site. Create your account or sign in next.'); }));
     on('s-check', () => api.call('update:check'));
+    const soundBox = $('s-remsound');
+    if (soundBox) {
+      soundBox.addEventListener('change', async () => {
+        state.settings = await api.call('settings:set', { reminderSound: soundBox.checked });
+        toast('ok', soundBox.checked ? 'Reminders come with a sound.' : 'Reminders come without a sound.');
+      });
+    }
+    on('s-remtry', () => api.call('bookings:try'));
     const widenBox = $('s-autowiden');
     if (widenBox) {
       widenBox.addEventListener('change', async () => {
@@ -3211,9 +3414,18 @@
   });
   api.on('toast', (t) => toast(t.kind || 'ok', t.text, t.ms));
   api.on('app:navigate', ({ page, params }) => go(page, params || {}));
+  api.on('bookings:state', (v) => {
+    const before = state.bookings;
+    state.bookings = v;
+    renderBookingsCount();
+    // A cancel that finished, or one more appointment: the full list is fetched again.
+    if (before && JSON.stringify(before.list.map((b) => [b.id, b.status])) !== JSON.stringify(v.list.map((b) => [b.id, b.status]))) state.bookingsAll = null;
+    if (state.route.page === 'bookings' && !state.bookingAsk) renderBookings();
+  });
+  api.on('bookings:chime', ({ kind }) => chime(kind));
   api.on('autofill:done', () => {});
 
-  setInterval(() => { tickClocks(); renderStatus(); tickBoard(); }, 1000);
+  setInterval(() => { tickClocks(); renderStatus(); tickBoard(); tickBookings(); }, 1000);
 
   // Boot: the import screen while it is still worth offering — a profile is
   // what the app fills a booking form from, and the browser on this machine
@@ -3235,6 +3447,7 @@
     if (s.developer && s.developer.on && ['help', 'signin'].includes(state.route.page)) render();
   });
   api.call('profile:get').then((p) => { state.profile = p; });
+  api.call('bookings:get').then((v) => { state.bookings = v; renderBookingsCount(); });
   api.call('robots:status').then((r) => { state.robots = r; renderStatus(); });
   applyMode(); renderUpdate();
 })();

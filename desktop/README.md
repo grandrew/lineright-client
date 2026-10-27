@@ -300,6 +300,49 @@ Picking one fills the form in; nothing is placed until you bid. Above them it
 says the chance of the form as you filled it in. It is an estimate: next week
 is taken to be like last week, so the app says "about".
 
+## My Bookings
+
+**My Bookings**, on the bar beside Sites and Console, lists your appointments.
+A green counter beside it flashes while one is still to come, and faster when
+one is less than a day away. The list comes from the site, which keeps
+every appointment a bid ended in (its `bookings.py`); the app keeps a copy,
+so its reminders still come when the site cannot be reached (`src/bookings.js`).
+
+Each card shows:
+- the day and time, and how long until it;
+- the office and its address;
+- the confirmation number, and how it was booked;
+- the next reminder.
+
+**Reminders.** One comes before each appointment, as a desktop notification
+and a sound (made by the app, `ui/app.js`). Clicking the notification opens
+My Bookings. Settings → Appointment reminders turns the sound off, and its
+*Try it* plays one.
+- **A day before.**
+- **Six hours before, kept between 8 am and 7 pm.** Before 8 am it moves to
+  8 am, or to 7 pm the evening before when 8 am would be less than two hours
+  before the appointment.
+- **An hour before.**
+
+Times are the office's own clock. A reminder that fell due while the app was
+closed comes when it opens, if the appointment is still ahead: the latest one,
+once.
+
+**Cancelling.** *Cancel appointment…* asks first, then opens the DMV's own
+"View/Cancel Appointment" page in a tab (`src/dmv-cancel.js`). There it:
+1. types in the name and phone number from your profile, and looks your
+   appointments up;
+2. finds this one by its confirmation number, and only this one;
+3. answers the DMV's "Are you sure?" (for a drive test, with the licence number
+   and date of birth it asks for);
+4. waits for "Your appointment has been canceled."
+
+The site then marks the appointment cancelled, and no more reminders come. A
+human check the DMV puts up is yours to answer in the page. If the DMV does not
+list the appointment under that name and number, the app says so and changes
+nothing. *Cancelled it some other way?* marks one cancelled without asking the
+DMV. Cancelling does not return the credits the bid spent.
+
 ## Advanced: telemetry and diagnostics
 
 **Help → Advanced** (or **Settings → Advanced**) is how this app is doing, kept
@@ -774,6 +817,8 @@ each:
 | `src/robots.js` | Runs the DMV robots (`../dmq`'s scout and booking handler) for the regbot site, on the app's own binary, and decides where they may go |
 | `src/reader.js` | Looking for openings when the site hands this device a read, and answering it |
 | `src/booker.js` | Booking the person's own slot with the robot when the site hands it over, and what comes of it |
+| `src/bookings.js` | The person's appointments and the reminders before each: a day, six hours (8 am–7 pm) and an hour before |
+| `src/dmv-cancel.js` | Cancelling one appointment on the DMV's View/Cancel page, in a tab, by its confirmation number |
 | `src/logbook.js` | The logs folder: the day's files, a folder per robot run, what is struck out before anything is written, and what goes after how long |
 | `src/pagelog.js` | Writing down a page in a tab as it goes: its network through the DevTools protocol, clicks and changes and copies of the page from a world of its own |
 | `src/pinger.js` | Pinging the site: being timed, and hearing at once that a slot was released to the person |
@@ -816,7 +861,7 @@ tab at once.
 ## Tests
 
 ```bash
-npm test          # 368 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
+npm test          # 379 tests: sync, store, which server a run uses, the robots, the reader, the booker, the pinger, telemetry,
                   # the trace (what takes the person out of it — a random profile in every spelling — how it is kept,
                   # what it is made of, and a smoke run whose site asks for it), portal,
                   # updater, menu, profile, needs, autofill, what goes to the browser and the page's policy,

@@ -1371,6 +1371,123 @@ test('a bid that widened by itself says so on top, with the suggestion and the b
   assert.equal(result.server, `http://127.0.0.1:${port}`);
 });
 
+/** A regbot site with one appointment tomorrow morning, and one cancelled yesterday (bookings.py). */
+async function bookingsStub() {
+  const seen = { cancelled: [], lists: 0 };
+  const startsAt = new Date(Date.now() + 20 * 3600000);
+  const pad = (n) => String(n).padStart(2, '0');
+  // The line's clock is UTC here, so the wall time is the instant's own.
+  const date = `${startsAt.getUTCFullYear()}-${pad(startsAt.getUTCMonth() + 1)}-${pad(startsAt.getUTCDate())}`;
+  const time = `${pad(startsAt.getUTCHours())}:${pad(startsAt.getUTCMinutes())}`;
+  const booking = { id: 41, bid_id: 5, job_id: 126, queue_id: 8, queue_name: 'REAL ID application', site_name: 'California DMV',
+    site_slug: 'ca-dmv', accent: '#0b63d6', office_code: 'X', office_name: 'San Jose', address: '111 W Alma Avenue, San Jose 95110',
+    date, time, timezone: 'UTC', starts_at: startsAt.toISOString().replace(/\.\d+Z$/, 'Z'), confirmation: '269303047',
+    booked_via: 'robot', device: 'desk', booked_at: new Date().toISOString(), status: 'booked', cancelled_at: null, cancelled_how: null,
+    manage_url: 'http://127.0.0.1:9/portal/appointments/appt-edit', cancel_needs: ['first_name', 'last_name', 'phone'] };
+  const old = { ...booking, id: 40, date: '2026-01-05', time: '09:00', starts_at: '2026-01-05T09:00:00Z', confirmation: '111',
+    status: 'cancelled', cancelled_how: 'app', office_name: 'Los Gatos' };
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    const read = () => new Promise((resolve) => { let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => resolve(b ? JSON.parse(b) : {})); });
+    if (url.pathname === '/api/client/sites') return json(200, { protocol: 'RQP/1', sites: [] });
+    if (url.pathname === '/api/client/sync') {
+      return json(200, { protocol: 'RQP/1', poll_after_ms: 1500, user: { id: 1, nickname: 'ada', balance: 455, escrow: 0 },
+        positions: [], handoffs: [], settled: [], reports: [], bookings: [booking] });
+    }
+    if (url.pathname === '/api/client/bookings') {
+      seen.lists += 1;
+      return json(200, { protocol: 'RQP/1', kind: 'client.bookings', bookings: [booking, old] });
+    }
+    if (url.pathname === '/api/client/bookings/41/cancelled') {
+      return read().then((body) => {
+        seen.cancelled.push(body);
+        booking.status = 'cancelled'; booking.cancelled_how = body.how; booking.cancelled_at = new Date().toISOString();
+        json(200, { ok: true, booking, message: 'Cancelled.' });
+      });
+    }
+    res.writeHead(404); res.end();
+    return undefined;
+  });
+  const port = await listen(server);
+  return { server, seen, port };
+}
+
+test('My Bookings: a green counter on the bar, a reminder with its sound, cancelling asks first, and one cancelled elsewhere is marked so',
+  { timeout: 120000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+  const { server, seen, port } = await bookingsStub();
+  t.after(() => server.close());
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-bookings-'));
+  const run = startApp({ electron, display, port, userData, exitAfter: 25000, extra: ['--remote-debugging-port=0'] });
+  let ui = null;
+  const appLog = () => {
+    const dir = path.join(userData, 'logs');
+    try { return fs.readdirSync(dir).filter((f) => /^app-.*\.log$/.test(f)).map((f) => fs.readFileSync(path.join(dir, f), 'utf8')).join(''); }
+    catch { return ''; }
+  };
+  try {
+    const devPort = Number(await until(() => fs.readFileSync(path.join(userData, 'DevToolsActivePort'), 'utf8').split('\n')[0], 30000, 'DevTools'));
+    ui = await pageWhere(devPort, (u) => u.endsWith('/ui/index.html'), 'the app page');
+
+    // The counter: one coming, within a day, so it flashes faster.
+    const counter = await until(async () => {
+      const c = await ui.evaluate("(() => { const e = document.getElementById('bk-count'); return e && !e.classList.contains('hidden') ? [e.textContent, e.className] : null; })()");
+      return c;
+    }, 30000, 'the counter');
+    assert.equal(counter[0], '1');
+    assert.match(counter[1], /\bsoon\b/);
+    assert.equal(await ui.evaluate("getComputedStyle(document.getElementById('bk-count')).animationName"), 'bk-flash');
+
+    // Tomorrow's appointment is less than a day away: the day-before reminder is due at once, with its sound.
+    await until(() => /bookings: reminder day for booking 41/.test(appLog()), 20000, 'the reminder');
+    await until(() => /ui sound: reminder day/.test(appLog()), 10000, 'its sound');
+    assert.match(appLog(), /Your appointment is (today|tomorrow) at/);
+
+    // The page: the coming one, and what is over or cancelled from the full list.
+    await ui.evaluate("document.getElementById('nav-bookings').click()");
+    const page = await until(async () => {
+      const text = await ui.evaluate("document.getElementById('page').innerText");
+      return /Earlier and cancelled/.test(text) && text;
+    }, 15000, 'My Bookings');
+    assert.match(page, /San Jose/);
+    assert.match(page, /111 W Alma Avenue/);
+    assert.match(page, /269303047/);
+    assert.match(page, /booked by this app's robot on desk/);
+    assert.match(page, /Next reminder: .*\((six hours|an hour) before\)/);
+    assert.match(page, /Los Gatos[\s\S]*Cancelled by the app/);
+    assert.ok(seen.lists >= 1);
+
+    // Cancelling asks first; with no name and phone in the profile it says what the DMV needs.
+    await ui.evaluate("document.querySelector('[data-bk-cancel]').click()");
+    assert.match(await ui.evaluate("document.getElementById('askbox').innerText"), /Cancel this appointment\?[\s\S]*cannot be undone/);
+    await ui.evaluate("document.getElementById('ask-yes').click()");
+    const said = await until(async () => {
+      const text = await ui.evaluate("document.getElementById('askbox').innerText");
+      return /DMV asks for your/.test(text) && text;
+    }, 10000, 'what the profile lacks');
+    assert.match(said, /first name and last name and phone number/);
+    assert.ok(await ui.evaluate("Boolean(document.getElementById('ask-profile'))"), 'a way to the profile');
+    await ui.evaluate("document.getElementById('ask-no').click()");
+    assert.deepEqual(seen.cancelled, [], 'nothing was said to the site');
+
+    // Cancelled some other way: marked so, the site is told, and the counter goes.
+    await ui.evaluate("document.querySelector('[data-bk-mark]').click()");
+    assert.match(await ui.evaluate("document.getElementById('askbox').innerText"), /Mark it cancelled\?/);
+    await ui.evaluate("document.getElementById('ask-yes').click()");
+    await until(() => seen.cancelled.length === 1, 10000, 'the site told');
+    assert.deepEqual(seen.cancelled[0], { how: 'elsewhere' });
+    await until(() => ui.evaluate("document.getElementById('bk-count').classList.contains('hidden')"), 10000, 'the counter gone');
+  } finally {
+    if (ui) ui.close();
+  }
+  const result = await run.result;
+  assert.equal(result.server, `http://127.0.0.1:${port}`);
+});
+
 /**
  * A regbot site that asks for the app's trace: every sync answers how far it has
  * it, and once the app has a turn's worth written down, asks for it — once —
