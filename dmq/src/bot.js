@@ -556,33 +556,106 @@ export async function readOpenDay(page, index) {
   }
 }
 
+/**
+ * Offer the page to whoever oversees this robot (the desktop app's AI
+ * oversight, through control.js), when the robot is stuck: `hooks.onTrouble`.
+ * Resolves to what the overseer made of it, as one of this file's outcomes, or
+ * null when nobody took over — and the robot then ends as it would have.
+ *
+ * What it says it booked is believed only when the number it names is on the
+ * page in front of it; and once it has had the page with the booking form not
+ * yet sent, anything short of a confirmed booking or a slot that is gone is
+ * unconfirmed if it may have pressed the button that books — so a person is
+ * never told to book again what may be booked already.
+ */
+async function overseen(page, config, hooks, office, trouble, log) {
+  if (!hooks.onTrouble || page.isClosed()) return null;
+  log('OVERSEER_ASKED', `${trouble.stage}: ${trouble.why}`);
+  let outcome;
+  try {
+    outcome = await hooks.onTrouble(page, trouble);
+  } catch (error) {
+    log('OVERSEER_FAILED', error.message);
+    return null;
+  }
+  if (!outcome) return null;
+  const where = { date: office.date, time: outcome.time || office.time || trouble.time || '', office: office.office ?? office.term };
+  log('OVERSEER_DONE', `${trouble.stage}: ${outcome.status}${outcome.why ? ` — ${outcome.why}` : ''}`);
+  if (outcome.status === 'booked' && outcome.confirmation) {
+    const reference = String(outcome.confirmation).trim();
+    const text = await page.locator('body').innerText().catch(() => '');
+    if (reference.length >= 4 && (text.includes(reference) || page.url().includes(encodeURIComponent(reference)))) {
+      log('BOOKED_SUCCESS', `${where.office} ${office.date.toDateString()} ${where.time} ref=${reference} (overseen)`);
+      const shot = await keepConfirmation(page, config.confirmationShotPath);
+      return { status: 'BOOKED_SUCCESS', ...where, reference, url: page.url(), shot, overseen: true };
+    }
+    return { status: 'BOOKING_UNCONFIRMED', ...where, overseen: true,
+      seen: `the overseer said ${reference}, which is not on the page (${await describeUnconfirmed(page)})` };
+  }
+  if (outcome.status === 'gone') {
+    log('SLOT_GONE', `${where.office}: ${outcome.why || 'the overseer found it gone'} (overseen)`);
+    return { status: NO_AVAILABILITY, slot_gone: true, office: where.office, date: office.date, overseen: true };
+  }
+  if (outcome.status === 'gate') {
+    const error = new Error(`A human check stopped the booking: ${outcome.why || 'the overseer saw one'}`);
+    error.gate = await readGate(page, `booking at ${where.office}`);
+    throw error;
+  }
+  if (outcome.status === 'unconfirmed' || (outcome.submitted && !trouble.readOnly)) {
+    return { status: 'BOOKING_UNCONFIRMED', ...where, overseen: true,
+      seen: outcome.why || await describeUnconfirmed(page) };
+  }
+  return null;
+}
+
 async function bookAt(context, config, office, log, hooks = {}) {
   const page = await context.newPage();
+  // How far it got, for an overseer that takes over: where it was, and whether
+  // the booking form has gone (after which the page is only looked at).
+  const at = { step: 'opening the appointment page', sent: false };
+  const term = office.office ?? office.term;
+  const wanted = { office: term, date: dateKey(office.date), time: office.time || null };
+  const help = (stage, why, extra = {}) => overseen(page, config, hooks, office,
+    { stage, why: String(why || '').slice(0, 600), step: at.step, wanted, ...extra }, log);
   try {
     await applyCaptchaToken(page, config.captchaToken);
     await applySolver(page, config.solverUrl);
     await navigateToLocationSearch(page, config);
-    await searchOffices(page, office.office ?? office.term);
+    at.step = 'finding the office';
+    await searchOffices(page, term);
     const button = await officeSelectButton(page, {
-      term: office.office ?? office.term,
-      isZip: /^\d{5}$/.test(office.office ?? office.term),
+      term,
+      isZip: /^\d{5}$/.test(term),
     });
     await button.click();
     await page.waitForURL(/select-date/, { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(2000);
 
-    const candidates = await scanCalendar(page, config, log, office.office ?? office.term);
+    at.step = 'reading the calendar';
+    const candidates = await scanCalendar(page, config, log, term);
     const target = candidates.find((c) => c.date.getTime() === office.date.getTime());
     // An allocated slot that is not there is gone: say so, so it is taken off
     // the board rather than handed to the next person to find the same page.
-    const gone = (why) => {
+    // Unless the page showed nothing to choose from at all — which is what a
+    // calendar or a list of times drawn some new way looks like to this robot
+    // too: an overseer looks first, and may yet book it.
+    const gone = async (why, { suspicious = false } = {}) => {
+      if (suspicious) {
+        const looked = await help('gone', why, { suspicious: true });
+        if (looked) return looked;
+      }
       log('SLOT_GONE', `${office.office}: ${why}`);
       return { status: NO_AVAILABILITY, slot_gone: true, office: office.office, date: office.date };
     };
-    if (!target) return gone(`${office.date.toDateString()} no longer listed`);
+    if (!target) {
+      return gone(`${office.date.toDateString()} no longer listed${candidates.length ? '' : ' — no open day at all'}`,
+        { suspicious: !candidates.length });
+    }
 
     const capture = attachTimesCapture(page);
     let choices = [];
+    let seenTimes = 0;
+    at.step = 'choosing the time';
     try {
       await openTimeButtons(page).nth(target.index).click();
       // The heading is on the page while the times are still loading, so it is
@@ -595,6 +668,7 @@ async function bookAt(context, config, office, log, hooks = {}) {
         if (time) parsed.push({ label: label.trim(), time });
       }
       const networkTimes = (fromNetwork && fromNetwork.times) || [];
+      seenTimes = parsed.length + networkTimes.length;
       // Allocated a time, the robot books that time and no other. The live
       // label can read "Invalid Date" while the times response still lists
       // "14:20"; the label's position in that list is the button to press.
@@ -613,11 +687,15 @@ async function bookAt(context, config, office, log, hooks = {}) {
       capture.stop();
     }
     if (office.time && choices.length === 0) {
-      return gone(`${office.date.toDateString()} ${office.time} no longer listed`);
+      return gone(`${office.date.toDateString()} ${office.time} no longer listed${seenTimes ? '' : ' — no time at all'}`,
+        { suspicious: !seenTimes });
     }
     if (choices.length === 0) return { status: NO_AVAILABILITY };
 
     let booked = null;
+    // Choices with no Confirm to press at all: not a slot taken, a page this
+    // robot no longer knows its way round.
+    let noConfirm = 0;
     for (const slot of choices) {
       if (slot.index !== undefined) {
         await page.locator('#time-selector label.appt-dialog-time__label').nth(slot.index).click();
@@ -630,7 +708,10 @@ async function bookAt(context, config, office, log, hooks = {}) {
       await page.waitForTimeout(1000);
 
       const confirm = page.getByRole('button', { name: /^confirm$/i }).first();
-      if (!(await confirm.isVisible().catch(() => false))) continue;
+      if (!(await confirm.isVisible().catch(() => false))) {
+        noConfirm += 1;
+        continue;
+      }
       if (await confirm.isDisabled().catch(() => true)) continue;
 
       await confirm.click();
@@ -645,11 +726,15 @@ async function bookAt(context, config, office, log, hooks = {}) {
       booked = slot.label;
       break;
     }
+    if (!booked && noConfirm === choices.length) {
+      throw new Error(`No "Confirm" button after choosing ${choices.map((c) => c.label).join(', ')}`);
+    }
     if (!booked) {
       if (office.time) return gone(`${office.date.toDateString()} ${office.time} was taken as it was chosen`);
       return { status: NO_AVAILABILITY };
     }
 
+    at.step = 'filling in the details';
     await page.getByRole('textbox', { name: /first name/i }).fill(config.firstName);
     await page.getByRole('textbox', { name: /last name/i }).fill(config.lastName);
     await page.getByRole('textbox', { name: /email address/i }).fill(config.email);
@@ -659,7 +744,9 @@ async function bookAt(context, config, office, log, hooks = {}) {
     // perhaps booked (bin/rqp-handler.js, idempotency.js).
     await hooks.onSubmit?.();
     // The last step: the confirmation is waited for below, not a fixed while.
+    at.step = 'sending the booking';
     await press(page, /schedule appointment/i, { settle: false });
+    at.sent = true;
 
     // From here on an appointment may exist whatever the page says, so nothing
     // below may throw: an error would reach regbot as transient and be retried,
@@ -670,6 +757,11 @@ async function bookAt(context, config, office, log, hooks = {}) {
     if (!reference) {
       const seen = await describeUnconfirmed(page);
       log('BOOKING_UNCONFIRMED', `${where}: ${seen}`);
+      // The page may say it in words this robot does not know: an overseer
+      // reads it — only reads it, the booking being sent.
+      const read = await help('confirming', `no confirmation number seen: ${seen}`, { readOnly: true, time: booked })
+        .catch(() => null);
+      if (read) return read;
       return { status: 'BOOKING_UNCONFIRMED', date: office.date, time: booked, office: office.office, seen };
     }
 
@@ -678,6 +770,14 @@ async function bookAt(context, config, office, log, hooks = {}) {
     const url = page.url();
     const shot = await keepConfirmation(page, config.confirmationShotPath);
     return { status: 'BOOKED_SUCCESS', date: office.date, time: booked, office: office.office, reference, url, shot };
+  } catch (error) {
+    // Stuck before the form went (nothing above throws after it): an overseer
+    // may take the page over from here and finish. A human check is the
+    // person's, not an overseer's.
+    if (at.sent || error.gate) throw error;
+    const took = await help('booking', error.message);
+    if (took) return took;
+    throw error;
   } finally {
     await page.close().catch(() => {});
   }
@@ -696,6 +796,8 @@ export async function run(env = process.env, hooks = {}) {
   const log = (status, detail) => {
     runLog(status, detail);
     if (probe) probe.note(status, detail);
+    // Each step as it happens, for whoever oversees this run (control.js).
+    try { hooks.onStep?.(status, detail); } catch { /* never the problem */ }
   };
 
   const browser = await chromium.launch({

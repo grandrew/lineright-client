@@ -56,6 +56,8 @@ const reset = require('./reset');
 const { RobotRunner, isLoopback } = require('./robots');
 const { Reader } = require('./reader');
 const { Booker, mayBook, definitive } = require('./booker');
+const { Overseer } = require('./overseer');
+const { runSiteTask } = require('./agent/sitetask');
 const { Pinger } = require('./pinger');
 const confirmations = require('./confirmations');
 const { Telemetry } = require('./telemetry');
@@ -181,6 +183,7 @@ let resetting = false;            // Settings → Start over is under way
 let robots = null;                // the DMV robots this app runs for the regbot site (robots.js)
 let reader = null;                // looking for openings when the site asks (reader.js)
 let booker = null;                // booking the person's own slot (booker.js)
+let overseer = null;              // AI oversight of that booking robot, when the person has bought it (overseer.js)
 let reminders = null;             // the person's appointments, and a reminder before each (bookings.js)
 const cancelling = new Map();     // booking id -> how cancelling it on the booking site goes: {phase, text, tabId}
 const cancelsUnsaid = new Map();  // booking id -> how it was cancelled, until the site has heard
@@ -1014,6 +1017,7 @@ function handleDoc(doc) {
   }
   send('sync:doc', withNeeds(doc));
   noteBookings(doc.bookings);
+  noteOversightTerms(doc.agent);
   noteAppsPolicy(doc.apps);
   if (reader && !builtin()) {
     if (doc.reader) reader.notePace(doc.reader);
@@ -1240,6 +1244,30 @@ function noteConnection(latency) {
   }
 }
 
+/**
+ * AI oversight, as the person sees it: while it has the robot's page, the
+ * booking's tab says so; and once, when the site first offers it to this
+ * account, a word on what it is, what it costs, and where it is turned off.
+ */
+function noteOversight(o) {
+  if (!o || !o.active) return;
+  const card = turnCards.get(o.active.job_id);
+  if (!card || card.kind !== 'booking') return;
+  const text = o.active.stage === 'confirming'
+    ? 'The robot sent the booking and could not see the DMV\'s confirmation. AI oversight is reading the page for it — nothing more is pressed.'
+    : 'The robot got stuck on the DMV\'s pages. AI oversight has taken its browser over and is finishing the booking'
+      + ` (${o.active.steps} step${o.active.steps === 1 ? '' : 's'} so far, ${o.active.credits} credit${o.active.credits === 1 ? '' : 's'}).`;
+  if (card.text !== text) setCard(o.active.job_id, { ...card, title: 'AI oversight is finishing your booking', text });
+}
+
+function noteOversightTerms(terms) {
+  if (!terms || !terms.available || !overseer || !overseer.on() || store.get('aiOversightNoticed', false)) return;
+  store.set('aiOversightNoticed', true);
+  send('toast', { kind: 'ok', ms: 30000, text: 'AI booking oversight is on: when the app\'s robot gets stuck on the DMV\'s pages, '
+    + `an AI takes its browser over and finishes the booking — about ${terms.step_credits} credit${terms.step_credits === 1 ? '' : 's'} a step, `
+    + `at most ${terms.session_credits} a booking, from the credits you bought. Settings → AI booking oversight turns it off.` });
+}
+
 /** What the app's robot made of the person's slot (booker.js), told to them. */
 function afterBooking(h, outcome) {
   if (closing) {
@@ -1254,9 +1282,10 @@ function afterBooking(h, outcome) {
     log(`booked ${where} — DMV confirmation ${outcome.confirmation}`
         + (outcome.unreported ? ` (the site did not record it: ${outcome.unreported})` : ''));
     notify(`Booked — ${h.queue_name}`, `${where}. Confirmation ${outcome.confirmation}.`, h);
+    const helped = outcome.overseen ? ' The robot got stuck on the DMV\'s pages, and AI oversight finished it.' : '';
     send('toast', outcome.unreported
-      ? { kind: 'warn', ms: 20000, text: `Booked ${where} — confirmation ${outcome.confirmation}. The LineRight Regbot site did not record it: ${outcome.unreported}` }
-      : { kind: 'ok', ms: 15000, text: `Booked ${where} — confirmation ${outcome.confirmation}.` });
+      ? { kind: 'warn', ms: 20000, text: `Booked ${where} — confirmation ${outcome.confirmation}.${helped} The LineRight Regbot site did not record it: ${outcome.unreported}` }
+      : { kind: 'ok', ms: 15000, text: `Booked ${where} — confirmation ${outcome.confirmation}.${helped}` });
     const shown = showConfirmation(h, outcome);
     if (shown) confirmationTabs.set(h.job_id, shown);
     setCard(h.job_id, { kind: 'booked', title: '✓ Booked', where, reference: `Confirmation ${outcome.confirmation}`,
@@ -2000,6 +2029,8 @@ function settingsView() {
     robotBooking: mayBook(store),
     // A sound with each reminder before an appointment (bookings.js).
     reminderSound: store.get('reminderSound', true) !== false,
+    // AI booking oversight (overseer.js): whether the person has it on, and the site's terms.
+    oversight: overseer ? overseer.state() : null,
     realDmvChecks: reader ? reader.mayLookAtRealDmv() : false,
     // Checking lines for everybody, which earns credits on the site.
     checking: reader ? reader.enabled() : false,
@@ -2385,7 +2416,7 @@ function wireIpc() {
   // -- the rest
   handle('settings:get', () => settingsView());
   handle('settings:set', async ({ serverMode: mode, serverUrl, updateUrl, clientName, readerEnabled, robotBooking,
-    checking, realDmvChecks, reimportRemind, logKeepDays, reminderSound }) => {
+    checking, realDmvChecks, reimportRemind, logKeepDays, reminderSound, aiOversight }) => {
     // Another server, practice and an update feed of the app's own are for the
     // people who work on regbot: developer mode's, wherever the asking came from.
     const elsewhere = mode === 'builtin' || mode === 'remote'
@@ -2421,6 +2452,12 @@ function wireIpc() {
     if (typeof reminderSound === 'boolean') {
       store.set('reminderSound', reminderSound);
       sendBookings();
+    }
+    if (typeof aiOversight === 'boolean') {
+      // Kept with when it was said: it lets the app spend the person's bought credits.
+      store.set('aiOversight', aiOversight);
+      store.set('aiOversightAt', new Date().toISOString());
+      if (overseer) overseer.changed();
     }
     if (typeof robotBooking === 'boolean') {
       // A yes is kept with when it was said: it is the person agreeing to
@@ -2476,7 +2513,25 @@ function wireIpc() {
   handle('sync:now', () => loop.poke());
   handle('app:info', () => settingsView());
   handle('app:about', () => showAbout());
-  handle('robots:status', () => (reader ? { ...reader.state(), ...booker.state() } : null));
+  // Developer mode: a site described in plain words, and the AI alone on it (agent/sitetask.js).
+  handle('agent:task', async ({ site = {}, kind = 'check', want = '' }) => {
+    if (!developer.on) throw new Error('That is part of developer mode: turn it on first (View → Developer mode).');
+    if (!client.paired) throw new Error('Sign in first: the AI is asked through your LineRight Regbot account.');
+    const scrub = new Scrubber();
+    scrub.setProfile(profile.values());
+    const allowed = kind === 'book' ? ['first_name', 'last_name', 'email', 'phone'] : [];
+    log(`AI task (${kind}) on ${String(site.start_url || '')}: ${String(want).slice(0, 200)}`);
+    const run = await runSiteTask({
+      runner: robots, client, site, kind: kind === 'book' ? 'book' : 'check', want: String(want || ''),
+      values: profile.values(), allowed, scrub: (t) => scrub.plain(String(t == null ? '' : t)),
+      log: (line) => log(`AI task: ${line}`), appVersion: app.getVersion(),
+    });
+    if (traces) traces.add('agent.task', { kind, session: run.session, outcome: run.outcome ? run.outcome.outcome : 'stopped', calls: run.calls, credits: run.credits });
+    return { outcome: run.outcome, steps: run.steps.map((x) => ({ tool: x.tool, result: x.result })), calls: run.calls,
+      credits: run.credits, stopped: run.stopped, session: run.session };
+  });
+  handle('robots:status', () => (reader ? { ...reader.state(), ...booker.state(),
+    oversight: overseer ? overseer.state() : null } : null));
   // Asked for from Settings, which has already shown what goes and been told yes.
   handle('app:reset', ({ confirm }) => {
     if (confirm !== true) throw new Error('A reset has to be confirmed.');
@@ -2686,10 +2741,12 @@ function smoke() {
       profile: { filled: profile.view().filled, encrypted: profile.encrypted, backend: profile.backend },
       browsers: browsers.scan().map((b) => ({ name: b.name, known: b.known, profiles: b.profiles.length })),
       offerImport: importWorthOffering(),
-      robots: reader ? { ...reader.state(), ...booker.state() } : null,
+      robots: reader ? { ...reader.state(), ...booker.state(), oversight: overseer ? overseer.state() : null } : null,
       ping: pinger ? { last: pinger.last, everyMs: pinger.everyMs } : null,
       telemetry: telemetry ? { summary: telemetry.summary(), events: telemetry.events.length, shares: telemetry.shares } : null,
-      traces: traces ? { ...traces.view(), status: traces.status(), kinds: traces.recent(300).map((e) => e.k) } : null,
+      traces: traces ? { ...traces.view(), status: traces.status(), kinds: traces.recent(300).map((e) => e.k),
+        // What the AI oversight wrote, however much the robots' network came after it.
+        agent: traces.recent(5000).filter((e) => /^agent\./.test(e.k)).map((e) => e.k) } : null,
       connection,
       autofill: lastFill,
       screen: lastNavigate,
@@ -2760,7 +2817,7 @@ async function main() {
     onFinish: (r) => { if (taps) taps.robotRun(r); },
     logbook,
   });
-  const robotsState = () => ({ ...reader.state(), ...booker.state() });
+  const robotsState = () => ({ ...reader.state(), ...booker.state(), oversight: overseer ? overseer.state() : null });
   reader = new Reader({
     runner: robots, getClient: () => client, getStore: () => store,
     log: (message) => log(`reader: ${message}`),
@@ -2775,9 +2832,21 @@ async function main() {
   });
   const shotsDir = path.join(app.getPath('userData'), 'robots', 'confirmations');
   confirmations.prune(shotsDir);
+  overseer = new Overseer({
+    getClient: () => client, getStore: () => store, getProfile: () => profile.values(),
+    // What the site says this account may have, on every sync (its agent.py).
+    getStatus: () => (lastDoc && lastDoc.agent) || null,
+    appVersion: app.getVersion(),
+    log: (message) => log(`oversight: ${message}`),
+    onState: (o) => { send('robots:state', robotsState()); noteOversight(o); },
+    onEvent: (e) => {
+      const { kind, ...fields } = e;
+      if (traces) traces.add(kind, fields);
+    },
+  });
   booker = new Booker({
     runner: robots, reader, getClient: () => client, getStore: () => store,
-    getProfile: () => profile.values(), shotsDir,
+    getProfile: () => profile.values(), shotsDir, overseer,
     log: (message) => log(`booker: ${message}`),
     onState: () => send('robots:state', robotsState()),
     onOutcome: (r) => {
@@ -2785,7 +2854,7 @@ async function main() {
       const o = r.outcome || {};
       if (o.confirmation && scrubber) scrubber.learn('confirmation', o.confirmation);
       if (traces) {
-        traces.add('book.end', { job: r.job, outcome: r.kind, by: 'robot', ms: r.ms, why: o.why,
+        traces.add('book.end', { job: r.job, outcome: r.kind, by: o.overseen ? 'robot+ai' : 'robot', ms: r.ms, why: o.why,
           unconfirmed: o.unconfirmed, unreported: o.unreported, quiet: o.quiet, device: o.device,
           recorded: o.recorded, shot: o.shot ? true : undefined });
       }

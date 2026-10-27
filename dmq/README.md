@@ -191,6 +191,23 @@ The booking robot goes on when nobody reads its output any more, so that it can
 finish and record what it made; the scout stops within seconds of the process
 that started it.
 
+## Oversight: the control channel
+
+Run by the desktop app with a channel open (`RQP_CONTROL=1` and Node's IPC),
+the booking handler says each step it takes, and when it is stuck — an error
+before the booking went, nothing at all to choose where its slot should be, or
+no confirmation number after sending — it asks the app whether its AI
+oversight takes over (`src/control.js`). If so it hands over the page it is on,
+as it is, and does what it is told there — run the app's page-reading script,
+press, type, choose, scroll, wait, go back, go to another page *of the same
+site* — until the app says what came of it. After the booking was sent the page
+is only looked at. A booking the overseer says it made counts only with its
+confirmation number on the page; anything short of booked or gone, after a
+takeover in which the booking may have been sent, is unconfirmed. Without the
+channel nothing changes. `bin/rqp-browser.js` is a browser with no script of
+its own, served to the app at once, for a site the AI is told about in plain
+words. See the desktop app's `docs/ai-oversight.md`.
+
 ## A note on booking
 
 A confirmed slot is a real appointment at a government agency, under a real

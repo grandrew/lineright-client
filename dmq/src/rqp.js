@@ -226,6 +226,8 @@ export function outcomeToResult(outcome, { latencyMs, booking } = {}) {
   // A run blocked at a human check reports it here, not just in prose, so the
   // connector can raise CaptchaRequired rather than let it look transient.
   if (outcome?.gate) extra.gate = outcome.gate;
+  // The robot got stuck and its overseer (the app's AI oversight) took over.
+  if (outcome?.overseen) extra.overseen = true;
 
   switch (outcome?.status) {
     case 'BOOKED_SUCCESS': {

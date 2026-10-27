@@ -15,6 +15,8 @@
 import crypto from 'crypto';
 import { run } from '../src/bot.js';
 import { BookingStore } from '../src/idempotency.js';
+import { controlChannel, overseeHere } from '../src/control.js';
+import { baseUrl } from '../src/services.js';
 import {
   ACK,
   NACK_FATAL,
@@ -156,7 +158,20 @@ async function main() {
     // The moment the form goes: from here an appointment may exist, which is
     // what a later run must know should this one not live to say.
     const hooks = { onSubmit: () => key && store.phase(key, 'submitting') };
+    // The app overseeing this run, when it keeps a channel to it (control.js):
+    // each step as it happens, and the page offered to it when the robot is
+    // stuck. Taking a page over before the form went, the overseer may send it:
+    // that counts as the moment the form goes.
+    const control = controlChannel();
+    if (control) {
+      hooks.onStep = (tag, detail) => control.event('step', { tag, detail: String(detail ?? '').slice(0, 500) });
+      hooks.onTrouble = (page, trouble) => overseeHere(control, page, trouble, {
+        base: baseUrl(env), readOnly: Boolean(trouble.readOnly),
+        beforeTake: trouble.readOnly ? null : hooks.onSubmit,
+      });
+    }
     const outcome = process.env.RQP_MODE === 'simulate' ? await simulate(env, hooks) : await run(env, hooks);
+    if (control) control.close();
     envelope = outcomeToResult(outcome, { latencyMs: Date.now() - started });
   } catch (error) {
     envelope = errorToResult(error instanceof RqpError ? error : error, {

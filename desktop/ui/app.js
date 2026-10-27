@@ -213,7 +213,9 @@
       const r = state.robots || {};
       // Checking lines earns credits on the site for every hour of it (its allowance.py).
       const earning = state.doc && state.doc.allowance && state.doc.allowance.checking;
-      const doing = r.booking ? `booking ${r.booking.queue_name}… · `
+      const ai = r.oversight && r.oversight.active;
+      const doing = ai ? `AI finishing the booking of ${ai.where}… · `
+        : r.booking ? `booking ${r.booking.queue_name}… · `
         : r.reading ? `looking for openings: ${r.reading.queue_name} · `
         : earning && earning.counting ? `checking lines, +${coins(earning.per_hour)}/h · ` : '';
       // How this app's connection stands among the apps online (the site says).
@@ -2037,7 +2039,8 @@
 
   /** What each line of the ledger was, in words (the site's ledger kinds). */
   const MOVEMENT = { grant: 'welcome', weekly: 'weekly top-up', earned: 'checking lines', topup: 'bought',
-    hold: 'staked', raise: 'raised', refund: 'returned', capture: 'spent', reversal: 'refunded' };
+    hold: 'staked', raise: 'raised', refund: 'returned', capture: 'spent', reversal: 'refunded',
+    agent: 'AI oversight' };
 
   /**
    * The credits nobody pays for: the weekly top-up, and what this app earns
@@ -2390,6 +2393,45 @@
     </div>`;
   }
 
+  // Developer mode: a site described in plain words, and the AI alone on it
+  // (the main process's agent/sitetask.js) — checking what is open, or booking.
+  // Built once with the page, so what is typed here survives its refreshes.
+  function aiTaskPanel() {
+    return `<div class="panel" id="adv-ai"><div class="panel-title">Try the AI on a site <span class="test-badge">Developer</span></div>
+      <p class="tiny muted" style="margin:0 0 10px">Describe a booking site in plain words — where booking starts, what its pages ask, what it says when it is done — and the AI works a browser of its own there: it checks what is open, or books. No robot needs to be written for the site first. It is charged like AI booking oversight, to bought credits, and the site keeps what it did.</p>
+      <label class="field"><span class="field-label">Site</span><input id="ai-name" placeholder="e.g. Riverside clinic"></label>
+      <label class="field"><span class="field-label">Where booking starts</span><input id="ai-url" placeholder="https://…"></label>
+      <label class="field"><span class="field-label">How booking works there</span><textarea id="ai-desc" rows="4" placeholder="Pick a service, then a day on the calendar, then a time; your name and email; then Confirm."></textarea></label>
+      <label class="field"><span class="field-label">What is wanted</span><input id="ai-want" placeholder="e.g. the first morning appointment in November"></label>
+      <div class="row" style="gap:8px; align-items:center"><select id="ai-kind"><option value="check">Check what is open</option><option value="book">Book it, with my name, email and phone</option></select>
+        <button class="btn btn-sm" id="ai-run">Run</button></div>
+      <div id="ai-out" class="tiny" style="margin-top:10px"></div></div>`;
+  }
+
+  function wireAiTask() {
+    const run = $('ai-run');
+    if (!run) return;
+    run.addEventListener('click', async () => {
+      const kind = $('ai-kind').value;
+      if (kind === 'book' && !window.confirm('Let the AI book an appointment on that site in your name, with your email and phone?')) return;
+      run.disabled = true;
+      $('ai-out').textContent = 'Working… the Console shows each step.';
+      try {
+        const r = await call('agent:task', { kind, site: { name: $('ai-name').value, start_url: $('ai-url').value,
+          description: $('ai-desc').value }, want: $('ai-want').value });
+        const o = r.outcome;
+        const found = o && Array.isArray(o.findings) && o.findings.length
+          ? `<ul style="margin:6px 0">${o.findings.map((f) => `<li>${esc([f.where, f.date, f.time, f.note].filter(Boolean).join(' · '))}</li>`).join('')}</ul>` : '';
+        $('ai-out').innerHTML = `<b>${esc(o ? o.outcome : 'stopped')}</b> — ${esc(o ? o.summary : r.stopped)}${o && o.confirmation ? ` Confirmation <b>${esc(o.confirmation)}</b>.` : ''}${found}
+          <div class="muted">${num(r.calls)} call${r.calls === 1 ? '' : 's'}, ${coins(r.credits)}; session #${num(r.session)}. ${r.steps.map((x) => esc(x.tool)).join(' → ')}</div>`;
+      } catch (err) {
+        $('ai-out').innerHTML = `<span class="bad">${esc(err.message)}</span>`;
+      } finally {
+        run.disabled = false;
+      }
+    });
+  }
+
   async function renderAdvanced(fresh) {
     const page = $('page');
     let t;
@@ -2408,7 +2450,7 @@
         <div class="rc-charts" id="adv-charts" style="margin-bottom:18px">${ADV_CHARTS.map((c) => `<div id="adv-${c.id}"></div>`).join('')}</div>
         <div class="split">
           <div class="card"><div class="card-pad" style="padding-bottom:0"><div class="panel-title">What happened</div></div><div id="adv-events"></div></div>
-          <div class="stack"><div id="adv-trace"></div><div id="adv-share"></div>
+          <div class="stack"><div id="adv-trace"></div><div id="adv-share"></div>${dev() ? aiTaskPanel() : ''}
             <div class="panel"><div class="panel-title">Kept on this computer</div>
               <p class="tiny muted" style="margin:0 0 10px">A minute at a time for the last day, and the last few hundred events, in telemetry.json in this app's data folder. Start over in Settings deletes it too.</p>
               <button class="btn btn-sm btn-danger" id="adv-clear">Clear this app's telemetry</button></div></div>
@@ -2423,6 +2465,7 @@
         toast('ok', 'Cleared.');
         renderAdvanced(true);
       });
+      wireAiTask();
       if (state.advTimer) clearInterval(state.advTimer);
       state.advTimer = setInterval(() => { if (state.route.page === 'advanced' && !document.hidden) renderAdvanced(false); }, 15000);
     }
@@ -3064,6 +3107,34 @@
     </div>`;
   }
 
+  // AI booking oversight (the main process's overseer.js, the site's agent.py):
+  // whether the site offers it to this account, on what terms, whether it is on,
+  // and what it did last.
+  function oversightPanel(s) {
+    if (s.serverMode === 'builtin' || !paired()) return '';
+    const live = (state.robots && state.robots.oversight) || s.oversight;
+    if (!live) return '';
+    const t = live.terms || {};
+    const offered = live.available;
+    const left = t.can_spend !== undefined ? coins(t.can_spend) : '';
+    const terms = offered
+      ? `About ${coins(t.step_credits)} a step, at most ${coins(t.session_credits)} for one booking${t.needs_purchase ? ', from the credits you bought' : ''}${left ? ` — ${left} it may spend now` : ''}.`
+      : esc(live.message || 'Not available on this site yet.');
+    const a = live.active;
+    const l = live.last;
+    const said = l ? ({ booked: 'it finished the booking', gone: 'the slot was gone', handed: 'it needed you (a human check)',
+      failed: 'it could not finish', stopped: 'it ran out of time or credits' })[l.outcome] || l.outcome : '';
+    const lastLine = a ? `Working now on ${esc(a.where)}: ${num(a.steps)} step${a.steps === 1 ? '' : 's'}, ${coins(a.credits)} so far.`
+      : l ? `Last: ${esc(l.where)} — ${esc(said)} (${num(l.calls)} call${l.calls === 1 ? '' : 's'}, ${coins(l.credits)}).` : '';
+    return `<div class="panel" id="s-oversight"><div class="panel-title">AI booking oversight</div>
+      <div class="check" style="margin-bottom:0"><input type="checkbox" id="s-ai" ${live.on ? 'checked' : ''} ${offered || live.on ? '' : 'disabled'}>
+        <label for="s-ai"><span class="small"><b>Let an AI finish a booking the robot gets stuck on</b></span>
+        <span class="field-help">The app's robot follows the DMV's pages as they were when it was written. When the DMV changes a page and the robot stops, the AI takes its browser over — the time it holds still held — reads the page, and finishes the booking; or reads the confirmation the robot could not find. A human check stays yours. Your details never go to the AI: it sees "[first_name]" where your name is, and the app types the real one. It goes through LineRight Regbot, which keeps what it did, to fix the robot.</span></label></div>
+      <p class="tiny ${offered ? 'muted' : 'warn'}" style="margin:8px 0 0">${terms}${!offered && t.why === 'needs_purchase' ? ' <a id="s-ai-buy">Buy credits</a>' : ''}</p>
+      ${lastLine ? `<p class="tiny muted" style="margin:4px 0 0" id="s-ai-now">${lastLine}</p>` : ''}
+    </div>`;
+  }
+
   // The browsers details were imported from, and the weekly offer to do it again.
   function againPanel(s) {
     const a = s.importAgain;
@@ -3161,6 +3232,7 @@
             <span class="field-help">Followed only in developer mode, from the next start.</span></label>` : ''}
         </div>
         ${robotsPanel(s)}
+        ${oversightPanel(s)}
         ${againPanel(s)}
         ${logsPanel(s)}
         ${advancedPanel(s)}
@@ -3253,6 +3325,14 @@
         settle(await call('settings:set', { robotBooking: bookForMe.checked }));
       }));
     }
+    const ai = $('s-ai');
+    if (ai) {
+      ai.addEventListener('change', guarded(async () => {
+        settle(await call('settings:set', { aiOversight: ai.checked }));
+        toast('ok', ai.checked ? 'AI booking oversight is on.' : 'AI booking oversight is off: a booking the robot gets stuck on opens for you to finish.');
+      }));
+    }
+    on('s-ai-buy', () => go('credits'));
     const remind = $('s-again-remind');
     if (remind) remind.addEventListener('change', guarded(async () => { settle(await call('settings:set', { reimportRemind: remind.checked })); }));
     on('s-again-now', () => openAgain(true));

@@ -34,6 +34,12 @@
  * A booking the DMV did not confirm is never tried again: the appointment may
  * exist, and a second try could make two.
  *
+ * With AI booking oversight (overseer.js) — the person bought credits and left
+ * it on — the robot runs with a channel open to the app, and when it gets stuck
+ * on a page it no longer knows its way round, the AI takes its browser over
+ * and finishes before any of the above is decided: what the robot answers then
+ * is what the AI made of it (`overseen`), held to the same rules.
+ *
  * Closing the app does not stop a booking under way (`finish`): the app waits
  * for the robot, tells the site how it went, then goes. Stopped part way, the
  * robot may have sent the form and booked the slot with nobody left to say so,
@@ -84,8 +90,8 @@ class Booker {
    * @param {string} [opts.shotsDir]   where the robot keeps its pictures of confirmation pages; none without
    */
   constructor({ runner, getClient, getStore, getProfile, reader = null, log = () => {}, onState = () => {},
-    onOutcome = () => {}, shotsDir = '' }) {
-    Object.assign(this, { runner, getClient, getStore, getProfile, reader, log, onState, onOutcome, shotsDir });
+    onOutcome = () => {}, shotsDir = '', overseer = null }) {
+    Object.assign(this, { runner, getClient, getStore, getProfile, reader, log, onState, onOutcome, shotsDir, overseer });
     this.current = null;
     // Two hand-offs can arrive in one sync (one person, two lines), and each is
     // booked at once: busy, and the booking on show, last until both are done.
@@ -270,13 +276,18 @@ class Booker {
       const tookOver = (claim && claim.took_over_from) || '';
       this.log(`booking ${where} for ${h.queue_name}`
         + (tookOver ? `, taking it over from ${tookOver}, which stopped answering` : ''));
+      // AI oversight, when the person has it: a channel to the robot as it books,
+      // for its stuck moments (overseer.js).
+      const timeoutMs = budgetMs(h.seconds_left);
+      const watch = this.overseer && this.overseer.wanted() ? this.overseer.watch(h, { deadline: Date.now() + timeoutMs }) : null;
       const result = await this.runner.run('book', this.request(h), {
         dmvBase: h.robot.base_url, solverUrl: h.robot.captcha_solver_url || '', allowBooking: true,
-        timeoutMs: budgetMs(h.seconds_left), confirmationShot: this.shotFor(h), context: { job: h.job_id },
+        timeoutMs, confirmationShot: this.shotFor(h), context: { job: h.job_id }, ...(watch ? { watch } : {}),
       });
+      const overseen = result.overseen ? { overseen: true } : {};
       if (result.status === 'confirmed' && result.confirmation) {
         outcome = { kind: 'booked', confirmation: result.confirmation,
-          url: result.confirmation_url || null, shot: result.confirmation_shot || null };
+          url: result.confirmation_url || null, shot: result.confirmation_shot || null, ...overseen };
         try {
           await client.booked(h.job_id, result.confirmation, { robot: true });
         } catch (err) {
@@ -292,14 +303,14 @@ class Booker {
         // runs out its time instead, for that device's "I booked it" to arrive.
         outcome = { kind: 'gone', quiet: true, device: tookOver };
       } else if (result.slot_gone) {
-        outcome = { kind: 'gone' };
+        outcome = { kind: 'gone', ...overseen };
         try {
           await client.gone(h.job_id, result.message || '');
         } catch (err) {
           this.log(`the site did not take "gone" for job ${h.job_id}: ${err.message}`);
         }
       } else if (result.unconfirmed) {
-        outcome = { kind: 'page', unconfirmed: true, why: 'The robot went as far as booking it, but the DMV showed no confirmation. Check your email for one before you book it again.' };
+        outcome = { kind: 'page', unconfirmed: true, ...overseen, why: 'The robot went as far as booking it, but the DMV showed no confirmation. Check your email for one before you book it again.' };
       } else if (result.gate) {
         outcome = { kind: 'page', why: 'The DMV asked for a human check. Finish booking it on the page.' };
       } else {

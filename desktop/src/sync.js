@@ -15,6 +15,8 @@
 /** How long an answer to a read may take. A sync stays on the client's own
  *  deadline: judging a filtered scout is the slow call, and only that one. */
 const ANSWER_TIMEOUT_MS = 20000;
+/** One call to the model, through the site: it waits for the model, which takes its time. */
+const AGENT_TIMEOUT_MS = 90000;
 /** How long an upload of the trace may take: a megabyte, gzipped, over a slow line. */
 const UPLOAD_TIMEOUT_MS = 60000;
 
@@ -319,6 +321,31 @@ class SyncClient {
   /** The booking site says this appointment is cancelled: `how` is app, page or elsewhere. */
   async bookingCancelled(bookingId, how = 'app') {
     return this.request(`/api/client/bookings/${Number(bookingId)}/cancelled`, { body: { how } });
+  }
+
+  /** Whether this account may have the AI oversee its bookings, and on what terms (the site's agent.py). */
+  async agentStatus() {
+    return this.request('/api/client/agent', { method: 'GET' });
+  }
+
+  /** The robot is stuck (or there is a task): one AI session, refused unless the account can pay for it. */
+  async agentOpen(body) {
+    return this.request('/api/client/agent/sessions', { body: body || {} });
+  }
+
+  /** One call to the model, through the site and charged there. Logged by its size: it carries pages. */
+  async agentChat(sessionId, body) {
+    const messages = Array.isArray(body && body.messages) ? body.messages : [];
+    return this.request(`/api/client/agent/sessions/${Number(sessionId)}/chat`, {
+      body, timeoutMs: AGENT_TIMEOUT_MS,
+      logBody: { messages: messages.length, tools: Array.isArray(body && body.tools) ? body.tools.length : 0,
+        chars: JSON.stringify(messages).length },
+    });
+  }
+
+  /** What the AI did and what came of it: the intervention's telemetry. */
+  async agentReport(sessionId, report) {
+    return this.request(`/api/client/agent/sessions/${Number(sessionId)}/report`, { body: report || {} });
   }
 
   /** Buy a pack of credits: a payment page to open, or (practice) credited now. The

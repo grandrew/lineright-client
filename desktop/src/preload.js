@@ -49,6 +49,8 @@ const CALLS = new Set([
   // the rest
   'settings:get', 'settings:set', 'update:check', 'update:install', 'sync:now', 'app:info',
   'app:about', 'app:reset', 'robots:status', 'logs:open',
+  // developer mode: the AI alone on a site described in plain words (agent/sitetask.js)
+  'agent:task',
   // a notice or an ended-turn bar, written into the app log as it is shown
   'ui:note',
 ]);

@@ -1618,3 +1618,120 @@ test('the site asks for the app\'s trace on a sync, and gets it gzipped, with th
     assert.equal(result.traces.uploads[0].ok, true);
     assert.equal(result.traces.status.acked, up.body.last);
   });
+
+/**
+ * A site that hands this person one turn on the DMV stand-in, offers them AI
+ * booking oversight (they bought credits), and answers the oversight's calls —
+ * the model being the rule-based stand-in (helpers/brain.js).
+ */
+async function overseenSite(standIn, target, brain) {
+  const seen = { claims: [], booked: [], gone: [], sessions: [], chats: 0, reports: [] };
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => { body += d; });
+    req.on('end', async () => {
+      const base = `http://127.0.0.1:${server.address().port}`;
+      const json = (code, o) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
+      const url = new URL(req.url, base);
+      const sent = body ? JSON.parse(body) : {};
+      if (url.pathname === '/api/client/sites') return json(200, { protocol: 'RQP/1', sites: [] });
+      if (url.pathname === '/api/client/handoffs/77/claim') { seen.claims.push(77); return json(200, { ok: true, claimed: true }); }
+      if (url.pathname === '/api/client/handoffs/77/booked') { seen.booked.push(sent); return json(200, { ok: true }); }
+      if (url.pathname === '/api/client/handoffs/77/gone') { seen.gone.push(sent); return json(200, { ok: true }); }
+      if (url.pathname === '/api/client/agent/sessions') { seen.sessions.push(sent); return json(200, { session_id: 1, max_calls: 40, max_credits: 150 }); }
+      if (url.pathname === '/api/client/agent/sessions/1/chat') {
+        seen.chats += 1;
+        const out = await brain.chat(sent);
+        return json(200, { ...out, finish_reason: 'tool_calls', session: { id: 1, calls: seen.chats, credits: seen.chats } });
+      }
+      if (url.pathname === '/api/client/agent/sessions/1/report') { seen.reports.push(sent); return json(200, { ok: true }); }
+      if (url.pathname !== '/api/client/sync') return json(404, { error: 'no' });
+      const answered = seen.booked.length || seen.gone.length;
+      const day = target.date;
+      const handoffs = answered ? [] : [{
+        job_id: 77, bid_id: 5, queue_id: 9, queue_name: 'Vehicle registration', queue_slug: 'vehicle-registration',
+        site_slug: 'ca-dmv', site_name: 'California DMV', connector: 'dmv.ca.gov.qmatic', phase: 'booking',
+        slot: { office_code: target.code, office_name: 'Poway', date: day, time: target.time, miles: 3.1 },
+        open_url: `${standIn}/portal/appointments/select-date?branch=${encodeURIComponent(target.code)}&service=VR`,
+        deadline: null, seconds_left: 280, since: null, rank_at: 1, amount: 200, message: 'Your turn', needs: [],
+        missed: { refund_percent: 70, refund: 140, kept: 60 }, booker: null,
+        robot: {
+          name: 'dmq-rqp/1', base_url: standIn, captcha_solver_url: null,
+          requires: ['first_name', 'last_name', 'email', 'phone'], guide: 'Office, day, time, details, then book.',
+          request: { protocol: 'RQP/1', kind: 'booking.request', job_id: 77,
+            idempotency_key: 'rqp1-job-77-oversight', issued_at: '2026-10-26T10:15:00Z',
+            target: { site: 'ca-dmv', connector: 'dmv.ca.gov.qmatic', queue: 'vehicle-registration', queue_name: 'Vehicle registration' },
+            slot: { window: [day, day], hours: ['08:00', '17:00'], timezone: 'America/Los_Angeles',
+              allocated: { offer_id: 3, office_code: target.code, office_name: 'Poway', date: day, time: target.time, miles: 3.1 } },
+            applicant: { user_id: 1, nickname: 'ada' },
+            personal_data: { office_mode: 'specific', office: 'Poway' },
+            priority: { bid: 200, currency: 'TMC' } },
+        },
+      }];
+      return json(200, { protocol: 'RQP/1', kind: 'client.sync', poll_after_ms: 1000, site_url: base,
+        user: { id: 1, nickname: 'ada', balance: 2300, escrow: 200 },
+        positions: [], handoffs, settled: [], reports: [], reads: [], reader: { mode: 'apps', last: null },
+        agent: { available: true, why: '', message: '', model: 'deepseek-flash', needs_purchase: true, balance: 2300,
+          bought: 500, paid_left: 500, can_spend: 500, session_credits: 150, step_credits: 1.7 },
+        // A site that keeps traces, as the real one does: the app writes everything down.
+        traces: { level: 'full', stream: null, acked: 0, ask: null } });
+    });
+  });
+  const port = await listen(server);
+  return { server, seen, port };
+}
+
+test('the DMV changed under the robot: AI oversight takes it over in the app and books the slot',
+  { timeout: 240000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  const serverDir = process.env.LINERIGHT_SERVER_DIR || path.join(__dirname, '..', '..', '..', 'lineright-server');
+  const standInJs = path.join(serverDir, 'testsite', 'server.js');
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+  if (!fs.existsSync(path.join(DMQ, 'bin', 'rqp-handler.js'))) return t.skip('no ../dmq checkout');
+  if (!fs.existsSync(standInJs)) return t.skip('no lineright-server checkout for the DMV stand-in');
+  const { bookingBrain, to24 } = require('./helpers/brain');
+  const { pathToFileURL } = require('node:url');
+  const { createState, createServer, slotsFor } = await import(pathToFileURL(standInJs).href);
+  const state = createState({ gate: 'off', officeCount: 0, drift: 'labels', cancelIntervalMs: 1e9 });
+  const dmv = createServer(state);
+  const dmvPort = await listen(dmv);
+  const poway = state.offices.find((o) => o.name === 'Poway');
+  const [day] = slotsFor(state, poway.code, 'VR');
+  const target = { code: poway.code, date: day.date, label: day.times[0], time: to24(day.times[0]) };
+  const brain = bookingBrain(target);
+  const site = await overseenSite(`http://127.0.0.1:${dmvPort}`, target, brain);
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-oversight-'));
+  seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
+  fs.writeFileSync(path.join(userData, 'regbot.json'), JSON.stringify({ v: 2, robotBooking: true }));
+  try {
+    const result = await runApp({ electron, display, port: site.port, userData, exitAfter: 60000 });
+    const { seen } = site;
+    assert.deepEqual(seen.claims, [77]);
+    assert.equal(seen.sessions.length, 1, 'one session: the robot was stuck once');
+    assert.equal(seen.sessions[0].stage, 'booking');
+    assert.equal(seen.sessions[0].job_id, 77);
+    assert.match(seen.sessions[0].trigger, /No "Confirm" button/);
+    assert.equal(seen.booked.length, 1, JSON.stringify({ seen, robots: result.robots }));
+    const made = state.bookings;
+    assert.equal(made.length, 1);
+    assert.equal(seen.booked[0].confirmation, made[0].ref);
+    assert.deepEqual(made[0].applicant, { first: 'Ada', last: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
+    assert.equal(`${made[0].date} ${made[0].time}`, `${target.date} ${target.label}`);
+    assert.equal(seen.reports.length, 1);
+    assert.equal(seen.reports[0].outcome, 'booked');
+    assert.equal(result.robots.lastBooking.kind, 'booked');
+    assert.equal(result.robots.lastBooking.overseen, true);
+    assert.equal(result.robots.oversight.last.outcome, 'booked');
+    assert.equal(result.robots.oversight.active, null);
+    assert.deepEqual(result.cards, [{ jobId: 77, kind: 'booked' }]);
+    const sent = JSON.stringify(brain.heard);
+    for (const value of ['Ada', 'Lovelace', 'ada@example.test', '5555550123']) assert.ok(!sent.includes(value), `the model never sees ${value}`);
+    assert.deepEqual(result.traces.agent, ['agent.take', 'agent.end'], 'the trace says the AI stepped in');
+  } finally {
+    site.server.close();
+    dmv.close();
+    fs.rmSync(userData, { recursive: true, force: true });
+  }
+});

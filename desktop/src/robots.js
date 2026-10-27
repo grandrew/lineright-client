@@ -15,6 +15,11 @@
  * practice one on this machine when the site is on this machine too. A site that
  * names anywhere else gets no robot sent there, whatever it says.
  *
+ * Given a `watch` (overseer.js), a booking run keeps a channel open to the
+ * robot (Node's IPC, RQP_CONTROL: dmq's control.js): the robot says each step
+ * as it takes it, and when it is stuck offers its page to the app's AI
+ * oversight before it gives up.
+ *
  * Given a logbook (logbook.js), each run is written down in a folder of its own
  * under the logs: what it was asked and what it answered, all it printed
  * (run.json), and what it did on the site — its network, its console, its
@@ -26,7 +31,9 @@ const path = require('node:path');
 const { killTree, robotPlatformEnv, OWNED } = require('./stack');
 const { redact, clip } = require('./logbook');
 
-const SCRIPTS = { scout: 'rqp-scout.js', book: 'rqp-handler.js' };
+const SCRIPTS = { scout: 'rqp-scout.js', book: 'rqp-handler.js',
+  // A browser with no robot's script, for the AI to work on a site described in words (agent/sitetask.js).
+  browse: 'rqp-browser.js' };
 /** The robots this app carries, as the site knows them (a connector's app_robot). */
 const ROBOTS = ['dmq-rqp/1'];
 /** The booking systems they work, as the site names them (a site's connector). */
@@ -63,7 +70,7 @@ function isRealDmv(base) {
  */
 function robotEnv({ env = process.env, paths, platform = process.platform, stateDir, dmvBase = '',
   solverUrl = '', allowBooking = false, confirmationShot = '', traceDir = '', traceScreenshots = false,
-  runLogPath = '' }) {
+  runLogPath = '', control = false }) {
   // Tests only: an unpackaged app may be told to run the robots in their own
   // simulate mode, which answers without a browser. An installed one never is.
   const simulate = !paths.packaged && env.REGBOT_ROBOT_SIMULATE === '1';
@@ -88,6 +95,8 @@ function robotEnv({ env = process.env, paths, platform = process.platform, state
   // A practice farm only, and only for a practice DMV: the robot checks the same.
   if (solverUrl && isLoopback(solverUrl) && isLoopback(dmvBase)) out.CAPTCHA_SOLVER_URL = solverUrl;
   if (allowBooking) out.RQP_ALLOW_BOOKING = 'true';
+  // A channel to the app as it books, for its AI oversight (dmq's control.js).
+  if (control) out.RQP_CONTROL = '1';
   // Where a booking keeps its picture of the confirmation page, for the person.
   if (allowBooking && confirmationShot) out.RQP_CONFIRMATION_SHOT = confirmationShot;
   if (simulate) {
@@ -138,14 +147,14 @@ class RobotRunner {
    * one saying why there is none — a robot that could not run is an answer too.
    */
   run(kind, envelope, { dmvBase = '', solverUrl = '', allowBooking = false, timeoutMs = 600000,
-    confirmationShot = '', context = {} } = {}) {
+    confirmationShot = '', context = {}, watch = null } = {}) {
     const script = path.join(this.paths.dmq, 'bin', SCRIPTS[kind]);
     fs.mkdirSync(this.stateDir, { recursive: true });
     const record = this.record(kind, envelope, { dmvBase, allowBooking: kind === 'book' && allowBooking, timeoutMs });
     const env = robotEnv({ env: this.env, paths: this.paths, platform: this.platform, stateDir: this.stateDir,
       dmvBase, solverUrl, allowBooking: kind === 'book' && allowBooking, confirmationShot,
       traceDir: record ? record.dir : '', traceScreenshots: kind === 'book',
-      runLogPath: this.logbook ? this.logbook.file('robot', 'log') : '' });
+      runLogPath: this.logbook ? this.logbook.file('robot', 'log') : '', control: Boolean(watch) });
     const failed = (message) => ({ protocol: 'RQP/1', kind: kind === 'scout' ? 'discovery.result' : 'booking.result',
       status: 'unavailable', message, offers: [], checked: [] });
     const started = Date.now();
@@ -167,7 +176,7 @@ class RobotRunner {
       let child;
       try {
         child = this.spawn(this.node, [script], {
-          cwd: this.paths.dmq, env, stdio: ['pipe', 'pipe', 'pipe'],
+          cwd: this.paths.dmq, env, stdio: watch ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
           // Its own process group, so stopping it reaches the browser it started.
           detached: this.platform !== 'win32', windowsHide: true,
         });
@@ -176,6 +185,11 @@ class RobotRunner {
         return;
       }
       this.running.set(child, kind);
+      if (watch) {
+        try { watch.attach(child); } catch (err) { this.log(`could not watch the robot: ${err.message}`); }
+        // A channel the robot has not closed must not hold the app's own exit.
+        if (child.channel && typeof child.channel.unref === 'function') child.channel.unref();
+      }
       let out = '';
       let err = '';
       let timedOut = false;
@@ -190,6 +204,9 @@ class RobotRunner {
       const done = (answer) => {
         this.clearTimeout(timer);
         this.running.delete(child);
+        if (watch) {
+          try { watch.detach(); } catch { /* never the problem */ }
+        }
         resolve(answer);
       };
       child.on('error', (e) => done(failed(`The robot could not be started: ${e.message}`)));

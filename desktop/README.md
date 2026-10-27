@@ -614,6 +614,22 @@ site says otherwise, one app's time per account). The status line says *checking
 lines, +⧗0.2/h* while it counts, and **Credits** shows the hours, what they
 earned, and the weekly top-up back to ⧗35 that every account gets.
 
+## AI booking oversight
+
+When the robot gets stuck booking your slot — the DMV changed a page under it —
+the app can let an AI finish it instead of handing you the page: it takes the
+robot's browser over as it is, mid-booking, reads the page as text with your
+details taken out (they travel only as placeholders such as `[first_name]`,
+which the app fills in on this computer), and finishes the booking; or, after
+the booking was sent, only reads the page for its confirmation. The model is
+DeepSeek's, asked through the LineRight Regbot site, which charges each step to
+your **bought** credits (about ⧗2 a step, at most ⧗150 a booking) and keeps a
+report of each intervention so the robot can be fixed. On by default once you
+have bought credits; **Settings → AI booking oversight** turns it off. In
+developer mode the same AI can check — or book — a site described in plain
+words, with no robot written for it (**Help → Advanced → Try the AI on a site**).
+All of it, with what it may and may not do: [docs/ai-oversight.md](docs/ai-oversight.md).
+
 ## What it does, in order
 
 | When | What |
@@ -820,6 +836,8 @@ each:
 | `src/robots.js` | Runs the DMV robots (`../dmq`'s scout and booking handler) for the regbot site, on the app's own binary, and decides where they may go |
 | `src/reader.js` | Looking for openings when the site hands this device a read, and answering it |
 | `src/booker.js` | Booking the person's own slot with the robot when the site hands it over, and what comes of it |
+| `src/overseer.js` | AI booking oversight: hearing the robot as it books, taking it over when it is stuck, and reporting what it did ([docs/ai-oversight.md](docs/ai-oversight.md)) |
+| `src/agent/` | The AI's parts: reading a page (`pagekit.js`), working a browser (`drivers.js`), its tools, its loop, what it is told, and a site described in words (`sitetask.js`) |
 | `src/bookings.js` | The person's appointments and the reminders before each: a day, six hours (8 am–7 pm) and an hour before |
 | `src/dmv-cancel.js` | Cancelling one appointment on the DMV's View/Cancel page, in a tab, by its confirmation number |
 | `src/logbook.js` | The logs folder: the day's files, a folder per robot run, what is struck out before anything is written, and what goes after how long |
@@ -842,6 +860,7 @@ each:
 | `test/` | `node --test`: the pure modules, plus a smoke test that launches the real app |
 | `test/fixtures/` | Browser databases to read, in the shapes Chromium has used |
 | `scripts/update-server.js` | A self-hosted update feed |
+| `scripts/oversight-live.js` | AI oversight for real: the robot on a stand-in that changed under it, a private site, and DeepSeek or a stand-in model |
 | `scripts/make-import-fixtures.js` | Writes those fixtures (`npm run fixtures`); nothing else needs a SQLite that can write |
 | `scripts/appimage-runtime.js` | Gives the AppImage a runtime that runs on today's Linux |
 | `scripts/linux-launcher.js` | Puts a launcher in front of Electron on Linux that drops Chromium's sandbox only where the system allows none |
