@@ -2008,12 +2008,13 @@
     const short = route.need ? Math.max(0, route.need - c.balance) : 0;
     const packs = c.packs || [];
     const covers = short ? packs.find((p) => (p.credits || p.coins) >= short) : null;
+    const ai = pay && !pay.practice ? aiOffer() : null;
     const buy = pay ? `<div class="packs">${packs.map((p) => {
       const amount = p.credits || p.coins;
       const flag = covers && covers.id === p.id;
       return `<div class="pack${flag ? ' pack-pick' : ''}">${flag ? '<span class="pack-flag">covers it</span>' : ''}
         <div class="pack-coins">${coins(amount)}</div><div class="pack-label">${esc(p.label)} · credits</div>
-        <p class="pack-blurb">${esc(p.blurb)}</p>
+        <p class="pack-blurb">${esc(p.blurb)}</p>${ai ? '<span class="pack-ai">+ AI oversight</span>' : ''}
         <button class="btn btn-accent btn-block" data-pack="${esc(p.id)}" ${state.checkout && state.checkout.status === 'pending' ? 'disabled' : ''}>${pay.practice ? `Add ${coins(amount)} free` : `Buy for ${esc(p.price)}`}</button></div>`;
     }).join('')}</div>
       <p class="tiny muted" style="margin:12px 0 0">${pay.practice
@@ -2034,7 +2035,39 @@
     </tbody></table></div>`;
     return `${need}${checkoutPanel()}${freePanel(c)}
       <div class="panel" style="margin-bottom:14px"><div class="panel-title">${pay && !pay.practice ? 'Or buy more' : 'Buy credits'}</div>${buy}</div>
-      ${purchases}${ledger}`;
+      ${ai ? aiNote(ai) : ''}${purchases}${ledger}`;
+  }
+
+  /**
+   * What buying credits brings besides the credits: AI booking oversight
+   * (docs/ai-oversight.md), on the terms the site gives this account. Null when
+   * the site does not run it, or gives it to every account alike.
+   */
+  function aiOffer() {
+    const live = state.robots && state.robots.oversight;
+    const a = (live && live.terms) || (state.doc && state.doc.agent);
+    if (!a || !a.needs_purchase || a.why === 'off' || a.why === 'unavailable') return null;
+    return { step: a.step_credits || 0, most: a.session_credits || 0,
+      yours: (a.bought || 0) > 0, off: Boolean(live && live.on === false) };
+  }
+
+  function aiNote(ai) {
+    const chip = !ai.yours ? '' : ai.off ? '<span class="ai-note-off">Off in Settings</span>' : '<span class="ai-note-yours">On for your account</span>';
+    return `<div class="ai-note" style="margin-bottom:14px">
+      <div class="ai-note-mark"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2.8l7.2 3v5.6c0 4.5-3.1 8.3-7.2 9.8-4.1-1.5-7.2-5.3-7.2-9.8V5.8z"/>
+        <path d="M12 7.6c.4 2.3 1.7 3.6 4 4-2.3.4-3.6 1.7-4 4-.4-2.3-1.7-3.6-4-4 2.3-.4 3.6-1.7 4-4z" fill="currentColor" stroke="none"/></svg></div>
+      <div class="ai-note-body">
+        <div class="ai-note-kicker">Comes with any pack ${chip}</div>
+        <h3>An AI agent that makes sure your booking happens</h3>
+        <p>This app's robot books a slot the moment it opens. But booking sites change — a button gets renamed, a form reworded — and a robot looking for the old words stops. Once you have bought credits, an AI agent watches over every booking the app makes. If the robot gets stuck, the agent takes over its browser with your time still held, reads the page the way a person would, and finishes the booking.</p>
+        <ul class="ai-note-points">
+          <li><b>Steps in only when needed</b>Most bookings never call on it. When one does, it costs ${ai.step ? `about ${coins(ai.step)} a step` : 'a few credits a step'} from the credits you bought${ai.most ? `, and never more than ${coins(ai.most)} for a booking` : ''}.</li>
+          <li><b>Your details stay with you</b>The agent reads “[first_name]” where your name is. The app types the real details into the form, on this computer.</li>
+          <li><b>Confirmed, or it tells you</b>A booking counts only when its confirmation number is on the page. Once a booking is sent, nothing is pressed twice.</li>
+        </ul>
+        <p class="ai-note-foot">It only ever spends credits you bought, never the free ones. <a data-go-settings>Settings → AI booking oversight</a> turns it off or on, and shows what it did last.</p>
+      </div></div>`;
   }
 
   /** What each line of the ledger was, in words (the site's ledger kinds). */
@@ -2087,6 +2120,7 @@
   }
 
   function wireCredits(root, rerender) {
+    root.querySelectorAll('[data-go-settings]').forEach((el) => el.addEventListener('click', () => go('settings')));
     const earnOn = root.querySelector('#earn-on');
     if (earnOn) earnOn.addEventListener('click', () => turnCheckingOn(rerender, { confirm: true }));
     for (const b of root.querySelectorAll('[data-pack]')) {
