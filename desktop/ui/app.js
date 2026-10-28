@@ -1672,6 +1672,10 @@
         if (!hit) { tipBox.classList.add('hidden'); svg.style.cursor = ''; return; }
         hovered = hit.id; mark(hit.id, true); svg.style.cursor = 'pointer';
         tipBox.innerHTML = OF.tip(fromPoint(points.get(hit.id)), doc);
+        // Measured at the left edge, where it has the plot's whole width: placed
+        // first near the right edge, it would shrink to the room left there.
+        tipBox.style.left = '0px';
+        tipBox.style.top = '0px';
         tipBox.classList.remove('hidden');
         const box = plot.clientWidth;
         const tw = tipBox.offsetWidth;

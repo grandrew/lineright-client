@@ -506,7 +506,10 @@ table.bk-rest td{font-size:12.5px}
 .of-tag.yours{background:var(--gold-soft); color:var(--gold)}
 .of-tag.offered{background:#f3efff; color:#6d28d9}
 .of-basis{margin:12px 0 0; line-height:1.5}
-.of-tip-note{margin-top:3px; color:#c7d2fe; white-space:normal !important; max-width:240px}
+/* Rows as label and value side by side, so the tooltip is as wide as its widest row. */
+#ofTip > div{display:flex; justify-content:space-between; gap:14px}
+#ofTip > div > b{float:none; margin-left:0; white-space:nowrap}
+#ofTip > .of-tip-note{display:block; margin-top:3px; color:#c7d2fe; white-space:normal; max-width:260px}
 .chip-feed{cursor:pointer; text-decoration:none !important; color:var(--text)}
 .chip-feed:hover{background:var(--surface-3)}
 .of-pick{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 4px}
