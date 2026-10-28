@@ -295,6 +295,12 @@ class SyncClient {
     return this.request(`/api/client/queues/${Number(queueId)}/options`, { body: draft || {} });
   }
 
+  /** The line's recent openings and how long each lasted: for one bid of the
+   *  person's (`bid_id`), a form's office choice (`fields`), or the whole line. Writes nothing. */
+  async openings(queueId, ask) {
+    return this.request(`/api/client/queues/${Number(queueId)}/openings`, { body: ask || {} });
+  }
+
   /** Three ways to widen a bid already in line, each with its chance. Writes nothing. */
   async widenOptions(bidId) {
     return this.request(`/api/client/bids/${Number(bidId)}/options`, { body: {} });

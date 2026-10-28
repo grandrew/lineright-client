@@ -32,6 +32,8 @@
     bestNoted: '',
     widenedGone: null, // widening notices closed with × (widened.js)
     options: null,     // the join form's three ways to ask: {queueId, key, doc, busy, error} (options.js)
+    feed: null,        // the recent openings shown under a board or on the console (openings.js): feedState()
+    feedPick: null,    // the position whose openings the console's Openings tab shows
     situationTimer: null,
     ended: [],         // turns that ended lately, and how: [{job_id, at, kind, text}] (endedTurns)
     consoleTab: 'positions',
@@ -1123,10 +1125,11 @@
           <span class="chip">${esc(q.weekdays)}</span>
           <span class="chip chip-accent">entry <strong>${coins(q.min_bid)}</strong></span>
           ${q.status !== 'open' ? `<span class="tag tag-${esc(q.status)}">${esc(q.status)}</span>` : ''}
+          ${paired() && b.openings_feed ? '<a class="chip chip-feed hidden" id="feedChip" title="The openings that came here lately, and how long each lasted"></a>' : ''}
         </div>
       </div>
-      <div class="board-split">
-        <div class="card">
+      <div class="board-split${paired() && b.openings_feed ? ' with-feed' : ''}">
+        <div class="card board-book">
           <div class="between" style="padding:14px 18px 12px; border-bottom:1px solid var(--line-soft)">
             <div><div class="panel-title" style="margin:0">Live order book</div><div class="tiny muted" style="margin-top:3px">Highest bid first · ties go to whoever bid earliest</div></div>
             ${offers ? '<div class="tiny muted" style="text-align:right; max-width:260px">Each opening an app finds goes at once to the best-placed bidder whose offices it fits.</div>'
@@ -1151,10 +1154,12 @@
             <button class="btn btn-block btn-sm" id="board-portal" style="margin-top:12px" title="${esc(b.portal_url)}">Open the booking site ↗</button>
           </div>
         </aside>
+        ${paired() && b.openings_feed ? '<div class="of-slot"><div id="feedSlot"></div></div>' : ''}
       </div>
     </div>`;
     wireBoard(b);
     if (state.change) wireChange(b);
+    if (paired() && b.openings_feed) mountFeed(boardFeedContext(b));
     if (!state.boardTimer) {
       state.boardTimer = setInterval(() => { if (!document.hidden) loadBoard(id).then((doc) => { if (doc) renderBoard(); }).catch(() => {}); }, 4000);
     }
@@ -1288,7 +1293,10 @@
       form.addEventListener('change', () => applyWhen(form, b.fields));
       // The three ways to ask follow the form, a moment after it stops changing.
       let optionsTimer = null;
-      const again = () => { clearTimeout(optionsTimer); optionsTimer = setTimeout(() => requestOptions(b, form), 600); };
+      const again = () => {
+        clearTimeout(optionsTimer);
+        optionsTimer = setTimeout(() => { requestOptions(b, form); if (b.openings_feed) requestFeed(boardFeedContext(b)); }, 600);
+      };
       form.addEventListener('input', again);
       form.addEventListener('change', again);
       form.addEventListener('change', () => paintJoinSoonest(form));
@@ -1447,6 +1455,248 @@
     applyWhen(form, b.fields);
     requestOptions(b, form);
     toast('ok', `Filled in: ${opt.label} — ${BO.chance(opt.chance)} chance.`);
+  }
+
+  // ------------------------------------------------------- recent openings
+  // Under a line's board, and on the console's Openings tab: the openings that
+  // came at the offices a bid takes, or the join form has chosen so far, or the
+  // whole line — how long each lasted, and what became of it (the site's
+  // openings_feed.py; openings.js says it). One element, kept while the page
+  // around it is drawn again on every sync, so a hover or a place in the list
+  // is not lost; it is asked again when what it covers changes, and each minute.
+  const OF = window.openingsFeed;
+  const FEED_FRESH_MS = 60000;
+
+  function feedState() {
+    if (!state.feed) {
+      state.feed = { ctx: null, key: '', base: '', doc: null, busy: false, error: '', off: false, seq: 0, at: 0,
+        hours: 72, office: '', fitsOnly: false, wide: false, queueId: null, shown: 40, focus: null, el: null, width: 0 };
+    }
+    return state.feed;
+  }
+
+  function feedEl() {
+    const f = feedState();
+    if (!f.el) {
+      f.el = document.createElement('section');
+      f.el.className = 'card of-card';
+      f.el.id = 'feedCard';
+      if (typeof ResizeObserver === 'function') {
+        new ResizeObserver(() => {
+          const plot = f.el.querySelector('#ofPlot');
+          const w = plot ? plot.clientWidth : 0;
+          if (w && Math.abs(w - f.width) > 8) paintFeed();
+        }).observe(f.el);
+      }
+    }
+    return f.el;
+  }
+
+  /** Put the feed where the page left room for it (#feedSlot), and ask for what `ctx` covers. */
+  function mountFeed(ctx) {
+    const slot = $('feedSlot');
+    const f = feedState();
+    if (!slot || !OF || f.off) return;
+    slot.replaceWith(feedEl());
+    requestFeed(ctx);
+    paintFeedChip();
+  }
+
+  /** On a board, a chip at the top says how long openings here last, and goes to them. */
+  function paintFeedChip() {
+    const chip = $('feedChip');
+    const f = state.feed;
+    if (!chip || !f || !f.doc || !OF || !state.board || f.doc.queue_id !== state.board.queue.id) return;
+    const s = f.doc.stats || {};
+    const range = OF.RANGE_WORDS[f.doc.hours] || `${num(f.doc.hours)} hours`;
+    chip.innerHTML = s.openings
+      ? `⏱ <strong>${num(s.openings)}</strong> opening${s.openings === 1 ? '' : 's'} in ${esc(range)}${s.median !== null && s.median !== undefined ? ` · typically gone in <strong>${esc(OF.dur(s.median))}</strong>` : ''} ↓`
+      : `⏱ No openings here in the last ${esc(range)} ↓`;
+    chip.classList.remove('hidden');
+    chip.onclick = () => { if (f.el && f.el.isConnected) f.el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  }
+
+  /** What the feed covers on a board: the person's bid, else the join form's offices, else the line. */
+  function boardFeedContext(b) {
+    if (b.mine && ['active', 'processing'].includes(b.mine.status)) return { queueId: b.queue.id, bidId: b.mine.bid_id };
+    const form = $('bidForm');
+    return { queueId: b.queue.id, fields: form ? formDraft(form).fields : null };
+  }
+
+  /** Whether `ctx` covers fewer than every office: a bid, or a form that has chosen some. */
+  function feedNarrow(ctx) {
+    return Boolean(ctx && (ctx.bidId || (ctx.fields && Object.values(ctx.fields).some((v) => String(v == null ? '' : v).trim()))));
+  }
+
+  function requestFeed(ctx, force = false) {
+    const f = feedState();
+    if (!ctx || !OF || f.off) return;
+    if (ctx.queueId !== f.queueId) { f.queueId = ctx.queueId; f.wide = false; }
+    // "Every office" looks past what the bid or the form covers, at the whole line.
+    const eff = f.wide ? { queueId: ctx.queueId } : ctx;
+    const base = OF.key(ctx.queueId, OF.body({ bidId: eff.bidId, fields: eff.fields }));
+    if (base !== f.base) { f.base = base; f.office = ''; f.shown = 40; f.focus = null; }
+    const ask = OF.body({ bidId: eff.bidId, fields: eff.fields, hours: f.hours, office: f.office, fitsOnly: f.fitsOnly });
+    const key = OF.key(ctx.queueId, ask);
+    f.ctx = ctx;
+    if (!force && key === f.key && (f.busy || (f.doc && Date.now() - f.at < FEED_FRESH_MS))) {
+      // Mounted again by a page drawn again: what it shows is still right.
+      if (f.el && !f.el.firstChild) paintFeed();
+      return;
+    }
+    if (key !== f.key) f.doc = f.doc && f.doc.queue_id === ctx.queueId ? f.doc : null;
+    f.key = key; f.busy = true; f.seq += 1;
+    const seq = f.seq;
+    paintFeed();
+    call('server:openings', { queue_id: ctx.queueId, ask }).then((doc) => {
+      if (seq !== f.seq) return;
+      f.doc = doc; f.busy = false; f.error = ''; f.at = Date.now();
+      paintFeed();
+    }).catch((err) => {
+      if (seq !== f.seq) return;
+      f.busy = false; f.at = Date.now();
+      // A site from before the feed has no such route: show nothing.
+      if (err.status === 404 && !ctx.bidId) { f.off = true; if (f.el) f.el.classList.add('hidden'); return; }
+      f.error = err.message;
+      paintFeed();
+    });
+  }
+
+  /** Ask again when the feed has grown old, as long as it is on the page. */
+  function freshenFeed() {
+    const f = state.feed;
+    if (!f || !f.ctx || !f.el || !f.el.isConnected || f.busy || document.hidden) return;
+    if (Date.now() - f.at >= FEED_FRESH_MS) requestFeed(f.ctx, true);
+  }
+
+  function paintFeed() {
+    const f = feedState();
+    const el = f.el;
+    if (!el || !OF) return;
+    const doc = f.doc;
+    const ranges = (doc && doc.ranges) || [24, 72, 168, 720];
+    // The toggle only where it changes something: a form whose office choice is not
+    // finished yet is shown every office anyway.
+    const narrowable = feedNarrow(f.ctx) && (f.wide || !doc || (doc.scope && doc.scope.kind !== 'line'));
+    const head = `<div class="of-head">
+        <div style="min-width:0"><div class="panel-title" style="margin:0">Recent openings</div>
+          <div class="tiny muted of-scope">${doc ? esc(OF.scopeText(doc)) : 'At the offices this covers'}${f.busy && doc ? ' · updating…' : ''}</div></div>
+        ${narrowable ? `<div class="rc-range" role="group" aria-label="Which offices">
+          <button type="button" data-of-wide="0" class="${f.wide ? '' : 'on'}">${f.ctx.bidId ? 'Your offices' : 'Offices chosen'}</button>
+          <button type="button" data-of-wide="1" class="${f.wide ? 'on' : ''}">Every office</button></div>` : ''}
+        <div class="rc-range" role="group" aria-label="How far back">${ranges.map((h) => `<button type="button" data-of-hours="${num(h)}" class="${Number(f.hours) === Number(h) ? 'on' : ''}">${esc(OF.RANGE_WORDS[h] || `${h} h`)}</button>`).join('')}</div>
+      </div>`;
+    if (!doc) {
+      el.innerHTML = `${head}<div class="of-body"><p class="small muted" style="margin:6px 0 0">${f.error ? esc(f.error) : 'Looking back over the openings…'}</p></div>`;
+      wireFeed(null);
+      return;
+    }
+    const plotBox = el.querySelector('#ofPlot');
+    f.width = plotBox && plotBox.clientWidth ? plotBox.clientWidth : (el.clientWidth ? el.clientWidth - 36 : 720);
+    const drawn = OF.plot(doc, { width: f.width, focus: f.focus });
+    f.hits = drawn.hits;
+    f.drawnWidth = drawn.width;
+    const items = doc.items || [];
+    const total = (doc.offices || []).reduce((n, o) => n + (Number(o.n) || 0), 0);
+    const bidScope = doc.scope && doc.scope.kind === 'bid';
+    el.innerHTML = `${head}
+      <div class="of-body">
+        ${f.error ? `<div class="note warn" style="margin:0 0 10px">${esc(f.error)}</div>` : ''}
+        <div class="of-tiles">${OF.tiles(doc).map((t) => `<div class="of-tile"><div class="v ${esc(t.tone || '')}">${esc(t.value)}</div><div class="k">${esc(t.label)}</div>${t.sub ? `<div class="s">${esc(t.sub)}</div>` : ''}</div>`).join('')}</div>
+        <div class="of-plot rc-plot" id="ofPlot">${drawn.svg}<div class="rc-tip hidden" id="ofTip"></div></div>
+        <div class="rc-legend of-legend">${OF.legend(doc)}</div>
+        <div class="of-filters">
+          <select id="ofOffice" aria-label="Which office">
+            <option value="">All offices · ${num(total)}</option>
+            ${(doc.offices || []).map((o) => `<option value="${esc(o.name)}" ${f.office && f.office.toLowerCase() === String(o.name).toLowerCase() ? 'selected' : ''}>${esc(o.name)} · ${num(o.n)}${o.median !== null && o.median !== undefined ? ` · typically ${esc(OF.short(o.median))}` : ''}${o.miles !== null && o.miles !== undefined ? ` · ${esc(o.miles)} mi` : ''}</option>`).join('')}
+          </select>
+          ${bidScope ? `<label class="of-check"><input type="checkbox" id="ofFits" ${f.fitsOnly ? 'checked' : ''}> Only the ones my bid takes</label>` : ''}
+          <span class="tiny muted" style="margin-left:auto">${items.length ? `Newest first${doc.more ? ` · the latest ${num(items.length)} of ${num(items.length + (Number(doc.more) || 0))}` : ''}` : ''}</span>
+        </div>
+        <div class="of-list" id="ofList">${items.length ? OF.rows(doc, { shown: f.shown, focus: f.focus })
+          : `<div class="empty" style="padding:22px 10px">No openings came ${doc.office ? `at ${esc(doc.office)} ` : 'here '}in the last ${esc(OF.RANGE_WORDS[doc.hours] || `${num(doc.hours)} hours`)}.${Number(doc.hours) < 720 ? ' <a data-of-longer>Look further back</a>' : ''}</div>`}</div>
+        ${items.length > f.shown ? `<button type="button" class="btn btn-sm btn-block" id="ofMore" style="margin-top:8px">Show ${num(Math.min(40, items.length - f.shown))} more</button>` : ''}
+        <p class="tiny muted of-basis">${esc(OF.basis(doc))}</p>
+      </div>`;
+    wireFeed(doc);
+    paintFeedChip();
+  }
+
+  function wireFeed(doc) {
+    const f = feedState();
+    const el = f.el;
+    for (const btn of el.querySelectorAll('[data-of-hours]')) {
+      btn.addEventListener('click', () => { f.hours = Number(btn.dataset.ofHours); f.shown = 40; f.focus = null; requestFeed(f.ctx, true); });
+    }
+    for (const btn of el.querySelectorAll('[data-of-wide]')) {
+      btn.addEventListener('click', () => { f.wide = btn.dataset.ofWide === '1'; requestFeed(f.ctx, true); });
+    }
+    if (!doc) return;
+    const longer = el.querySelector('[data-of-longer]');
+    if (longer) longer.addEventListener('click', () => { const r = doc.ranges || [24, 72, 168, 720]; f.hours = r.find((h) => h > Number(doc.hours)) || 720; requestFeed(f.ctx, true); });
+    const office = el.querySelector('#ofOffice');
+    if (office) office.addEventListener('change', () => { f.office = office.value; f.shown = 40; f.focus = null; requestFeed(f.ctx, true); });
+    const fits = el.querySelector('#ofFits');
+    if (fits) fits.addEventListener('change', () => { f.fitsOnly = fits.checked; f.shown = 40; f.focus = null; requestFeed(f.ctx, true); });
+    const more = el.querySelector('#ofMore');
+    if (more) more.addEventListener('click', () => { f.shown += 40; paintFeed(); });
+    const plot = el.querySelector('#ofPlot');
+    const tipBox = el.querySelector('#ofTip');
+    const svg = plot && plot.querySelector('svg');
+    const byId = new Map((doc.items || []).map((i) => [i.id, i]));
+    const fromPoint = (p) => byId.get(p[0]) || {
+      id: p[0], t: p[1], est: p[2], lo: p[3], hi: p[4], outcome: p[5], fit: p[6], open: p[5] === 'open',
+      office: ((doc.offices || [])[p[7]] || {}).name || '', slot: p[8], miles: ((doc.offices || [])[p[7]] || {}).miles,
+    };
+    const points = new Map((doc.points || []).map((p) => [p[0], p]));
+    const nearest = (e) => {
+      const r = svg.getBoundingClientRect();
+      const scale = r.width ? f.drawnWidth / r.width : 1;
+      const mx = (e.clientX - r.left) * scale;
+      const my = (e.clientY - r.top) * scale;
+      let best = null;
+      for (const h of f.hits || []) {
+        const d = (h.x - mx) ** 2 + (h.y - my) ** 2;
+        if (d <= 144 && (!best || d < best.d)) best = { ...h, d };
+      }
+      return best ? { ...best, px: best.x / scale, py: best.y / scale } : null;
+    };
+    const mark = (id, on) => {
+      for (const n of el.querySelectorAll(`[data-pid="${num(id)}"]`)) n.classList.toggle('hover', on);
+    };
+    let hovered = null;
+    if (svg) {
+      svg.addEventListener('mousemove', (e) => {
+        const hit = nearest(e);
+        if (hovered !== null && (!hit || hit.id !== hovered)) { mark(hovered, false); hovered = null; }
+        if (!hit) { tipBox.classList.add('hidden'); svg.style.cursor = ''; return; }
+        hovered = hit.id; mark(hit.id, true); svg.style.cursor = 'pointer';
+        tipBox.innerHTML = OF.tip(fromPoint(points.get(hit.id)), doc);
+        tipBox.classList.remove('hidden');
+        const box = plot.clientWidth;
+        const tw = tipBox.offsetWidth;
+        tipBox.style.left = `${Math.max(0, Math.min(box - tw, hit.px + 12))}px`;
+        tipBox.style.top = `${Math.max(0, hit.py - tipBox.offsetHeight - 8)}px`;
+      });
+      svg.addEventListener('mouseleave', () => { tipBox.classList.add('hidden'); if (hovered !== null) mark(hovered, false); hovered = null; });
+      svg.addEventListener('click', (e) => {
+        const hit = nearest(e);
+        if (!hit) return;
+        f.focus = hit.id;
+        const index = (doc.items || []).findIndex((i) => i.id === hit.id);
+        if (index >= f.shown) f.shown = index + 1;
+        paintFeed();
+        const row = el.querySelector(`.of-row[data-pid="${num(hit.id)}"]`);
+        if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        else toast('ok', 'That one is older than the list goes back; the plot has it.', 4000);
+      });
+    }
+    for (const row of el.querySelectorAll('.of-row[data-pid]')) {
+      const id = Number(row.dataset.pid);
+      row.addEventListener('mouseenter', () => mark(id, true));
+      row.addEventListener('mouseleave', () => mark(id, false));
+      row.addEventListener('click', () => { f.focus = f.focus === id ? null : id; paintFeed(); });
+    }
   }
 
   // ------------------------------------------------------- changing a bid
@@ -2041,9 +2291,16 @@
             <div style="text-align:right; margin-right:6px"><div class="num" style="font-weight:700; font-size:16px">${coins(p.amount)}</div><div class="tiny muted">${esc(p.site_name)}</div></div>
             ${p.status === 'active' ? `<button class="btn btn-sm" data-raise50="${num(p.bid_id)}" title="Raise by 50 credits">+${coins(50)}</button>
             <button class="btn btn-sm" data-change-bid="${num(p.queue_id)}" title="A wider range, a later time, or another amount">Change</button>` : ''}
+            <button class="btn btn-sm btn-ghost" data-feed-open="${num(p.bid_id)}" title="The openings that came at this bid's offices, and how long each lasted">Openings</button>
             <button class="btn btn-sm btn-ghost" data-board="${num(p.queue_id)}">Board</button>
           </div>
         </div>`).join('') : '<div class="empty">No live positions. <a data-go-sites>Find a line to join →</a></div>'}</div>`;
+    } else if (tab === 'openings') {
+      const pick = positions.find((p) => p.bid_id === state.feedPick) || positions[0];
+      body = positions.length ? `<div class="of-pick" role="group" aria-label="Which position">${positions.map((p) => `
+          <button type="button" class="of-pick-b${p === pick ? ' on' : ''}" data-feed-pick="${num(p.bid_id)}" style="--accent-raw:${esc(p.accent)}"><b>${esc(p.queue_name)}</b><span>${esc(p.site_name)} · #${num(p.rank)}</span></button>`).join('')}</div>
+        <div id="feedSlot"></div>`
+        : '<div class="card"><div class="empty">No live positions. A line\'s board shows the openings at its offices too. <a data-go-sites>Find a line →</a></div></div>';
     } else if (tab === 'history') {
       body = `<div class="card">${a.history.length ? `<table class="data"><thead><tr><th>Settled</th><th>Site</th><th>Line</th><th>Outcome</th><th class="right">Bid</th><th>Reference</th></tr></thead><tbody>
         ${a.history.map((h) => `<tr><td class="muted">${esc(ago(h.settled_at))}</td><td>${esc(h.site_name)}</td><td class="muted"><a data-board="${num(h.queue_id)}">${esc(h.queue_name)}</a></td><td><span class="tag tag-${esc(h.status)}">${esc(h.status)}</span></td><td class="right num">${coins(h.amount)}</td><td class="num muted">${esc(h.confirmation || '—')}</td></tr>`).join('')}
@@ -2090,6 +2347,7 @@
       </div>
       <div class="tabs">
         <button data-tab="positions" class="${tab === 'positions' ? 'on' : ''}">Positions <span class="muted">${positions.length}</span></button>
+        <button data-tab="openings" class="${tab === 'openings' ? 'on' : ''}" title="The openings that came at your bids' offices, and how long each lasted">Openings</button>
         <button data-tab="history" class="${tab === 'history' ? 'on' : ''}">History <span class="muted">${a.history.length}</span></button>
         <button data-tab="wallet" class="${tab === 'wallet' ? 'on' : ''}">Credits</button>
         <button data-tab="account" class="${tab === 'account' ? 'on' : ''}">Account</button>
@@ -2097,6 +2355,12 @@
       ${body}
     </div>`;
     for (const b of page.querySelectorAll('.tabs button')) b.addEventListener('click', () => { state.consoleTab = b.dataset.tab; renderConsole(); });
+    for (const b of page.querySelectorAll('[data-feed-open]')) b.addEventListener('click', () => { state.feedPick = Number(b.dataset.feedOpen); state.consoleTab = 'openings'; renderConsole(); });
+    for (const b of page.querySelectorAll('[data-feed-pick]')) b.addEventListener('click', () => { state.feedPick = Number(b.dataset.feedPick); renderConsole(); });
+    if (tab === 'openings' && positions.length) {
+      const pick = positions.find((p) => p.bid_id === state.feedPick) || positions[0];
+      mountFeed({ queueId: pick.queue_id, bidId: pick.bid_id });
+    }
     for (const a2 of page.querySelectorAll('[data-board]')) a2.addEventListener('click', () => go('board', { id: Number(a2.dataset.board) }));
     for (const a2 of page.querySelectorAll('[data-go-sites]')) a2.addEventListener('click', () => go('sites'));
     for (const a2 of page.querySelectorAll('[data-external]')) a2.addEventListener('click', () => api.call('tabs:external', { url: a2.dataset.external }));
@@ -3742,7 +4006,7 @@
   api.on('bookings:chime', ({ kind }) => chime(kind));
   api.on('autofill:done', () => {});
 
-  setInterval(() => { tickClocks(); renderStatus(); tickBoard(); tickBookings(); }, 1000);
+  setInterval(() => { tickClocks(); renderStatus(); tickBoard(); tickBookings(); freshenFeed(); }, 1000);
 
   // Boot: the import screen while it is still worth offering — a profile is
   // what the app fills a booking form from, and the browser on this machine

@@ -1565,6 +1565,155 @@ test('booking the soonest in the reach: the switch on the form and the bid, a su
   await run.result;
 });
 
+/** A regbot site whose lines have had openings lately (openings_feed.py): one line with a bid, one without. */
+async function openingsStub() {
+  const seen = { openings: [] };
+  const line = 'Driver licence or ID card';
+  const now = Math.floor(Date.now() / 1000);
+  const fields = [
+    { key: 'office_mode', label: 'Which offices will you accept?', type: 'select', required: true,
+      options: [{ label: 'One specific office', value: 'specific' }, { label: 'Any office within range of me', value: 'radius' }] },
+    { key: 'origin', label: 'Measure the range from', type: 'text', required: true, when: { key: 'office_mode', equals: 'radius' } },
+    { key: 'radius_miles', label: 'Within', type: 'number', required: true, when: { key: 'office_mode', equals: 'radius' } }];
+  const queue = (id) => ({ id, slug: `line-${id}`, name: id === 9 ? line : 'REAL ID application', description: '', status: 'open',
+    window: ['2026-10-01', '2026-12-31'], hours: ['08:00', '17:00'], weekdays: 'Mon–Fri', timezone: 'America/Los_Angeles', min_bid: 45,
+    slots_per_cycle: 1, cycle_seconds: 60, dispatch: 'offers', site_slug: 'ca-dmv', site_name: 'California DMV', accent: '#0b63d6',
+    connector: 'dmv.ca.gov.qmatic', mock: false, next_dispatch_in: 30 });
+  const mine = { bid_id: 8, rank: 1, amount: 46, status: 'active', note: '', preferred_date: '2026-10-29', preferred_time: '09:00',
+    if_passed: '1d', soonest: false, auto_widen: false, widened_at: null, raises: 0,
+    place: { office_mode: 'radius', origin: '95050', origin_label: '95050', radius_miles: 5 } };
+  const item = (id, office, minutesAgo, est, outcome, fit, extra = {}) => ({ id, office, miles: office === 'Santa Clara' ? 2.3 : 4.1,
+    slot: '2026-10-29 15:10', lead_h: 30, t: now - minutesAgo * 60, last: now - minutesAgo * 60 + 60, missed: now - minutesAgo * 60 + est * 2 - 60,
+    open: outcome === 'open', outcome, booked: outcome === 'booked', fit, before_bid: false, sightings: 2, est, lo: 60, hi: outcome === 'open' ? null : est * 2 - 60, ...extra });
+  const feed = (ask) => {
+    const bid = ask.bid_id === 8;
+    const chosen = Boolean(ask.fields && ask.fields.origin);
+    let items = [item(31, 'Santa Clara', 30, 3600, 'open', bid ? 'takes' : null), item(30, 'San Jose', 300, 240, 'booked', bid ? 'later' : null),
+      item(29, 'Santa Clara', 1500, 120, 'gone', bid ? 'takes' : null)];
+    if (!bid && !chosen) items.push(item(28, 'Los Gatos', 2000, 900, 'gone', null));
+    if (ask.office) items = items.filter((i) => i.office.toLowerCase() === ask.office.toLowerCase());
+    if (ask.fits_only) items = items.filter((i) => i.fit === 'takes');
+    const offices = [{ name: 'Santa Clara', n: 2, median: 120, miles: 2.3 }, { name: 'San Jose', n: 1, median: 240, miles: 4.1 }];
+    const hours = ask.hours || 72;
+    return { protocol: 'RQP/1', kind: 'client.openings', queue_id: ask.queue_id, hours, ranges: [24, 72, 168, 720],
+      step: { 24: 3600, 72: 10800, 168: 21600, 720: 86400 }[hours], since: now - hours * 3600, now, timezone: 'America/Los_Angeles',
+      scope: bid ? { kind: 'bid', text: 'Within 5 mi of 95050', offices: 2, bid_id: 8 }
+        : chosen ? { kind: 'place', text: 'Within 5 mi of 95050', offices: 2, bid_id: null } : { kind: 'line', text: 'Every office on this line', offices: null, bid_id: null },
+      office: ask.office || null, fits_only: Boolean(ask.fits_only),
+      stats: { openings: items.length, per_day: 1, median: 240, p25: 120, p75: 900, quick: 0.67, bracketed: 2, open: 1, booked: 1, yours: 0,
+        offices: 2, busiest_hour: 9, takes: bid ? items.filter((i) => i.fit === 'takes').length : null },
+      trend: { before: 900, lately: 180, way: 'shorter', older: 3, newer: 3 },
+      buckets: [{ t: now - 6 * 3600, n: 1, median: 240, p25: 240, p75: 240 }, { t: now - 3 * 3600, n: 2, median: 120, p25: 60, p75: 200 }],
+      by_hour: new Array(24).fill(0),
+      points: items.map((i) => [i.id, i.t, i.est, i.lo, i.hi, i.outcome, i.fit, i.office === 'Santa Clara' ? 0 : 1, i.slot]),
+      items, more: 0, offices: (bid || chosen) ? offices : offices.concat([{ name: 'Los Gatos', n: 1, median: 900, miles: null }]),
+      quick_seconds: 300, look_seconds: 120 };
+  };
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    const read = () => new Promise((resolve) => { let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => resolve(b ? JSON.parse(b) : {})); });
+    if (url.pathname === '/api/client/sites') return json(200, { protocol: 'RQP/1', sites: [] });
+    if (url.pathname === '/api/client/sync') {
+      return json(200, { protocol: 'RQP/1', poll_after_ms: 1000, user: { id: 1, nickname: 'super_manly', balance: 500, escrow: 46 },
+        positions: [{ ...mine, queue_id: 9, queue_name: line, site_slug: 'ca-dmv', site_name: 'California DMV', field_size: 1,
+          window: ['2026-10-01', '2026-12-31'], hours: ['08:00', '17:00'] }],
+        handoffs: [], settled: [], reports: [], widened: [], prefs: { auto_widen: false }, advice: null });
+    }
+    const board = url.pathname.match(/^\/api\/client\/queues\/(9|10)$/);
+    if (board) {
+      const id = Number(board[1]);
+      return json(200, { protocol: 'RQP/1', kind: 'client.board', queue: queue(id), bids: [], mine: id === 9 ? mine : null,
+        handoff: null, soonest_switch: true, openings_feed: true, field_size: id === 9 ? 1 : 0, to_lead: 45, min_raise: 5,
+        default_date: '2026-10-29', fields, kept_on_device: [], prefs: { auto_widen: false }, portal_url: 'http://127.0.0.1:9/' });
+    }
+    const asked = url.pathname.match(/^\/api\/client\/queues\/(9|10)\/openings$/);
+    if (asked) {
+      return read().then((body) => { seen.openings.push({ queue: Number(asked[1]), ...body }); json(200, feed({ ...body, queue_id: Number(asked[1]) })); });
+    }
+    if (url.pathname === '/api/client/queues/10/options') {
+      return json(200, { protocol: 'RQP/1', kind: 'client.options', queue_id: 10, draft: null, options: [], note: 'Say which offices first.' });
+    }
+    if (url.pathname === '/api/client/account') {
+      return json(200, { user: { id: 1, nickname: 'super_manly', balance: 500, escrow: 46, email: '', created_at: '2026-10-28' },
+        history: [], devices: [], packs: [], payments: null, purchases: [], ledger: [], stats: { won: 0, lost: 0, active: 1, spent: 0 } });
+    }
+    res.writeHead(404); res.end();
+    return undefined;
+  });
+  const port = await listen(server);
+  return { server, seen, port };
+}
+
+test('recent openings: the venues being looked at, a bid\'s own offices, how long each lasted, and the console\'s tab',
+  { timeout: 150000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+  const { server, seen, port } = await openingsStub();
+  t.after(() => server.close());
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-openings-'));
+  const run = startApp({ electron, display, port, userData, exitAfter: 60000,
+    extra: ['--remote-debugging-port=0', '--page=board:10'] });
+  let ui = null;
+  try {
+    const devPort = Number(await until(() => fs.readFileSync(path.join(userData, 'DevToolsActivePort'), 'utf8').split('\n')[0], 30000, 'DevTools'));
+    ui = await pageWhere(devPort, (u) => u.endsWith('/ui/index.html'), 'the app page');
+    const card = () => ui.evaluate("(document.getElementById('feedCard') || {}).innerText || ''");
+
+    // Browsing a line with nothing chosen: every office on it.
+    assert.match(await until(async () => { const x = await card(); return /Los Gatos/.test(x) && x; }, 20000, 'the feed under the board'),
+      /Recent openings[\s\S]*At every office on this line[\s\S]*typically gone in[\s\S]*All offices · 4[\s\S]*Open now/i);
+    assert.deepEqual(seen.openings[0], { queue: 10, hours: 72 });
+    assert.equal(await ui.evaluate("document.querySelectorAll('#feedCard circle.of-dot').length"), 4);
+
+    // Choosing offices on the join form narrows it to them.
+    await ui.evaluate(`(() => { const f = document.getElementById('bidForm'); const set = (n, v) => { const el = f.querySelector('[name=' + n + ']');
+      el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); }; set('office_mode', 'radius'); set('origin', '95050'); set('radius_miles', '5'); })()`);
+    await until(() => seen.openings.some((o) => o.fields && o.fields.origin === '95050' && o.fields.radius_miles === '5'), 10000, 'asked about the offices chosen');
+    assert.match(await until(async () => { const x = await card(); return /you chose/.test(x) && x; }, 10000, 'the narrower feed'),
+      /At the 2 offices you chose · Within 5 mi of 95050/);
+    assert.doesNotMatch(await card(), /Los Gatos/);
+
+    // Hovering a dot says which opening it is.
+    await ui.evaluate(`(() => { const dot = document.querySelector('#feedCard circle.of-dot.booked'); const r = dot.getBoundingClientRect();
+      dot.ownerSVGElement.dispatchEvent(new MouseEvent('mousemove', { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true })); })()`);
+    const tip = await ui.evaluate("(() => { const t = document.getElementById('ofTip'); return t.classList.contains('hidden') ? '' : t.innerText; })()");
+    assert.match(tip, /San Jose[\s\S]*Thu, Oct 29 · 3:10 PM[\s\S]*Booked via LineRight/);
+
+    // Further back, and one office.
+    await ui.evaluate("document.querySelector('#feedCard [data-of-hours=\"168\"]').click()");
+    await until(() => seen.openings.some((o) => o.hours === 168), 10000, 'asked about 7 days');
+    await until(() => ui.evaluate("Boolean(document.getElementById('ofOffice'))"), 10000, 'the office filter');
+    await ui.evaluate("(() => { const s = document.getElementById('ofOffice'); s.value = 'San Jose'; s.dispatchEvent(new Event('change')); })()");
+    await until(() => seen.openings.some((o) => o.office === 'San Jose' && o.hours === 168), 10000, 'asked about one office');
+    assert.equal(await until(() => ui.evaluate("document.querySelectorAll('#ofList .of-row').length === 1 && 1"), 10000, 'one office listed'), 1);
+
+    // A line with a bid: its own offices, each held up against it.
+    await ui.evaluate("document.querySelector('[data-page=console]').click()");
+    await until(() => ui.evaluate("Boolean(document.querySelector('[data-feed-open=\"8\"]'))"), 10000, 'the position');
+    await ui.evaluate("document.querySelector('[data-feed-open=\"8\"]').click()");
+    await until(() => seen.openings.some((o) => o.bid_id === 8), 10000, 'asked about the bid');
+    assert.match(await until(async () => { const x = await card(); return /your bid would take/.test(x) && x; }, 10000, 'the console tab'),
+      /At your bid's 2 offices[\s\S]*2 of 3[\s\S]*your bid would take[\s\S]*later than your bid took then/);
+    assert.match(await ui.evaluate("document.querySelector('.of-pick').innerText"), /Driver licence or ID card/);
+    await ui.evaluate("document.getElementById('ofFits').click()");
+    await until(() => seen.openings.some((o) => o.bid_id === 8 && o.fits_only === true), 10000, 'only the ones the bid takes');
+    await ui.evaluate("document.querySelector('#feedCard [data-of-wide=\"1\"]').click()");
+    const wide = await until(() => seen.openings.slice().reverse().find((o) => o.queue === 9 && !o.bid_id), 10000, 'every office on the line');
+    assert.equal(wide.fits_only, undefined, 'every office has no bid to fit');
+    // The console is drawn again on every sync; the feed stays as it is, not asked again.
+    const asks = seen.openings.length;
+    await new Promise((r) => setTimeout(r, 2500));
+    assert.equal(seen.openings.length, asks);
+    assert.match(await card(), /At every office on this line/);
+  } finally {
+    if (ui) ui.close();
+  }
+  await run.result;
+});
+
 /** A regbot site with one appointment tomorrow morning, and one cancelled yesterday (bookings.py). */
 async function bookingsStub() {
   const seen = { cancelled: [], lists: 0 };

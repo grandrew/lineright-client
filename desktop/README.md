@@ -300,6 +300,41 @@ Picking one fills the form in; nothing is placed until you bid. Above them it
 says the chance of the form as you filled it in. It is an estimate: next week
 is taken to be like last week, so the app says "about".
 
+### Recent openings
+
+Under a line's order book, and on the console's **Openings** tab for each of
+your positions, the app shows the openings that came lately and how long each
+lasted before it was gone (`ui/openings.js`; the site's `openings_feed.py`).
+On a line you have bid on, that covers your bid's offices. Each opening says
+whether your bid as it stands would have taken it when it came, or was later
+than it took then. While you are only looking, it covers the offices chosen
+on the join form so far, and follows the form as you change them. With none
+chosen, it covers every office on the line. **Every office** looks past your
+offices at the whole line.
+
+- **Numbers at the top:** how many came and how many a day; how long one
+  typically lasted, and the middle half; the share gone within five minutes;
+  whether lately they go faster or last longer than earlier in the range;
+  how many are open now; for a bid, how many it would have taken and how many
+  went to you; and the busiest hour.
+- **The plot:** each opening as a dot, when it came against how long it lasted
+  (a log scale, a minute to days), with a line through the median of each
+  step and a band over its middle half. Under it, how many came in each step.
+  Grey is gone; a green ring is still open; green is booked through
+  LineRight; violet was handed to a bidder; gold was yours. Faded ones were
+  later than your bid took. Hover over a dot to see it, and click it to find
+  it in the list.
+- **The list:** by day, newest first. Each opening says its office and
+  distance, its slot and how far ahead it came, how long it lasted, and what
+  became of it.
+
+The range is 24 hours, 3 days, 7 days or 30 days, and one office can be picked
+out. How long one lasted runs from the look that first saw it to the first
+look that found it gone, and is taken as the middle of the last look that saw
+it and the first that did not. The chip at the top of the board says the
+count and the typical lasting, and goes to the section. A site from before
+the feed has no such route, and the app shows nothing there.
+
 ## My Bookings
 
 **My Bookings**, on the bar beside Sites and Console, lists your appointments.

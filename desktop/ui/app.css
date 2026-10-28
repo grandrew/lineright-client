@@ -442,3 +442,80 @@ table.bk-rest td{font-size:12.5px}
 .btn-danger.solid{background:var(--bad); border-color:transparent; color:#fff}
 .btn-danger.solid:hover{background:color-mix(in srgb,var(--bad) 86%,#fff)}
 @media (max-width: 900px){.bk-card{grid-template-columns:1fr} .bk-actions{flex-direction:row; flex-wrap:wrap}}
+
+/* --------------------------------------------- recent openings (openings.js)
+   Under a line's board and on the console's Openings tab: the numbers, the plot
+   of how long each opening lasted, and the list. Gone is grey; open now is a
+   green ring; booked here is green; handed to a bidder is violet; yours is gold. */
+.of-card{margin-top:16px; padding:14px 18px 14px; overflow:visible}
+/* On a board: under the order book, beside the position; under the position when narrow. */
+.board-split.with-feed{grid-template-areas:"book side" "feed side"; grid-template-rows:auto 1fr}
+.board-split.with-feed > .board-book{grid-area:book}
+.board-split.with-feed > aside{grid-area:side}
+.board-split.with-feed > .of-slot{grid-area:feed; min-width:0}
+.of-slot > .of-card{margin-top:0}
+@media (max-width:900px){ .board-split.with-feed{grid-template-areas:"book" "side" "feed"; grid-template-rows:auto} }
+.of-head{display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap}
+.of-head > div:first-child{flex:1; min-width:200px}
+.of-scope{margin-top:3px}
+.of-body{margin-top:12px}
+.of-tiles{display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:8px; margin:0 0 12px}
+.of-tile{background:var(--surface-2); border:1px solid var(--line-soft); border-radius:var(--r-sm); padding:8px 10px; min-width:0}
+.of-tile .v{font:700 18px/1.25 var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.of-tile .k{font-size:12px; margin-top:2px}
+.of-tile .s{font-size:11px; color:var(--faint); margin-top:1px}
+.of-plot{position:relative; margin:0 -4px}
+.of-svg{width:100%; height:auto}
+.of-count{fill:color-mix(in srgb,var(--accent) 26%,var(--surface-3))}
+.of-band{fill:color-mix(in srgb,var(--accent) 13%,transparent)}
+.of-median{fill:none; stroke:var(--accent); stroke-width:2.2; stroke-linejoin:round; stroke-linecap:round}
+.of-dot{fill:#94a3b8; stroke:#fff; stroke-width:1}
+.of-dot.booked{fill:var(--ok)} .of-dot.offered{fill:#8b5cf6} .of-dot.yours{fill:var(--gold-bright)}
+.of-dot.open{fill:#fff; stroke:var(--ok); stroke-width:2}
+.of-dot.hover,.of-dot.focus{stroke:var(--text); stroke-width:2}
+.of-span{stroke:#94a3b8; stroke-width:1.5; opacity:.45}
+.of-span.booked,.of-span.open{stroke:var(--ok)} .of-span.offered{stroke:#8b5cf6} .of-span.yours{stroke:var(--gold-bright)}
+.of-dot.later,.of-span.later{opacity:.3}
+.of-rise{fill:var(--ok)}
+.of-axis-k{font-style:italic}
+.of-legend{margin:2px 0 0}
+.of-key{display:inline-flex; align-items:center; gap:6px}
+.of-swatch{display:inline-block; width:9px; height:9px; border-radius:50%; background:#94a3b8}
+.of-swatch.open{background:#fff; box-shadow:inset 0 0 0 2px var(--ok)}
+.of-swatch.booked{background:var(--ok)} .of-swatch.offered{background:#8b5cf6} .of-swatch.yours{background:var(--gold-bright)}
+.of-swatch.median{width:14px; height:3px; border-radius:2px; background:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 13%,transparent)}
+.of-swatch.later{opacity:.3}
+.of-filters{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:14px 0 6px}
+.of-filters select{padding:5px 8px; font-size:13px; max-width:100%}
+.of-check{display:inline-flex; align-items:center; gap:6px; font-size:13px; cursor:pointer}
+.of-list{border-top:1px solid var(--line-soft)}
+.of-day{font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); padding:10px 6px 4px}
+.of-row{display:grid; grid-template-columns:70px minmax(0,1.5fr) minmax(0,1fr) 190px; gap:12px; align-items:center; padding:7px 6px; border-radius:8px; cursor:pointer}
+.of-row:hover,.of-row.hover{background:var(--surface-2)}
+.of-row.focus{background:var(--accent-soft)}
+.of-row.later{opacity:.65}
+.of-when{font-size:12.5px; color:var(--muted)}
+.of-life{display:flex; align-items:center; gap:8px; min-width:0}
+.of-life span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.of-bar{flex:0 1 100px; min-width:36px; height:6px; border-radius:3px; background:var(--surface-3); overflow:hidden}
+.of-bar i{display:block; height:100%; border-radius:3px; background:#94a3b8}
+.of-bar i.open,.of-bar i.booked{background:var(--ok)} .of-bar i.offered{background:#8b5cf6} .of-bar i.yours{background:var(--gold-bright)}
+.of-out{display:flex; flex-direction:column; align-items:flex-end; gap:2px; text-align:right}
+.of-tag{font-size:11.5px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--surface-3); color:var(--muted); white-space:nowrap}
+.of-tag.open,.of-tag.booked{background:var(--ok-soft); color:var(--ok)}
+.of-tag.yours{background:var(--gold-soft); color:var(--gold)}
+.of-tag.offered{background:#f3efff; color:#6d28d9}
+.of-basis{margin:12px 0 0; line-height:1.5}
+.of-tip-note{margin-top:3px; color:#c7d2fe; white-space:normal !important; max-width:240px}
+.chip-feed{cursor:pointer; text-decoration:none !important; color:var(--text)}
+.chip-feed:hover{background:var(--surface-3)}
+.of-pick{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 4px}
+.of-pick-b{display:flex; flex-direction:column; align-items:flex-start; gap:1px; padding:7px 12px; border:1px solid var(--line); background:var(--surface); border-radius:var(--r-sm); text-align:left}
+.of-pick-b span{font-size:11.5px; color:var(--muted)}
+.of-pick-b:hover{background:var(--surface-2)}
+.of-pick-b.on{border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+@media (max-width:640px){
+  .of-row{grid-template-columns:56px minmax(0,1fr)}
+  .of-life,.of-out{grid-column:2}
+  .of-out{flex-direction:row; align-items:center; justify-content:flex-start; text-align:left}
+}

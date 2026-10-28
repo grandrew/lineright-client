@@ -2150,6 +2150,7 @@ function wireIpc() {
   handle('server:quote', ({ bid_id, change }) => client.quoteBid(bid_id, change));
   handle('server:options', ({ queue_id, draft }) => client.bidOptions(queue_id, draft));
   handle('server:widen-options', ({ bid_id }) => client.widenOptions(bid_id));
+  handle('server:openings', ({ queue_id, ask }) => client.openings(queue_id, ask));
   handle('server:prefs', async (prefs) => {
     const r = await client.setPreferences(prefs);
     loop.poke();
