@@ -46,3 +46,16 @@ test('a turn is held to the reach the server sends, which may have widened by it
   assert.equal(reachFor({ if_passed: 'later' }, 'nonsense'), '');
   assert.equal(reachFor(null, undefined), '');
 });
+
+test('a bid that books the soonest in its reach takes a later time before its moment', () => {
+  // Asked for Thu 09:00 with a day's reach; it is Tuesday evening; Santa Clara has Thu 15:10.
+  const asked = {
+    preferredDate: '2026-10-29', preferredTime: '09:00', code: '1d',
+    slotDate: '2026-10-29', slotTime: '15:10',
+    nowMs: Date.parse('2026-10-27T19:25:00'),
+  };
+  assert.equal(outsideReach(asked), true, 'without it the turn is passed');
+  assert.equal(outsideReach({ ...asked, soonest: true }), false);
+  assert.equal(outsideReach({ ...asked, soonest: true, slotDate: '2026-10-30', slotTime: '09:30' }), true,
+    'past the end of the reach it is still too far');
+});

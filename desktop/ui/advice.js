@@ -17,7 +17,8 @@
   // best way to ask, and turns that went unbooked.
   const KINDS = {
     radius: true, time: true, offices: true,
-    reach: true, date: true, range: true, nearby: true, raise: true, config: true, turns: true,
+    reach: true, date: true, soonest: true, range: true, nearby: true, raise: true, config: true,
+    turns: true,
   };
   // A sync that drops the suggestion for a moment does not take the bar down.
   // Two minutes is long enough for the board to flicker and short enough that
@@ -157,5 +158,13 @@
     return Boolean(advice && (advice.change || ['radius', 'time', 'offices'].includes(advice.kind)));
   }
 
-  return { visible, best, hold, remember, saveGone, loadGone, moment, HOLD_MS, SOONER_MS, title, sentence, actionLabel, changes, miles };
+  /** The credits applying it takes from what there is to spend, or 0: a raise's difference. */
+  function cost(advice) {
+    if (!advice || advice.kind !== 'raise') return 0;
+    const to = Number(advice.amount);
+    const from = Number(advice.from_amount);
+    return Number.isFinite(to) && Number.isFinite(from) && to > from ? to - from : 0;
+  }
+
+  return { visible, best, hold, remember, saveGone, loadGone, moment, HOLD_MS, SOONER_MS, title, sentence, actionLabel, changes, cost, miles };
 });

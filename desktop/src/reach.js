@@ -53,16 +53,17 @@ function localWall(nowMs = Date.now()) {
  *
  * Before the preferred moment, any later slot is too far. After it, any slot
  * past the chosen reach is too far, and so is one whose clock time has
- * already gone by.
+ * already gone by. A bid that books the soonest in its reach (`soonest`, the
+ * site's allocation.takes_until) takes its whole reach from the start.
  */
-function outsideReach({ preferredDate, preferredTime, code, slotDate, slotTime, nowMs }) {
+function outsideReach({ preferredDate, preferredTime, code, slotDate, slotTime, nowMs, soonest = false }) {
   if (!CODES.includes(code)) return false;
   const pref = wall(preferredDate, preferredTime);
   const slot = wall(slotDate, slotTime);
   const end = pref === null ? null : reachEnd(pref, code);
   if (pref === null || slot === null || end === null) return false;
   const now = localWall(nowMs);
-  if (now <= pref) return slot > pref;
+  if (now <= pref && !soonest) return slot > pref;
   return slot > end || slot < now;
 }
 

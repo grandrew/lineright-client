@@ -14,7 +14,8 @@
   };
   const HOUR = 3600000;
 
-  /** What the site is asked about: the place fields, the date, time, reach and amount. */
+  /** What the site is asked about: the place fields, the date, time, reach and amount,
+   *  and whether the bid books the soonest in its reach. */
   function body(form, placeKeys) {
     const fields = {};
     for (const key of placeKeys || []) {
@@ -26,6 +27,8 @@
       preferred_time: form.preferred_time || '',
       if_passed: form.if_passed || '',
       amount: Number(form.amount) || 0,
+      // Only from a form that shows the switch: a site from before it is not asked.
+      ...(typeof form.soonest === 'boolean' ? { soonest: form.soonest } : {}),
     };
   }
 
@@ -82,7 +85,9 @@
     return {
       label: option.label || '',
       place: option.place_text || '',
-      asks: `anything up to ${moment(option.preferred_date, option.preferred_time, formatDate)}, then ${reach(option.if_passed)} more`,
+      asks: option.soonest && option.until
+        ? `the soonest opening up to ${moment(option.until, undefined, formatDate)}`
+        : `anything up to ${moment(option.preferred_date, option.preferred_time, formatDate)}, then ${reach(option.if_passed)} more`,
       chance: chance(option.chance),
       tone: tone(option.chance),
       by: option.until ? `of an appointment by ${moment(option.until, undefined, formatDate)}` : '',
@@ -101,6 +106,30 @@
     return out;
   }
 
+  /**
+   * The end of a reach from the moment asked for, as 'YYYY-MM-DD HH:MM', or ''.
+   * Wall times, as the site's allocation.reach_end counts them: a month is a
+   * calendar month, the 31st plus one is the last day of the next.
+   */
+  function reachEnd(date, time, code) {
+    const [y, mo, d] = String(date || '').split('-').map(Number);
+    const [hh, mm] = String(time || '').split(':').map(Number);
+    if (![y, mo, d, hh, mm].every(Number.isInteger)) return '';
+    const hours = { '1h': 1, '2h': 2, '5h': 5, '1d': 24, '5d': 120, '2w': 336 }[code];
+    let at;
+    if (hours) at = new Date(Date.UTC(y, mo - 1, d, hh, mm) + hours * HOUR);
+    else if (code === '1mo' || code === '6mo') {
+      const months = code === '1mo' ? 1 : 6;
+      const index = mo - 1 + months;
+      const year = y + Math.floor(index / 12);
+      const month = index % 12;
+      const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      at = new Date(Date.UTC(year, month, Math.min(d, last), hh, mm));
+    } else return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${at.getUTCFullYear()}-${pad(at.getUTCMonth() + 1)}-${pad(at.getUTCDate())} ${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}`;
+  }
+
   /** The line under the options: what they are worked out from. */
   function basis(doc) {
     const b = (doc && doc.basis) || {};
@@ -110,5 +139,5 @@
     return `Worked out from the ${seen}, against the bids ahead. An estimate, not a promise.${rough}`;
   }
 
-  return { body, key, chance, tone, moment, likely, reach, describe, apply, basis };
+  return { body, key, chance, tone, moment, likely, reach, reachEnd, describe, apply, basis };
 });

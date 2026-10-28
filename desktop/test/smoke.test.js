@@ -1371,6 +1371,200 @@ test('a bid that widened by itself says so on top, with the suggestion and the b
   assert.equal(result.server, `http://127.0.0.1:${port}`);
 });
 
+/** A regbot site where a bid may book the soonest in its reach (the site's allocation.takes_until). */
+async function soonestStub() {
+  const seen = { options: [], advice: [], changes: [] };
+  const live = { soonest: false, balance: 30, stage: 'soonest' };
+  const line = 'Driver licence or ID card';
+  const now = { bid_id: 8, queue_id: 9, queue_name: line, kind: 'soonest', key: '8:soonest:2026-10-29 15:10',
+    title: 'An opening you can take now', action: 'Book the soonest in my reach', change: { soonest: true },
+    text: 'Santa Clara (2.3 mi) has Thu Oct 29 at 15:10 open now: later than the time you asked for, Thu Oct 29 at 09:00, but inside your 1 day reach.',
+    office_name: 'Santa Clara', slot_date: '2026-10-29', slot_time: '15:10', miles: 2.3 };
+  const raise = { bid_id: 8, queue_id: 9, queue_name: line, kind: 'raise', key: '8:raise:120', title: 'What would have worked',
+    action: 'Bid ⧗120', change: { amount: 120, expect_amount: 46 }, amount: 120, from_amount: 46,
+    text: 'In the last 2 days, 1 opening on Thu Oct 29 fit your bid and went to a bid ahead of yours.',
+    office_name: 'San Jose', slot_date: '2026-10-29', slot_time: '10:00' };
+  const fields = [
+    { key: 'office_mode', label: 'Which offices will you accept?', type: 'select', required: true,
+      options: [{ label: 'One specific office', value: 'specific' }, { label: 'Any office within range of me', value: 'radius' }] },
+    { key: 'origin', label: 'Measure the range from', type: 'text', required: true, when: { key: 'office_mode', equals: 'radius' } },
+    { key: 'radius_miles', label: 'Within', type: 'number', required: true, when: { key: 'office_mode', equals: 'radius' } }];
+  const queue = (id) => ({ id, slug: `line-${id}`, name: id === 9 ? line : 'REAL ID application', description: '', status: 'open',
+    window: ['2026-10-01', '2026-12-31'], hours: ['08:00', '17:00'], weekdays: 'Mon–Fri', timezone: 'America/Los_Angeles', min_bid: 45,
+    slots_per_cycle: 1, cycle_seconds: 60, dispatch: 'offers', site_slug: 'ca-dmv', site_name: 'California DMV', accent: '#0b63d6',
+    connector: 'dmv.ca.gov.qmatic', mock: false, next_dispatch_in: 30 });
+  const mine = () => ({ bid_id: 8, rank: 1, amount: 46, status: 'active', note: '', preferred_date: '2026-10-29', preferred_time: '09:00',
+    if_passed: '1d', soonest: live.soonest, auto_widen: false, widened_at: null, raises: 0,
+    place: { office_mode: 'radius', origin: '95050', origin_label: '95050', radius_miles: 5 } });
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    const read = () => new Promise((resolve) => { let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => resolve(b ? JSON.parse(b) : {})); });
+    if (url.pathname === '/api/client/sites') return json(200, { protocol: 'RQP/1', sites: [] });
+    if (url.pathname === '/api/client/sync') {
+      return json(200, { protocol: 'RQP/1', poll_after_ms: 1000, user: { id: 1, nickname: 'super_manly', balance: live.balance, escrow: 46 },
+        positions: [{ ...mine(), queue_id: 9, queue_name: line, site_slug: 'ca-dmv', site_name: 'California DMV', field_size: 1,
+          window: ['2026-10-01', '2026-12-31'], hours: ['08:00', '17:00'] }],
+        handoffs: [], settled: [], reports: [], widened: [], prefs: { auto_widen: false },
+        advice: live.stage === 'soonest' ? now : (live.stage === 'raise' ? raise : null) });
+    }
+    if (url.pathname === '/api/client/queues/10' || url.pathname === '/api/client/queues/9') {
+      const id = Number(url.pathname.split('/').pop());
+      return json(200, { protocol: 'RQP/1', kind: 'client.board', queue: queue(id), bids: [], mine: id === 9 ? mine() : null,
+        handoff: null, soonest_switch: true, field_size: id === 9 ? 1 : 0, to_lead: 45, min_raise: 5, default_date: '2026-10-29',
+        fields, kept_on_device: [], prefs: { auto_widen: false }, portal_url: 'http://127.0.0.1:9/' });
+    }
+    if (url.pathname === '/api/client/queues/10/options') {
+      return read().then((body) => {
+        seen.options.push(body);
+        json(200, { protocol: 'RQP/1', kind: 'client.options', queue_id: 10,
+          draft: { chance: body.soonest ? 0.9 : 0.22, until: '2026-10-30 09:00', likely_by: null, place_text: 'Within 5 mi of 95050', offices: 2,
+            soonest: body.soonest === true, soonest_chance: 0.9 },
+          options: [{ key: 'v0:2026-10-29T09:00:1d', label: 'Long shot', place: null, preferred_date: '2026-10-29', preferred_time: '09:00',
+            if_passed: '1d', soonest: body.soonest === true, until: '2026-10-30 09:00', chance: body.soonest ? 0.9 : 0.22, likely_by: null,
+            place_text: 'Within 5 mi of 95050' }],
+          basis: { days: 7, openings: 362, offices: 2, offices_seen: 2, rough: false } });
+      });
+    }
+    if (url.pathname === '/api/client/bids/8/advice') {
+      return read().then((body) => {
+        seen.advice.push(body);
+        if (body.key === now.key) {
+          live.soonest = true; live.stage = 'raise';
+          return json(200, { ok: true, bid_id: 8, queue_id: 9, soonest: true,
+            message: 'Now booking the soonest in its reach, anything up to Fri Oct 30 at 09:00. You are at position 1.' });
+        }
+        if (body.key === raise.key && live.balance < 74) {
+          return json(402, { error: `That takes ⧗74 more and you have ⧗${live.balance}.`, code: 'insufficient_credits',
+            need: 74, balance: live.balance, short: 74 - live.balance, buy_url: 'http://127.0.0.1:9/checkout?need=74' });
+        }
+        if (body.key === raise.key) {
+          live.stage = null; live.balance -= 74;
+          return json(200, { ok: true, bid_id: 8, queue_id: 9, message: 'Raised to ⧗120. You are at position 1.' });
+        }
+        return json(409, { error: 'That suggestion is no longer the one to take.' });
+      });
+    }
+    if (url.pathname === '/api/client/bids/8/change') {
+      return read().then((body) => {
+        seen.changes.push(body);
+        if (body.preferred_time) {
+          return json(400, { error: 'A change can make the time wider but not narrower: every time the bid takes now has to stay in. '
+            + 'Booking the soonest in its reach (anything up to Fri Oct 30 at 09:00, from now on) takes that time and keeps every one it takes now.',
+          instead: { change: { soonest: true }, words: 'Booking the soonest in its reach (anything up to Fri Oct 30 at 09:00, from now on)',
+            label: 'Book the soonest in my reach' } });
+        }
+        if (typeof body.soonest === 'boolean') live.soonest = body.soonest;
+        return json(200, { ok: true, bid_id: 8, queue_id: 9, amount: 46, delta: 0, rank: 1, soonest: live.soonest,
+          message: live.soonest ? 'Now booking the soonest in its reach, anything up to Fri Oct 30 at 09:00. You are at position 1.'
+            : 'Now waiting for its time before taking a later one. You are at position 1.' });
+      });
+    }
+    if (url.pathname === '/api/client/bids/8/quote') {
+      return json(200, { protocol: 'RQP/1', kind: 'client.quote', bid_id: 8, amount: 46, status: 'active', balance: live.balance,
+        lowers_left: 3, change: null, suggested: { kind: 'keep', amount: 46, delta: 0, reason: 'right', why: 'Your bid is about right.' },
+        options: [{ amount: 46, delta: 0, label: 'current', afford: true, standing: { rivals_ahead: 0 }, outlook: { turns: 1, likely_s: 7200, first_turn_s: 3600 } }],
+        rivals: { ahead: [] }, basis: { openings: 362, days: 7, horizon_days: 28 } });
+    }
+    if (url.pathname === '/api/client/account') {
+      return json(200, { user: { id: 1, nickname: 'super_manly', balance: live.balance, escrow: 46, email: '', created_at: '2026-10-28' },
+        history: [], devices: [], packs: [], payments: null, purchases: [], ledger: [],
+        stats: { won: 0, lost: 0, active: 1, spent: 0 } });
+    }
+    if (url.pathname === '/api/client/credits') {
+      return json(200, { balance: live.balance, escrow: 46, purchases: [], ledger: [],
+        packs: [{ id: 'starter', label: 'Starter', credits: 500, price: '$5', blurb: 'A few bids.' }],
+        payments: { practice: false, display: 'Stripe', emulated: true } });
+    }
+    res.writeHead(404); res.end();
+    return undefined;
+  });
+  const port = await listen(server);
+  return { server, seen, live, port };
+}
+
+test('booking the soonest in the reach: the switch on the form and the bid, a suggestion that needs credits bought first, a refused change answered with one that is taken',
+  { timeout: 150000 }, async (t) => {
+  const electron = electronPath();
+  const display = xvfb();
+  if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
+  if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
+  const { server, seen, live, port } = await soonestStub();
+  t.after(() => server.close());
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-soonest-'));
+  const run = startApp({ electron, display, port, userData, exitAfter: 60000,
+    extra: ['--remote-debugging-port=0', '--page=board:10'] });
+  let ui = null;
+  try {
+    const devPort = Number(await until(() => fs.readFileSync(path.join(userData, 'DevToolsActivePort'), 'utf8').split('\n')[0], 30000, 'DevTools'));
+    ui = await pageWhere(devPort, (u) => u.endsWith('/ui/index.html'), 'the app page');
+
+    // The join form: the switch is off, said, and its chance shown once the site says it.
+    await until(() => ui.evaluate("Boolean(document.getElementById('join-soonest'))"), 20000, 'the switch on the join form');
+    assert.equal(await ui.evaluate("document.getElementById('join-soonest').checked"), false, 'off unless turned on');
+    await until(() => seen.options.length, 10000, 'the options asked about');
+    assert.equal(seen.options[0].soonest, false);
+    const said = () => ui.evaluate("document.querySelector('#bidForm [data-soonest-box]').innerText");
+    assert.match(await until(async () => { const x = await said(); return /about 90%/.test(x) && x; }, 10000, 'its chance'),
+      /Off: a time later than the one you asked for is taken only once your time has passed[\s\S]*anything up to Fri Oct 30 at 08:00[\s\S]*With it on: about 90% chance/);
+    await ui.evaluate("document.getElementById('join-soonest').click()");
+    await until(() => seen.options.some((o) => o.soonest === true), 10000, 'the form asked about with it on');
+    assert.match(await said(), /On: any opening in your reach is taken as soon as it opens/);
+    assert.match(await ui.evaluate("document.getElementById('bidOptions').innerText"), /the soonest opening up to/);
+
+    // The suggestion for the opening open now turns it on for the bid in line.
+    const bar = () => ui.evaluate("[...document.querySelectorAll('#banner .banner-row.advice')].map((r) => r.innerText).join('\\n')");
+    assert.match(await until(async () => { const x = await bar(); return /open now/.test(x) && x; }, 20000, 'the suggestion'),
+      /An opening you can take now[\s\S]*Book the soonest in my reach/);
+    await ui.evaluate("document.querySelector('#banner .banner-row.advice [data-act=apply]').click()");
+    await until(() => seen.advice.length === 1, 10000, 'the suggestion applied');
+    assert.deepEqual(seen.advice[0], { key: '8:soonest:2026-10-29 15:10' });
+
+    // A raise it cannot pay for: the button says so, the Credits screen says what happens next,
+    // and once the credits are in the raise is made by itself.
+    assert.match(await until(async () => { const x = await bar(); return /Bid ⧗120/.test(x) && x; }, 20000, 'the raise suggestion'),
+      /Bid ⧗120 · buy ⧗44 more/);
+    // The raise is asked about first; yes, here (a dialog would hold the page).
+    await ui.evaluate('window.confirm = () => true');
+    await ui.evaluate("document.querySelector('#banner .banner-row.advice [data-act=apply]').click()");
+    await until(() => seen.advice.length === 2, 10000, 'the raise tried');
+    const page = () => ui.evaluate("document.getElementById('page').innerText");
+    assert.match(await until(async () => { const x = await page(); return /Once the credits are in/.test(x) && x; }, 10000, 'the Credits screen'),
+      /⧗44 short[\s\S]*Once the credits are in, the app will apply “Bid ⧗120” by itself/);
+    live.balance = 530;   // bought
+    await until(() => seen.advice.length === 3, 20000, 'the raise made once the credits are in');
+    assert.deepEqual(seen.advice[2], { key: '8:raise:120' });
+
+    // The bid in line shows the switch on, and turns it off from there.
+    await ui.evaluate("document.querySelector('[data-page=console]').click()");
+    await until(() => ui.evaluate("Boolean(document.querySelector('[data-board=\"9\"]'))"), 10000, 'the console');
+    assert.match(await page(), /the soonest opening up to Fri Oct 30 at 09:00/);
+    await ui.evaluate("document.querySelector('[data-board=\"9\"]').click()");
+    await until(() => ui.evaluate("Boolean(document.getElementById('soonest-8'))"), 15000, 'the switch on the bid');
+    assert.equal(await ui.evaluate("document.getElementById('soonest-8').checked"), true);
+    await ui.evaluate("document.getElementById('soonest-8').click()");
+    await until(() => seen.changes.some((c) => c.soonest === false), 10000, 'turned off');
+
+    // Asking for a later time by hand is refused as narrower, with the switch offered instead.
+    await until(() => ui.evaluate("Boolean(document.getElementById('change-open'))"), 10000, 'the change button');
+    await ui.evaluate("document.getElementById('change-open').click()");
+    await until(() => ui.evaluate("Boolean(document.querySelector('#changePanel [data-change=time]'))"), 10000, 'the change panel');
+    await ui.evaluate("(() => { const el = document.querySelector('#changePanel [data-change=time]'); el.value = '15:10'; el.dispatchEvent(new Event('change')); })()");
+    await until(() => ui.evaluate("!document.getElementById('change-save').disabled"), 10000, 'something to save');
+    await ui.evaluate("document.getElementById('change-save').click()");
+    const offered = await until(async () => {
+      const x = await ui.evaluate("(document.getElementById('changeError') || {}).innerText || ''");
+      return /Book the soonest in my reach/.test(x) && x;
+    }, 10000, 'the change offered instead');
+    assert.match(offered, /takes that time and keeps every one it takes now/);
+    await ui.evaluate("document.querySelector('#changeError button').click()");
+    await until(() => seen.changes.some((c) => c.soonest === true && !c.preferred_time), 10000, 'the change taken instead');
+  } finally {
+    if (ui) ui.close();
+  }
+  await run.result;
+});
+
 /** A regbot site with one appointment tomorrow morning, and one cancelled yesterday (bookings.py). */
 async function bookingsStub() {
   const seen = { cancelled: [], lists: 0 };

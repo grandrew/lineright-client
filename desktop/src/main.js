@@ -1087,7 +1087,7 @@ function passIfTooFar(h) {
   if (!code || !pos || !slot) return false;
   if (!outsideReach({
     preferredDate: pos.preferred_date, preferredTime: pos.preferred_time, code,
-    slotDate: slot.date, slotTime: slot.time,
+    slotDate: slot.date, slotTime: slot.time, soonest: Boolean(pos.soonest),
   })) return false;
   const where = describeHandoff(h);
   log(`passing ${where}: later than the ${code} you asked for`);
@@ -1972,7 +1972,9 @@ async function uploadTraces(ask) {
 // What of a refusal the screen may act on: a bid the credits do not cover
 // (402: how many are missing, where to buy them), or a site that asked to be
 // left alone for a while (429).
-const DETAIL = ['code', 'need', 'balance', 'short', 'buy_url'];
+// What an error reply carries for the screen to act on: how many credits a
+// bid is short of, and a change the site would take instead of a refused one.
+const DETAIL = ['code', 'need', 'balance', 'short', 'buy_url', 'instead'];
 
 function handle(name, fn) {
   ipcMain.handle(`regbot:${name}`, async (_event, payload) => {

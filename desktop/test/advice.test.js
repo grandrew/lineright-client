@@ -147,3 +147,24 @@ test('what is closed is saved with its opening; a bare key saved before is forgo
   assert.equal(Object.keys(many).length, 40);
   assert.ok(many['2:radius:49'] && !('2:radius:9' in many), 'the latest are kept');
 });
+
+test('booking the soonest in the reach is a suggestion the banner shows, in the site\'s words', () => {
+  const soonest = {
+    bid_id: 8, kind: 'soonest', key: '8:soonest:2026-10-29 15:10', queue_name: 'Driver licence or ID card',
+    title: 'An opening you can take now', action: 'Book the soonest in my reach', change: { soonest: true },
+    text: 'Santa Clara (2.3 mi) has Thu Oct 29 at 15:10 open now.',
+    office_name: 'Santa Clara', slot_date: '2026-10-29', slot_time: '15:10', miles: 2.3,
+  };
+  assert.equal(banner.visible({ advice: soonest }, {}), soonest);
+  assert.equal(banner.title(soonest), 'An opening you can take now');
+  assert.equal(banner.actionLabel(soonest), 'Book the soonest in my reach');
+  assert.equal(banner.changes(soonest), true);
+  assert.equal(banner.cost(soonest), 0, 'it costs nothing');
+});
+
+test('a raise says what it costs', () => {
+  const raise = { bid_id: 8, kind: 'raise', key: '8:raise:120', amount: 120, from_amount: 46, action: 'Bid ⧗120', change: { amount: 120, expect_amount: 46 } };
+  assert.equal(banner.cost(raise), 74);
+  assert.equal(banner.cost({ ...raise, amount: 40 }), 0);
+  assert.equal(banner.cost(null), 0);
+});

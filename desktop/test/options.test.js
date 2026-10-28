@@ -20,6 +20,24 @@ test('the draft sent is the form: its place, date, time, reach and amount', () =
     preferred_date: '2026-10-27', preferred_time: '17:00', if_passed: '1d', amount: 45,
   });
   assert.equal(opts.key(draft), opts.key(JSON.parse(JSON.stringify(draft))), 'the same draft is asked once');
+  assert.equal(opts.body({ soonest: true }, PLACE).soonest, true, 'and whether it books the soonest in its reach');
+  assert.equal(opts.body({ soonest: false }, PLACE).soonest, false);
+  assert.notEqual(opts.key(opts.body({ soonest: true }, PLACE)), opts.key(opts.body({}, PLACE)));
+});
+
+test('an option that books the soonest says how far, not when its moment passes', () => {
+  const d = opts.describe({ ...option, soonest: true }, undefined, Date.parse('2026-10-24T12:00:00'));
+  assert.equal(d.asks, 'the soonest opening up to 2026-10-29, 09:00');
+});
+
+test('the end of a reach, as the site counts it', () => {
+  assert.equal(opts.reachEnd('2026-10-29', '09:00', '1d'), '2026-10-30 09:00');
+  assert.equal(opts.reachEnd('2026-10-29', '15:10', '5h'), '2026-10-29 20:10');
+  assert.equal(opts.reachEnd('2026-10-29', '09:00', '2w'), '2026-11-12 09:00');
+  assert.equal(opts.reachEnd('2026-01-31', '09:00', '1mo'), '2026-02-28 09:00', 'a calendar month');
+  assert.equal(opts.reachEnd('2026-08-31', '09:00', '6mo'), '2027-02-28 09:00');
+  assert.equal(opts.reachEnd('2026-10-29', '', '1d'), '');
+  assert.equal(opts.reachEnd('2026-10-29', '09:00', 'never'), '');
 });
 
 test('chances are said roughly, and coloured by how sure', () => {

@@ -100,13 +100,47 @@
     const hit = REACHES.find(([value]) => value === code);
     return hit ? hit[1].replace(/^Book in the /, '') : '';
   }
-  function reachSelect(code, bidId) {
+  const REACH_HELP = 'Until that moment, an earlier opening is taken. Once it has passed, the nearest later opening within this reach is taken. Nothing farther out is offered.';
+  function reachSelect(code, bidId, p) {
+    const switchable = p && typeof p.soonest === 'boolean' && code;
     return `<label class="field" style="margin:8px 0 0"><span class="field-label">If that time passes</span>
       <select data-if-passed="${num(bidId)}">
         ${code ? '' : '<option value="" selected>Choose how far to look</option>'}
         ${REACHES.map(([value, label]) => `<option value="${esc(value)}"${value === code ? ' selected' : ''}>${esc(label)}</option>`).join('')}
       </select>
-      <span class="field-help">Until that moment, an earlier opening is taken. Once it has passed, the nearest later opening within this reach is taken. Nothing farther out is offered.</span></label>`;
+      <span class="field-help">${switchable && p.soonest ? 'Any opening up to the end of this reach is taken, the soonest first. Nothing farther out is offered.' : REACH_HELP}</span></label>
+      ${switchable ? soonestBox({ id: `soonest-${num(bidId)}`, bidId, on: p.soonest, end: reachEndText(p.preferred_date, p.preferred_time, code) }) : ''}`;
+  }
+  /** 'Fri Oct 30 at 09:00': the end of a reach from the moment asked for, or ''. */
+  function reachEndText(date, time, code) {
+    const end = window.bidOptions ? window.bidOptions.reachEnd(date, time, code) : '';
+    if (!end) return '';
+    const [d, t] = end.split(' ');
+    return `${shortDate(d).replace(',', '')} at ${t}`;
+  }
+  /**
+   * The switch that lets a bid book the soonest in its reach (the site's
+   * allocation.takes_until). Off, which is how every bid starts, a time later
+   * than the one asked for is taken only once that time has passed. On, any
+   * opening in the reach is taken as soon as it opens. Shown wherever the
+   * reach is chosen, in a box of its own so that it is seen. `chance` is what
+   * the site says the bid's chance is with it on, when it has said.
+   */
+  function soonestBox({ id, name = '', bidId = 0, change = false, on = false, end = '', chance = null }) {
+    const attrs = `${name ? ` name="${esc(name)}"` : ''}${bidId ? ` data-soonest="${num(bidId)}"` : ''}${change ? ' data-change="soonest"' : ''}`;
+    return `<div class="soonest-box${on ? ' on' : ''}" data-soonest-box>
+      <label class="switch-row" for="${esc(id)}">
+        <input type="checkbox" class="switch" id="${esc(id)}"${attrs}${on ? ' checked' : ''}>
+        <span class="switch-text"><b>Book the soonest in my reach</b>
+          <span class="field-help" data-soonest-say>${soonestSay(on, end, chance)}</span></span>
+      </label></div>`;
+  }
+  function soonestSay(on, end, chance) {
+    const until = end ? `, anything up to <b>${esc(end)}</b>` : '';
+    const odds = chance == null ? '' : ` <span class="soonest-chance">With it on: ${esc(window.bidOptions.chance(chance))} chance.</span>`;
+    return on
+      ? `On: any opening in your reach is taken as soon as it opens${until}. You may get a later time on the same day rather than wait for yours.${odds}`
+      : `Off: a time later than the one you asked for is taken only once your time has passed. Turn it on if you would rather have it soon: any opening in your reach${until}, as soon as it opens.${odds}`;
   }
   function uiNote(kind, text) {
     api.call('ui:note', { kind, text }).catch(() => {});
@@ -433,6 +467,16 @@
     fit();
   }
 
+  /** A suggestion's button: what it does, and what it costs when it costs credits. */
+  function adviceButton(item) {
+    const label = window.adviceBanner.actionLabel(item);
+    const extra = window.adviceBanner.cost ? window.adviceBanner.cost(item) : 0;
+    if (!extra) return label;
+    const balance = state.doc && state.doc.user ? Number(state.doc.user.balance) : null;
+    if (balance !== null && extra > balance) return `${label} · buy ${coins(extra - balance)} more`;
+    return `${label} · +${coins(extra)}`;
+  }
+
   function renderBanner(force) {
     const box = $('banner');
     const handoffs = (state.doc && state.doc.handoffs) || [];
@@ -456,7 +500,8 @@
     const adviceMark = advice ? `${advice.key}|${advice.office_code || ''}|${advice.slot_date || ''}|${advice.slot_time || ''}|${advice.text || ''}` : '';
     const key = handoffs.map((h) => `${h.job_id}:${h.phase}:${h.booker ? `${h.booker.name}:${h.booker.silent}` : ''}:${h.over ? h.over.kind : ''}`).join(',')
       + `|${state.prompt}|${robotOn}|${state.ended.map((e) => e.job_id).join(',')}|${showing}|${adviceMark}`
-      + `|${widened.map((w) => w.key).join(',')}|${best ? `${best.key}|${best.text || ''}` : ''}`;
+      + `|${widened.map((w) => w.key).join(',')}|${best ? `${best.key}|${best.text || ''}` : ''}`
+      + `|${state.doc && state.doc.user ? state.doc.user.balance : ''}`;
     if (!force && key === state.bannerKey) { tickClocks(); return; }
     state.bannerKey = key;
     box.innerHTML = '';
@@ -502,7 +547,7 @@
         <span class="text"><b>${esc(window.adviceBanner.title(item))}</b> · ${esc(line + said)}
           <br><span class="tiny">${changes ? 'Nothing changes until you apply this.' : 'This is a setting on this computer.'}</span></span>
         <span class="actions">
-          <button class="pill primary" data-act="apply">${esc(window.adviceBanner.actionLabel(item))}</button>
+          <button class="pill primary" data-act="apply">${esc(adviceButton(item))}</button>
           <button class="pill" data-act="dismiss" title="Dismiss">×</button>
         </span>`;
       row.querySelector('[data-act=apply]').addEventListener('click', () => doAdvice(item));
@@ -1032,7 +1077,7 @@
         <div class="bid-who"><span class="bid-nick">${esc(r.nickname)}${r.mine ? '<span class="tag tag-you">you</span>' : ''}${r.status === 'processing' ? '<span class="tag tag-processing">booking</span>' : ''}</span>
           <span class="bid-sub">${esc(r.age)}${r.raises ? ` · raised ${num(r.raises)}×` : ''}</span></div>
         <div class="bid-amount">${coins(r.amount)}</div>
-        <div class="bid-meta">${esc(prettyDate(r.preferred_date))}<br>${esc(r.preferred_time)}${r.if_passed ? `<br><span class="tiny muted">${esc(reachLabel(r.if_passed))}</span>` : ''}</div>
+        <div class="bid-meta">${esc(prettyDate(r.preferred_date))}<br>${esc(r.preferred_time)}${r.if_passed ? `<br><span class="tiny muted">${esc(reachLabel(r.if_passed))}${r.soonest ? ', soonest first' : ''}</span>` : ''}</div>
       </div>`).join('');
   }
 
@@ -1144,7 +1189,7 @@
       ${byOffers(q) && m.rank === 1 ? '<p class="small ok" style="margin:4px 0 0">✓ First in line: the next opening that fits your offices is yours.</p>'
         : !byOffers(q) && m.rank <= q.slots_per_cycle ? '<p class="small ok" style="margin:4px 0 0">✓ In the hand-off window — your turn comes on the next cycle.</p>'
         : `<p class="small muted" style="margin:4px 0 0"><span id="toLead">${coins(b.to_lead)}</span> takes the lead right now.</p>`}
-      ${m.status === 'active' ? reachSelect(shownReach(m), m.bid_id) : ''}
+      ${m.status === 'active' ? reachSelect(shownReach(m), m.bid_id, m) : ''}
       ${m.status === 'active' && typeof m.auto_widen === 'boolean' ? `<div class="check" style="margin:8px 0 0"><input type="checkbox" id="mine-autowiden" data-auto-widen="${num(m.bid_id)}" ${m.auto_widen ? 'checked' : ''}>
         <label for="mine-autowiden"><span class="small">Widen by itself until it books</span>
         <span class="field-help">Once that time passes with nothing booked, the reach climbs a step, and again each day after.${m.widened_at ? ` It last widened ${esc(ago(m.widened_at))}.` : ''}</span></label></div>` : ''}
@@ -1182,7 +1227,8 @@
           <select name="if_passed">
             ${REACHES.map(([value, label]) => `<option value="${esc(value)}"${value === '1d' ? ' selected' : ''}>${esc(label)}</option>`).join('')}
           </select>
-          <span class="field-help">Until that moment, an earlier opening is taken. Once it has passed, the nearest later opening within this reach is taken. Nothing farther out is offered.</span></label>
+          <span class="field-help">${REACH_HELP}</span></label>
+        ${b.soonest_switch ? soonestBox({ id: 'join-soonest', name: 'soonest', on: values.soonest === true }) : ''}
         ${b.prefs && typeof b.prefs.auto_widen === 'boolean' ? `<div class="check"><input type="checkbox" name="auto_widen" id="join-autowiden" ${b.prefs.auto_widen ? 'checked' : ''}>
           <label for="join-autowiden"><span class="small"><b>Widen by itself until it books</b></span>
           <span class="field-help">If that time passes with nothing booked, the reach climbs a step — 5 hours to a day, 5 days to two weeks — and again each day after, until a booking comes. It keeps its amount and its place. Settings → Bidding turns this off for every bid.</span></label></div>` : ''}
@@ -1215,6 +1261,7 @@
     for (const sel of page.querySelectorAll('[data-if-passed]')) {
       sel.addEventListener('change', () => { if (sel.value) doIfPassed(Number(sel.dataset.ifPassed), sel.value); });
     }
+    wireSoonest(page);
     for (const box of page.querySelectorAll('[data-auto-widen]')) {
       box.addEventListener('change', async () => {
         const bidId = Number(box.dataset.autoWiden);
@@ -1244,6 +1291,8 @@
       const again = () => { clearTimeout(optionsTimer); optionsTimer = setTimeout(() => requestOptions(b, form), 600); };
       form.addEventListener('input', again);
       form.addEventListener('change', again);
+      form.addEventListener('change', () => paintJoinSoonest(form));
+      paintJoinSoonest(form);
       requestOptions(b, form);
       // Said before it is sent: the site refuses a bid the credits do not cover
       // (and is the one that decides — this is only the balance it last sent).
@@ -1268,11 +1317,12 @@
         }
         const body = { queue_id: b.queue.id, amount: Number(form.amount.value), preferred_date: form.preferred_date.value, preferred_time: form.preferred_time.value, if_passed: form.if_passed.value, fields, needs_of_line: b.kept_on_device || [] };
         if (form.auto_widen) body.auto_widen = form.auto_widen.checked;
+        if (form.soonest) body.soonest = form.soonest.checked;
         const errBox = form.querySelector('#bidError');
         errBox.classList.add('hidden');
         // Keep what they typed either way: a trip to the profile must not cost
         // them the amount, the date and the answers they just filled in.
-        state.bidDraft = { queueId: b.queue.id, values: fields };
+        state.bidDraft = { queueId: b.queue.id, values: { ...fields, soonest: Boolean(body.soonest) } };
         try {
           const r = await call('server:bid', body);
           if (r && r.gated) { toast('warn', `Add ${tellNames(r.need)} to your profile to join this line.`, 9000); return; }
@@ -1291,7 +1341,7 @@
             buy.addEventListener('click', () => buyFor(err.detail.need || body.amount));
             errBox.appendChild(buy);
           }
-          state.bidDraft = { queueId: b.queue.id, values: fields };
+          state.bidDraft = { queueId: b.queue.id, values: { ...fields, soonest: Boolean(body.soonest) } };
         }
       });
     }
@@ -1308,6 +1358,7 @@
     const values = {
       preferred_date: form.preferred_date.value, preferred_time: form.preferred_time.value,
       if_passed: form.if_passed.value, amount: form.amount.value,
+      soonest: form.soonest ? form.soonest.checked : undefined,
     };
     for (const k of PLACE_KEYS) {
       const el = form.querySelector(`[name="${k}"]`);
@@ -1343,7 +1394,21 @@
     });
   }
 
+  /** The join form's switch, said for what the form asks now, with its chance once known. */
+  function paintJoinSoonest(form) {
+    const box = form && form.querySelector('[data-soonest-box]');
+    if (!box || !form.soonest) return;
+    const on = form.soonest.checked;
+    const o = state.options;
+    const draft = o && o.doc && o.doc.draft;
+    const chance = draft && typeof draft.soonest_chance === 'number' ? draft.soonest_chance : null;
+    box.classList.toggle('on', on);
+    box.querySelector('[data-soonest-say]').innerHTML = soonestSay(
+      on, reachEndText(form.preferred_date.value, form.preferred_time.value, form.if_passed.value), chance);
+  }
+
   function paintOptions(b, form) {
+    paintJoinSoonest(form);
     const box = $('bidOptions');
     const o = state.options;
     if (!box || !o) return;
@@ -1395,7 +1460,8 @@
     const m = b.mine;
     state.change = {
       bidId: m.bid_id, quote: null, error: '', saveError: '', busy: false, seq: 0, shape: null,
-      draft: { place: '', date: m.preferred_date || '', time: m.preferred_time || '', reach: m.if_passed || '', amount: m.amount },
+      draft: { place: '', date: m.preferred_date || '', time: m.preferred_time || '', reach: m.if_passed || '', amount: m.amount,
+        soonest: typeof m.soonest === 'boolean' ? m.soonest : undefined },
     };
     requestQuote(b);
   }
@@ -1416,13 +1482,17 @@
     }).catch((err) => {
       if (state.change !== c || seq !== c.seq) return;
       c.quote = null; c.error = err.message; c.loading = false;
+      // Refused as narrower: the change the site would take is offered here, at once.
+      c.instead = (err.detail && err.detail.instead) || null;
       paintQuote(b);
     });
   }
 
   function quoteHtml(b) {
     const c = state.change;
-    if (c.error) return `<div class="note bad">${esc(c.error)}</div>`;
+    if (c.error) {
+      return `<div class="note bad">${esc(c.error)}${c.instead ? `<button type="button" class="btn btn-sm btn-accent" data-instead style="display:block; margin-top:8px">${esc(c.instead.label || 'Do that instead')}</button>` : ''}</div>`;
+    }
     const doc = c.quote;
     if (!doc) return '<p class="small muted" style="margin:6px 0">Working out what each amount buys…</p>';
     const pick = doc.suggested || {};
@@ -1447,6 +1517,11 @@
       for (const btn of box.querySelectorAll('[data-change-amount]')) {
         btn.addEventListener('click', () => setChangeAmount(b, Number(btn.dataset.changeAmount)));
       }
+      const instead = box.querySelector('[data-instead]');
+      if (instead && state.change && state.change.instead) {
+        const offer = state.change.instead;
+        instead.addEventListener('click', () => applyInstead(state.change.bidId, offer));
+      }
     }
     paintSave(b);
   }
@@ -1458,7 +1533,21 @@
     save.textContent = c.busy ? 'Saving…' : BC.saveLabel(c.draft, b.mine, coins);
     save.disabled = c.busy || !Object.keys(BC.body(c.draft, b.mine)).length || Boolean(c.error);
     const said = $('changeError');
-    if (said) { said.textContent = c.saveError || ''; said.classList.toggle('hidden', !c.saveError); }
+    if (said) {
+      said.textContent = c.saveError || '';
+      // Refused as narrower, with the change the site would take instead.
+      if (c.saveError && c.instead) {
+        const use = document.createElement('button');
+        use.type = 'button';
+        use.className = 'btn btn-sm btn-accent';
+        use.style.marginTop = '8px';
+        use.style.display = 'block';
+        use.textContent = c.instead.label || 'Do that instead';
+        use.addEventListener('click', () => applyInstead(c.bidId, c.instead));
+        said.appendChild(use);
+      }
+      said.classList.toggle('hidden', !c.saveError);
+    }
   }
 
   function setChangeAmount(b, amount) {
@@ -1488,7 +1577,8 @@
       </div>
       <label class="field"><span class="field-label">If that time passes</span>
         <select data-change="reach">${reaches.map((o) => `<option value="${esc(o.value)}"${o.value === d.reach ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select>
-        <span class="field-help">Later, or farther: every time the bid takes now stays in.</span></label>`
+        <span class="field-help">Later, or farther: every time the bid takes now stays in.</span></label>
+      ${typeof d.soonest === 'boolean' ? soonestBox({ id: 'change-soonest', change: true, on: d.soonest, end: reachEndText(d.date, d.time, d.reach) }) : ''}`
         : '<p class="tiny muted" style="margin:0 0 12px">This bid already takes any time in the line\'s window.</p>'}
       <div class="sep"></div>
       <span class="field-label">Your bid</span>
@@ -1516,7 +1606,13 @@
       const read = () => {
         c.saveError = '';
         if (key === 'amount') { c.draft.amount = Number(el.value) || 0; paintQuote(b); return; }
-        c.draft[key] = el.value;
+        c.draft[key] = el.type === 'checkbox' ? el.checked : el.value;
+        c.instead = null;
+        const box = panel.querySelector('[data-soonest-box]');
+        if (box) {
+          box.classList.toggle('on', Boolean(c.draft.soonest));
+          box.querySelector('[data-soonest-say]').innerHTML = soonestSay(Boolean(c.draft.soonest), reachEndText(c.draft.date, c.draft.time, c.draft.reach), null);
+        }
         shapeChanged();
       };
       el.addEventListener(key === 'amount' ? 'input' : 'change', read);
@@ -1536,10 +1632,17 @@
       } catch (err) {
         c.busy = false;
         if (err.status === 402) {
-          go('credits', { need: err.detail.need, back: { page: 'board', id: b.queue.id } });
+          // Short: buy what is missing, and the change is made once it is in.
+          buyThen(err.detail, 'save the change to your bid', async () => {
+            const r = await call('server:change', { bid_id: c.bidId, change });
+            if (change.if_passed) chosenReach[c.bidId] = change.if_passed;
+            toast('ok', r.message, 9000);
+            state.change = null; state.board = null;
+          }, { page: 'board', id: b.queue.id });
           return;
         }
         c.saveError = err.message;
+        c.instead = (err.detail && err.detail.instead) || null;
         paintSave(b);
         if (err.status === 409) {
           toast('warn', err.message, 9000);
@@ -1562,26 +1665,117 @@
       go('settings');
       return;
     }
-    if (advice.kind === 'raise' && !window.confirm(`Raise your bid on ${advice.queue_name || 'this line'} to ${coins(advice.amount)}? The difference is held from your credits until it settles.`)) return;
+    const extra = window.adviceBanner.cost(advice);
+    if (advice.kind === 'raise' && !window.confirm(`Raise your bid on ${advice.queue_name || 'this line'} to ${coins(advice.amount)}? ${extra ? `${coins(extra)} more is` : 'The difference is'} held from your credits until it settles.`)) return;
+    const apply = async () => adviceApplied(advice, await call('server:advice', { bid_id: advice.bid_id, key: advice.key }));
     try {
-      const reply = await call('server:advice', { bid_id: advice.bid_id, key: advice.key });
-      if (advice.if_passed && ['time', 'reach', 'config'].includes(advice.kind)) {
-        chosenReach[advice.bid_id] = advice.if_passed;
-        const positions = state.doc && state.doc.positions;
-        const pos = positions && positions.find((p) => p.bid_id === advice.bid_id);
-        if (pos) pos.if_passed = advice.if_passed;
-        if (state.board && state.board.mine && state.board.mine.bid_id === advice.bid_id) {
-          state.board.mine.if_passed = advice.if_passed;
-        }
-      }
-      toast('ok', reply.message || 'Updated.');
-      rememberAdviceGone(advice);
-      renderBanner(true);
-      if (state.route.page === 'board') { state.board = null; renderBoard(); }
-      if (state.route.page === 'console') renderConsole();
+      await apply();
     } catch (err) {
+      if (err.status === 402) {
+        // It costs credits there are not: buy them, and it is applied once they are in.
+        buyThen(err.detail, `apply “${window.adviceBanner.actionLabel(advice)}”`, apply);
+        return;
+      }
+      if (err.detail && err.detail.instead) { offerInstead(advice.bid_id, err.message, err.detail.instead); return; }
       toast('bad', err.message, 9000);
     }
+  }
+
+  /** What changed, shown at once rather than on the next sync. */
+  function adviceApplied(advice, reply) {
+    const positions = state.doc && state.doc.positions;
+    const pos = positions && positions.find((p) => p.bid_id === advice.bid_id);
+    const mine = state.board && state.board.mine && state.board.mine.bid_id === advice.bid_id ? state.board.mine : null;
+    if (advice.if_passed && ['time', 'reach', 'config'].includes(advice.kind)) {
+      chosenReach[advice.bid_id] = advice.if_passed;
+      if (pos) pos.if_passed = advice.if_passed;
+      if (mine) mine.if_passed = advice.if_passed;
+    }
+    if (advice.change && advice.change.soonest) {
+      if (pos) pos.soonest = true;
+      if (mine) mine.soonest = true;
+    }
+    toast('ok', (reply && reply.message) || 'Updated.', 9000);
+    rememberAdviceGone(advice);
+    renderBanner(true);
+    if (state.route.page === 'board') { state.board = null; renderBoard(); }
+    if (state.route.page === 'console') renderConsole();
+  }
+
+  /** A change the site refused as narrower, and the one it would take: asked, then made. */
+  function offerInstead(bidId, message, instead) {
+    if (!window.confirm(`${message}\n\n${instead.label || 'Do that instead'}?`)) return;
+    applyInstead(bidId, instead);
+  }
+
+  async function applyInstead(bidId, instead) {
+    try {
+      const r = await call('server:change', { bid_id: bidId, change: instead.change });
+      if (instead.change.if_passed) chosenReach[bidId] = instead.change.if_passed;
+      toast('ok', r.message, 9000);
+      state.change = null;
+      state.board = null;
+      if (state.route.page === 'board') renderBoard();
+      if (state.route.page === 'console') renderConsole();
+    } catch (err) {
+      if (err.status === 402) { buyThen(err.detail, `apply “${instead.label}”`, () => applyInstead(bidId, instead)); return; }
+      toast('bad', err.message, 9000);
+    }
+  }
+
+  /** Each switch that books the soonest in a live bid's reach: turned on or off at once. */
+  function wireSoonest(root) {
+    for (const box of root.querySelectorAll('[data-soonest]')) {
+      box.addEventListener('change', async () => {
+        const bidId = Number(box.dataset.soonest);
+        const on = box.checked;
+        try {
+          const r = await call('server:change', { bid_id: bidId, change: { soonest: on } });
+          toast('ok', r.message, 9000);
+          const pos = state.doc && (state.doc.positions || []).find((p) => p.bid_id === bidId);
+          if (pos) pos.soonest = on;
+          if (state.board && state.board.mine && state.board.mine.bid_id === bidId) state.board.mine.soonest = on;
+          const wrap = box.closest('[data-soonest-box]');
+          if (wrap) wrap.classList.toggle('on', on);
+          if (state.route.page === 'board') { state.boardShape = ''; renderBoard(); }
+          if (state.route.page === 'console') renderConsole();
+        } catch (err) {
+          box.checked = !on;
+          toast('bad', err.message, 9000);
+        }
+      });
+    }
+  }
+
+  /**
+   * Short of credits for something the person chose: the Credits screen, with
+   * the pack that covers it marked, and the thing itself done by itself as soon
+   * as the credits are in (afterBuyCheck, from the sync that shows them). One
+   * try; an hour and ten minutes at most, as long as a payment is waited for.
+   */
+  function buyThen(detail, label, run, back) {
+    const route = state.route;
+    const to = back || (route.page === 'board' ? { page: 'board', id: route.id }
+      : route.page === 'credits' && route.back ? route.back : { page: 'console' });
+    state.afterBuy = { need: Number(detail && detail.need) || 0, label, run, back: to, at: Date.now() };
+    toast('warn', `That needs ${coins((detail && detail.short) || 0)} more credits. Once you buy them, the app will ${label} by itself.`, 12000);
+    go('credits', { need: detail && detail.need, back: to });
+  }
+
+  async function afterBuyCheck(doc) {
+    const a = state.afterBuy;
+    if (!a || !doc || !doc.user) return;
+    if (Date.now() - a.at > 70 * 60 * 1000) { state.afterBuy = null; return; }
+    if (!(doc.user.balance >= a.need)) return;
+    state.afterBuy = null;
+    uiNote('notice', `credits are in: ${a.label}`);
+    try {
+      await a.run();
+    } catch (err) {
+      toast('bad', `The credits are in, but this did not go through (${a.label}): ${err.message}`, 12000);
+      return;
+    }
+    if (state.route.page === 'credits' && a.back) go(a.back.page, a.back.id ? { id: a.back.id } : {});
   }
 
   async function doIfPassed(bidId, code) {
@@ -1607,11 +1801,13 @@
   }
 
   async function doRaise(bidId, delta) {
-    try { const r = await call('server:raise', { bid_id: bidId, delta }); toast('ok', r.message); state.board = null; if (state.route.page === 'board') renderBoard(); if (state.route.page === 'console') renderConsole(); }
+    const raise = async () => { const r = await call('server:raise', { bid_id: bidId, delta }); toast('ok', r.message); state.board = null; if (state.route.page === 'board') renderBoard(); if (state.route.page === 'console') renderConsole(); };
+    try { await raise(); }
     catch (err) {
+      // Short of credits: the Credits screen, with the pack that covers it
+      // marked, and the raise made once they are in.
+      if (err.status === 402) { buyThen(err.detail, `raise your bid by ${coins(delta)}`, raise); return; }
       toast('bad', err.message, 9000);
-      // Short of credits: the Credits screen, with the pack that covers it marked.
-      if (err.status === 402) go('credits', { need: err.detail.need, back: state.route.page === 'board' ? { page: 'board', id: state.route.id } : { page: 'console' } });
     }
   }
 
@@ -1835,8 +2031,10 @@
           <div class="pos-rank ${p.rank === 1 ? 'lead' : ''}">${num(p.rank)}</div>
           <div style="min-width:0">
             <div class="row" style="gap:8px; flex-wrap:wrap"><a data-board="${num(p.queue_id)}"><strong>${esc(p.queue_name)}</strong></a><span class="tag tag-${esc(p.status)}">${esc(p.status)}</span>${handoffs.has(p.bid_id) ? '<span class="tag tag-booking">your turn</span>' : ''}${p.mock ? '<span class="test-badge">Test site</span>' : ''}</div>
-            <div class="small muted" style="margin-top:3px">${esc(p.site_name)} · position ${num(p.rank)} of ${num(p.field_size)} · asked for ${esc(prettyDate(p.preferred_date))} at ${esc(p.preferred_time)}${shownReach(p) ? ` · if it passes, ${esc(reachLabel(shownReach(p)))}, and nothing farther` : ''}</div>
-            ${p.status === 'active' ? reachSelect(shownReach(p), p.bid_id) : ''}
+            <div class="small muted" style="margin-top:3px">${esc(p.site_name)} · position ${num(p.rank)} of ${num(p.field_size)} · asked for ${esc(prettyDate(p.preferred_date))} at ${esc(p.preferred_time)}${shownReach(p) ? (p.soonest
+              ? ` · the soonest opening up to ${esc(reachEndText(p.preferred_date, p.preferred_time, shownReach(p)))}`
+              : ` · if it passes, ${esc(reachLabel(shownReach(p)))}, and nothing farther`) : ''}</div>
+            ${p.status === 'active' ? reachSelect(shownReach(p), p.bid_id, p) : ''}
             ${p.note ? `<div class="tiny muted" style="margin-top:3px">${esc(p.note)}</div>` : ''}
           </div>
           <div class="pos-actions">
@@ -1907,6 +2105,7 @@
     for (const sel of page.querySelectorAll('[data-if-passed]')) {
       sel.addEventListener('change', () => { if (sel.value) doIfPassed(Number(sel.dataset.ifPassed), sel.value); });
     }
+    wireSoonest(page);
     if (tab === 'wallet') wireCredits(page, () => { state.account = null; renderConsole(); });
     for (const b of page.querySelectorAll('[data-revoke]')) {
       b.addEventListener('click', async () => {
@@ -2021,9 +2220,10 @@
         ? '<b>Practice server.</b> These are practice credits: nothing is charged and no money moves.'
         : `Paid on ${esc(pay.display)}'s own page, which opens in your browser: your card number never reaches LineRight Regbot or this app.${pay.emulated ? ' <b>This site uses a Stripe emulator — no money moves.</b>' : (pay.live ? '' : ' <b>Test mode</b> — use a Stripe test card.')}`}</p>`
       : '<p class="small bad" style="margin:0">Credits cannot be bought on this server right now — its payment provider is not set up.</p>';
+    const then = state.afterBuy && short ? `<br>Once the credits are in, the app will <b>${esc(state.afterBuy.label)}</b> by itself. <a id="afterbuy-cancel" style="margin-left:6px">Don’t</a>` : '';
     const need = short ? `<div class="note warn" style="margin-bottom:14px">That needs <b>${coins(route.need)}</b> and you have <b>${coins(c.balance)}</b> to spend — <b>${coins(short)}</b> short.
       ${covers ? 'The pack marked below covers it.' : 'No single pack covers it on its own.'}
-      ${route.back ? '<a id="credits-back" style="margin-left:6px">Back to the line</a>' : ''}</div>` : '';
+      ${route.back ? '<a id="credits-back" style="margin-left:6px">Back to the line</a>' : ''}${then}</div>` : '';
     const purchases = (c.purchases || []).length ? `<div class="card" style="margin-bottom:14px"><table class="data"><thead><tr><th>Started</th><th>Pack</th><th class="right">Credits</th><th class="right">Paid</th><th>Status</th><th></th></tr></thead><tbody>
       ${c.purchases.map((p) => `<tr><td class="muted">${esc(ago(p.created_at))}</td><td>${esc(p.pack)}</td><td class="right num">${coins(p.credits)}</td><td class="right num">${esc(MONEY(p))}</td>
         <td><span class="tag tag-${p.status === 'paid' ? 'fulfilled' : p.status === 'pending' ? 'processing' : 'failed'}">${esc(p.refunded ? 'refunded' : p.status)}</span>${p.failure && p.status !== 'paid' ? ` <span class="tiny muted">${esc(p.failure)}</span>` : ''}</td>
@@ -2156,6 +2356,8 @@
     if (dismiss) dismiss.addEventListener('click', () => { state.checkout = null; rerender(); });
     const back = root.querySelector('#credits-back');
     if (back) back.addEventListener('click', () => go(state.route.back.page, state.route.back.id ? { id: state.route.back.id } : {}));
+    const stop = root.querySelector('#afterbuy-cancel');
+    if (stop) stop.addEventListener('click', () => { state.afterBuy = null; rerender(); });
   }
 
   async function buyPack(packId) {
@@ -3486,6 +3688,7 @@
     const before = state.doc;
     state.doc = doc; state.docAt = Date.now();
     creditsLive(before, doc);
+    afterBuyCheck(doc);
     endedTurns(before, doc);
     renderWho(); renderBanner(false); renderAgain();
     if (state.form && !doc) { state.form = null; renderFound(); }

@@ -39,6 +39,17 @@ test('only what differs from the bid is sent', () => {
   assert.notEqual(change.shapeKey({ ...as, place: '15' }), change.shapeKey(as));
 });
 
+test('booking the soonest is sent only when it changes, and needs a fresh quote', () => {
+  const as = { place: '', date: mine.preferred_date, time: mine.preferred_time, reach: '1d', amount: 160 };
+  const off = { ...mine, soonest: false };
+  assert.deepEqual(change.body({ ...as, soonest: false }, off), {});
+  assert.deepEqual(change.body({ ...as, soonest: true }, off), { soonest: true });
+  assert.deepEqual(change.body({ ...as, soonest: false }, { ...mine, soonest: true }), { soonest: false });
+  assert.deepEqual(change.body(as, off), {}, 'a site that does not know it is not sent it');
+  assert.notEqual(change.shapeKey({ ...as, soonest: true }), change.shapeKey({ ...as, soonest: false }));
+  assert.equal(change.saveLabel({ ...as, soonest: true }, off, coins), 'Save the change');
+});
+
 test('the Save button says what it will do', () => {
   const as = { place: '', date: mine.preferred_date, time: mine.preferred_time, reach: '1d', amount: 160 };
   assert.equal(change.saveLabel(as, mine, coins), 'Nothing changed yet');

@@ -62,8 +62,9 @@
 
   /**
    * What to send for the change being drawn up: only what differs from the bid.
-   * `draft` is { place, date, time, reach, amount }; `mine` is the board's
-   * `mine`. Returns { fields?, preferred_date?, preferred_time?, if_passed?, amount? }.
+   * `draft` is { place, date, time, reach, soonest, amount }; `mine` is the
+   * board's `mine`. Returns { fields?, preferred_date?, preferred_time?,
+   * if_passed?, soonest?, amount? }.
    */
   function body(draft, mine) {
     const d = draft || {};
@@ -74,6 +75,7 @@
     if (d.date && d.date !== m.preferred_date) out.preferred_date = d.date;
     if (d.time && d.time !== m.preferred_time) out.preferred_time = d.time;
     if (d.reach && d.reach !== m.if_passed) out.if_passed = d.reach;
+    if (typeof d.soonest === 'boolean' && d.soonest !== Boolean(m.soonest)) out.soonest = d.soonest;
     const amount = Number(d.amount);
     if (Number.isInteger(amount) && amount > 0 && amount !== Number(m.amount)) out.amount = amount;
     return out;
@@ -82,7 +84,7 @@
   /** Whether the draft changes anything but the amount (and so needs a fresh quote). */
   function shapeKey(draft) {
     const d = draft || {};
-    return [d.place || '', d.date || '', d.time || '', d.reach || ''].join('|');
+    return [d.place || '', d.date || '', d.time || '', d.reach || '', d.soonest ? 'soonest' : ''].join('|');
   }
 
   function duration(seconds) {
