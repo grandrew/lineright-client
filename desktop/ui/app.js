@@ -252,7 +252,8 @@
       const ai = r.oversight && r.oversight.active;
       const doing = ai ? `AI finishing the booking of ${ai.where}… · `
         : r.booking ? `booking ${r.booking.queue_name}… · `
-        : r.reading ? `looking for openings: ${r.reading.queue_name} · `
+        : r.diagnosing ? `AI checking why ${r.diagnosing.queue_name} cannot be read… · `
+        : r.reading ? `${r.reading.purpose === 'watch' ? 'watching' : r.reading.purpose === 'check' ? 'checking again' : 'looking for openings'}: ${r.reading.queue_name} · `
         : earning && earning.counting ? `checking lines, +${coins(earning.per_hour)}/h · ` : '';
       // How this app's connection stands among the apps online (the site says).
       const l = state.doc && state.doc.latency;
@@ -1003,6 +1004,7 @@
                   <span class="chip">${esc(q.weekdays)}</span>
                   <span class="chip">entry <strong>${coins(q.min_bid)}</strong></span>
                   <span class="chip">${dispatchChip(q)}</span>
+                  ${watchChip(q.watch)}
                 </div>
               </div>`).join('')}
             <p class="tiny muted" style="margin:10px 0 0">Need another kind of appointment on ${esc(s.name)}? <a id="site-ask">Ask for a line</a>.</p>
@@ -1126,6 +1128,7 @@
           <span class="chip chip-accent">entry <strong>${coins(q.min_bid)}</strong></span>
           ${q.status !== 'open' ? `<span class="tag tag-${esc(q.status)}">${esc(q.status)}</span>` : ''}
           ${paired() && b.openings_feed ? '<a class="chip chip-feed hidden" id="feedChip" title="The openings that came here lately, and how long each lasted"></a>' : ''}
+          ${watchChip(b.watch)}
         </div>
       </div>
       <div class="board-split${paired() && b.openings_feed ? ' with-feed' : ''}">
@@ -1516,6 +1519,12 @@
     chip.onclick = () => { if (f.el && f.el.isConnected) f.el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   }
 
+  /** How reading a line goes, as a chip (the site's linewatch.py): the soonest seen, or trouble. */
+  function watchChip(w) {
+    const c = OF && w ? OF.watchChip(w) : null;
+    return c ? `<span class="chip chip-watch ${esc(c.tone)}" title="${esc(c.title)}">${esc(c.text)}</span>` : '';
+  }
+
   /** What the feed covers on a board: the person's bid, else the join form's offices, else the line. */
   function boardFeedContext(b) {
     if (b.mine && ['active', 'processing'].includes(b.mine.status)) return { queueId: b.queue.id, bidId: b.mine.bid_id };
@@ -1535,7 +1544,7 @@
     // "Every office" looks past what the bid or the form covers, at the whole line.
     const eff = f.wide ? { queueId: ctx.queueId } : ctx;
     const base = OF.key(ctx.queueId, OF.body({ bidId: eff.bidId, fields: eff.fields }));
-    if (base !== f.base) { f.base = base; f.office = ''; f.shown = 40; f.focus = null; }
+    if (base !== f.base) { f.base = base; f.office = ''; f.shown = 40; f.focus = null; f.watchShown = 0; }
     const ask = OF.body({ bidId: eff.bidId, fields: eff.fields, hours: f.hours, office: f.office, fitsOnly: f.fitsOnly });
     const key = OF.key(ctx.queueId, ask);
     f.ctx = ctx;
@@ -1602,6 +1611,7 @@
     el.innerHTML = `${head}
       <div class="of-body">
         ${f.error ? `<div class="note warn" style="margin:0 0 10px">${esc(f.error)}</div>` : ''}
+        ${OF.watchBlock(doc.watch, { shown: f.watchShown || 6 })}
         <div class="of-tiles">${OF.tiles(doc).map((t) => `<div class="of-tile"><div class="v ${esc(t.tone || '')}">${esc(t.value)}</div><div class="k">${esc(t.label)}</div>${t.sub ? `<div class="s">${esc(t.sub)}</div>` : ''}</div>`).join('')}</div>
         <div class="of-plot rc-plot" id="ofPlot">${drawn.svg}<div class="rc-tip hidden" id="ofTip"></div></div>
         <div class="rc-legend of-legend">${OF.legend(doc)}</div>
@@ -1640,6 +1650,8 @@
     if (fits) fits.addEventListener('change', () => { f.fitsOnly = fits.checked; f.shown = 40; f.focus = null; requestFeed(f.ctx, true); });
     const more = el.querySelector('#ofMore');
     if (more) more.addEventListener('click', () => { f.shown += 40; paintFeed(); });
+    const watchMore = el.querySelector('[data-ow-more]');
+    if (watchMore) watchMore.addEventListener('click', () => { f.watchShown = 1000; paintFeed(); });
     const plot = el.querySelector('#ofPlot');
     const tipBox = el.querySelector('#ofTip');
     const svg = plot && plot.querySelector('svg');
@@ -3602,11 +3614,11 @@
       ${connectionLine}
       <div class="check"><input type="checkbox" id="s-reader" ${s.checking ? 'checked' : ''}>
         <label for="s-reader"><span class="small"><b>Check lines for everybody in line</b>${s.publicSite ? ' — on the real DMV (dmv.ca.gov)' : ''}${perHour ? ` · earns ${perHour} an hour` : ''}</span>
-        <span class="field-help">Now and then the site asks this app to look at a line's offices and report what it sees, from this computer, with a browser the app runs out of sight. What it finds goes to whoever is first — which may be you.${s.publicSite ? ' On the real DMV it is automated traffic from your own internet address, a few pages at a time, so it waits for your yes.' : ''}${perHour ? ` The site adds ${perHour} to your credits for every hour this app is checking.` : ''}</span></label></div>
+        <span class="field-help">Now and then the site asks this app to look at a line's offices and report what it sees, from this computer, with a browser the app runs out of sight. What it finds goes to whoever is first — which may be you. With nothing else to do it also looks, slowly, at lines nobody bids on, so every line shows what was seen lately.${s.publicSite ? ' On the real DMV it is automated traffic from your own internet address, a few pages at a time, so it waits for your yes.' : ''}${perHour ? ` The site adds ${perHour} to your credits for every hour this app is checking.` : ''}</span></label></div>
       <div class="check"><input type="checkbox" id="s-bookforme" ${s.robotBooking ? 'checked' : ''}>
         <label for="s-bookforme"><span class="small"><b>Let the app book for me</b>${s.publicSite ? ' — on the real DMV (dmv.ca.gov)' : ''}</span>
         <span class="field-help">Off until you say so: when a slot is yours, the booking page opens in a tab with your details filled in, and you book it. On, the app's robot books it with the details in your profile while that tab says what it is doing, then shows you the DMV's confirmation; if it cannot finish, the tab is yours to book in.${s.publicSite ? ' A booking it makes is a real appointment in your name.' : ''}</span></label></div>
-      <p class="tiny muted" style="margin:8px 0 0" id="s-robots-now">${r.booking ? `Booking ${esc(r.booking.where)} now.` : r.reading ? `Looking at ${esc(r.reading.queue_name)} now — ${num(r.reading.offices)} office${r.reading.offices === 1 ? '' : 's'}.` : lastLine}</p>
+      <p class="tiny muted" style="margin:8px 0 0" id="s-robots-now">${r.booking ? `Booking ${esc(r.booking.where)} now.` : r.diagnosing ? `The AI is checking why ${esc(r.diagnosing.queue_name)} cannot be read, for the site.` : r.reading ? `${r.reading.purpose === 'watch' ? 'Watching' : 'Looking at'} ${esc(r.reading.queue_name)} now — ${num(r.reading.offices)} office${r.reading.offices === 1 ? '' : 's'}.` : lastLine}</p>
       ${bookedLine && !r.booking ? `<p class="tiny muted" style="margin:4px 0 0">${bookedLine}</p>` : ''}
     </div>`;
   }
@@ -3633,7 +3645,7 @@
     return `<div class="panel" id="s-oversight"><div class="panel-title">AI booking oversight</div>
       <div class="check" style="margin-bottom:0"><input type="checkbox" id="s-ai" ${live.on ? 'checked' : ''} ${offered || live.on ? '' : 'disabled'}>
         <label for="s-ai"><span class="small"><b>Let an AI finish a booking the robot gets stuck on</b></span>
-        <span class="field-help">The app's robot follows the DMV's pages as they were when it was written. When the DMV changes a page and the robot stops, the AI takes its browser over — the time it holds still held — reads the page, and finishes the booking; or reads the confirmation the robot could not find. A human check stays yours. Your details never go to the AI: it sees "[first_name]" where your name is, and the app types the real one. It goes through LineRight Regbot, which keeps what it did, to fix the robot.</span></label></div>
+        <span class="field-help">The app's robot follows the DMV's pages as they were when it was written. When the DMV changes a page and the robot stops, the AI takes its browser over — the time it holds still held — reads the page, and finishes the booking; or reads the confirmation the robot could not find. A human check stays yours. Your details never go to the AI: it sees "[first_name]" where your name is, and the app types the real one. It goes through LineRight Regbot, which keeps what it did, to fix the robot. And when the robots cannot read a line at all, the site may ask this app's AI to look at the booking site and say why — at the site's cost, never your credits; nothing is booked or held, and nothing of yours is used.</span></label></div>
       <p class="tiny ${offered ? 'muted' : 'warn'}" style="margin:8px 0 0">${terms}${!offered && t.why === 'needs_purchase' ? ' <a id="s-ai-buy">Buy credits</a>' : ''}</p>
       ${lastLine ? `<p class="tiny muted" style="margin:4px 0 0" id="s-ai-now">${lastLine}</p>` : ''}
     </div>`;

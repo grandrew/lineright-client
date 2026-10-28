@@ -755,7 +755,9 @@ test('the app looks for openings when the site asks, with its own scout, and ans
     assert.equal(answer.kind, 'discovery.result');
     assert.equal(answer.offers.length, 2);
     assert.ok(answer.offers.every((o) => o.office_name === 'Poway' && o.slot_date === day));
-    assert.deepEqual(seen.bodies[0].reader, { enabled: true, robots: ['dmq-rqp/1'], reading: null, busy: false, agreed: true });
+    // `ai`: AI booking oversight is on unless the person turns it off, so the site may ask it to check a line.
+    assert.deepEqual(seen.bodies[0].reader, { enabled: true, robots: ['dmq-rqp/1'], reading: null, busy: false, agreed: true,
+      ai: true });
     assert.equal(result.robots.last.read_id, 5);
     assert.equal(result.robots.last.offers[0].verdict, 'passed');
     assert.equal(result.robots.reading, null);
@@ -1585,6 +1587,16 @@ async function openingsStub() {
   const item = (id, office, minutesAgo, est, outcome, fit, extra = {}) => ({ id, office, miles: office === 'Santa Clara' ? 2.3 : 4.1,
     slot: '2026-10-29 15:10', lead_h: 30, t: now - minutesAgo * 60, last: now - minutesAgo * 60 + 60, missed: now - minutesAgo * 60 + est * 2 - 60,
     open: outcome === 'open', outcome, booked: outcome === 'booked', fit, before_bid: false, sightings: 2, est, lo: 60, hi: outcome === 'open' ? null : est * 2 - 60, ...extra });
+  // How reading the line goes (the site's linewatch.py): fine on line 10, the robots in trouble on line 9.
+  const stamp = (secondsAgo) => new Date((now - secondsAgo) * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const watch = (id) => (id === 9 ? {
+    state: 'trouble', label: 'The apps\' robots cannot read this line right now', looked_at: stamp(300), read_at: stamp(7200),
+    offices: 187, read_24h: 3, soonest: null, advice: ['Openings here may go unseen until the robots are fixed.'],
+    issue: { kind: 'failed', since: stamp(3600), last_at: stamp(300), reads: 3, apps: 2, check: 'agent', found: null, found_text: null },
+  } : {
+    state: 'ok', label: 'The apps read this line lately', looked_at: stamp(600), read_at: stamp(600), offices: 187, read_24h: 42,
+    soonest: { office: 'Los Gatos', date: '2026-11-03', time: '09:40', seen_at: stamp(3 * 3600) }, issue: null, advice: [],
+  });
   const feed = (ask) => {
     const bid = ask.bid_id === 8;
     const chosen = Boolean(ask.fields && ask.fields.origin);
@@ -1607,7 +1619,12 @@ async function openingsStub() {
       by_hour: new Array(24).fill(0),
       points: items.map((i) => [i.id, i.t, i.est, i.lo, i.hi, i.outcome, i.fit, i.office === 'Santa Clara' ? 0 : 1, i.slot]),
       items, more: 0, offices: (bid || chosen) ? offices : offices.concat([{ name: 'Los Gatos', n: 1, median: 900, miles: null }]),
-      quick_seconds: 300, look_seconds: 120 };
+      quick_seconds: 300, look_seconds: 120,
+      watch: { ...watch(ask.queue_id), at: [
+        { office: 'Los Gatos', read_at: stamp(3 * 3600), ok: true, found: 2, date: '2026-11-03', time: '09:40', error: null, miles: 9.8 },
+        { office: 'Santa Clara', read_at: stamp(900), ok: true, found: 0, date: null, time: null, error: null, miles: 2.3 },
+        { office: 'San Jose', read_at: stamp(300), ok: false, found: 0, date: null, time: null, error: 'could not be read', miles: 4.1 },
+      ].filter((o) => !(bid || chosen) || o.office !== 'Los Gatos') } };
   };
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -1624,7 +1641,7 @@ async function openingsStub() {
     if (board) {
       const id = Number(board[1]);
       return json(200, { protocol: 'RQP/1', kind: 'client.board', queue: queue(id), bids: [], mine: id === 9 ? mine : null,
-        handoff: null, soonest_switch: true, openings_feed: true, field_size: id === 9 ? 1 : 0, to_lead: 45, min_raise: 5,
+        handoff: null, soonest_switch: true, openings_feed: true, watch: watch(id), field_size: id === 9 ? 1 : 0, to_lead: 45, min_raise: 5,
         default_date: '2026-10-29', fields, kept_on_device: [], prefs: { auto_widen: false }, portal_url: 'http://127.0.0.1:9/' });
     }
     const asked = url.pathname.match(/^\/api\/client\/queues\/(9|10)\/openings$/);
@@ -1667,6 +1684,10 @@ test('recent openings: the venues being looked at, a bid\'s own offices, how lon
       /Recent openings[\s\S]*At every office on this line[\s\S]*typically gone in[\s\S]*All offices · 4[\s\S]*Open now/i);
     assert.deepEqual(seen.openings[0], { queue: 10, hours: 72 });
     assert.equal(await ui.evaluate("document.querySelectorAll('#feedCard circle.of-dot').length"), 4);
+    // What the looks saw at each office, soonest first, and a chip at the top saying the soonest.
+    assert.match(await card(), /The apps read this line lately[\s\S]*42 of 187 offices read in 24 h[\s\S]*Soonest seen at each office[\s\S]*Los Gatos[\s\S]*Tue, Nov 3 · 9:40 AM[\s\S]*nothing open[\s\S]*could not be read/i);
+    assert.match(await ui.evaluate("(document.querySelector('.board-head .chip-watch') || {}).innerText || ''"),
+      /Soonest seen: Tue, Nov 3 · 9:40 AM at Los Gatos/);
 
     // Choosing offices on the join form narrows it to them.
     await ui.evaluate(`(() => { const f = document.getElementById('bidForm'); const set = (n, v) => { const el = f.querySelector('[name=' + n + ']');
@@ -1698,6 +1719,7 @@ test('recent openings: the venues being looked at, a bid\'s own offices, how lon
     assert.match(await until(async () => { const x = await card(); return /your bid would take/.test(x) && x; }, 10000, 'the console tab'),
       /At your bid's 2 offices[\s\S]*2 of 3[\s\S]*your bid would take[\s\S]*later than your bid took then/);
     assert.match(await ui.evaluate("document.querySelector('.of-pick').innerText"), /Driver licence or ID card/);
+    assert.match(await card(), /robots cannot read this line right now[\s\S]*3 looks by 2 apps could read nothing\. An AI is checking the booking site now\.[\s\S]*may go unseen/);
     await ui.evaluate("document.getElementById('ofFits').click()");
     await until(() => seen.openings.some((o) => o.bid_id === 8 && o.fits_only === true), 10000, 'only the ones the bid takes');
     await ui.evaluate("document.querySelector('#feedCard [data-of-wide=\"1\"]').click()");

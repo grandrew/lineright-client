@@ -173,3 +173,51 @@ test('the tooltip says where, when, how long and what became of it', () => {
   assert.match(html, /Lasted <b>about 4 min<\/b>/);
   assert.match(html, /<div class="of-tip-note">your bid takes it<\/div>/);
 });
+
+// ------------------------------------------------ how reading the line goes
+const NOW_MS = NOW * 1000;
+const iso = (s) => new Date(NOW_MS - s * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+function watch(over = {}) {
+  return {
+    state: 'ok', label: 'The apps read this line lately', looked_at: iso(600), read_at: iso(600), offices: 187, read_24h: 42,
+    soonest: { office: 'Redding', date: '2026-11-03', time: '09:40', seen_at: iso(3 * H) }, issue: null, advice: [],
+    at: [
+      { office: 'Redding', read_at: iso(3 * H), ok: true, found: 4, date: '2026-11-03', time: '09:40', error: null, miles: 12.5 },
+      { office: 'Chico', read_at: iso(600), ok: true, found: 0, date: null, time: null, error: null, miles: null },
+      { office: 'Arvin', read_at: iso(900), ok: false, found: 0, date: null, time: null, error: 'could not be read', miles: null },
+    ],
+    ...over,
+  };
+}
+
+test('a line\'s reading as a chip: the soonest seen, or the trouble', () => {
+  const c = OF.watchChip(watch(), NOW_MS);
+  assert.equal(c.tone, 'ok');
+  assert.match(c.text, /Soonest seen: Tue, Nov 3 · 9:40 AM at Redding/);
+  assert.match(c.title, /Seen 3 h ago\. A time seen a while ago may be gone/);
+  assert.equal(OF.watchChip(watch({ state: 'trouble', label: 'x' })).tone, 'bad');
+  assert.equal(OF.watchChip(watch({ state: 'blocked', label: 'x' })).tone, 'warn');
+  assert.equal(OF.watchChip(watch({ state: 'unwatched', soonest: null })).text, 'Not looked at lately');
+  assert.equal(OF.watchChip(watch({ soonest: null })).text, 'Nothing open seen lately');
+  assert.equal(OF.watchChip(null), null);
+});
+
+test('the soonest seen at each office, the ones that could not be read, and the trouble', () => {
+  const html = OF.watchBlock(watch({ unread: 2 }), { shown: 2, nowMs: NOW_MS });
+  assert.match(html, /42 of 187 offices read in 24 h · last read 10 min ago/);
+  assert.match(html, /Tue, Nov 3 · 9:40 AM/);
+  assert.match(html, /12\.5 mi/);
+  assert.match(html, /nothing open/);
+  assert.doesNotMatch(html, /Arvin/, 'two shown');
+  assert.match(html, /Show all 3/);
+  assert.match(html, /2 not looked at yet/);
+  const trouble = OF.watchBlock(watch({ state: 'trouble', label: 'The apps\' robots cannot read this line right now',
+    issue: { kind: 'failed', since: iso(2 * H), reads: 3, apps: 2, check: 'agent' },
+    advice: ['Openings here may go unseen until the robots are fixed.'] }), { nowMs: NOW_MS });
+  assert.match(trouble, /Since 2 h ago: 3 looks by 2 apps could read nothing\. An AI is checking the booking site now\./);
+  assert.match(trouble, /<li>Openings here may go unseen/);
+  assert.match(trouble, /could not be read/);
+  assert.equal(OF.watchBlock(null), '');
+  assert.match(OF.watchBlock(watch({ at: [] })), /No office here has been looked at yet/);
+});

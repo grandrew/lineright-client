@@ -58,6 +58,7 @@ const { Reader } = require('./reader');
 const { Booker, mayBook, definitive } = require('./booker');
 const { Overseer } = require('./overseer');
 const { runSiteTask } = require('./agent/sitetask');
+const { runDiagnosis } = require('./agent/diagnose');
 const { Pinger } = require('./pinger');
 const confirmations = require('./confirmations');
 const { Telemetry } = require('./telemetry');
@@ -2829,8 +2830,22 @@ async function main() {
       telemetry.read(r);
       if (traces) {
         traces.add('read.end', { read: r.read, queue: r.queue, status: r.status, robot: r.robot, found: r.found,
-          ms: r.ms, offices: r.offices, verdicts: r.verdicts, http: r.http || undefined, err: r.error });
+          ms: r.ms, offices: r.offices, verdicts: r.verdicts, http: r.http || undefined, err: r.error,
+          purpose: r.purpose && r.purpose !== 'bids' ? r.purpose : undefined });
       }
+    },
+    // A line the robots cannot read, here or elsewhere: the AI looks, on the site's
+    // grant and money (agent/diagnose.js) — only while the person has the AI on.
+    aiAllowed: () => Boolean(overseer && overseer.on()) && !builtin(),
+    diagnose: ({ grant, result, robotLog }) => {
+      const scrub = new Scrubber();
+      scrub.setProfile(profile.values());
+      return runDiagnosis({ runner: robots, client, grant, result, robotLog,
+        scrub: (t) => scrub.plain(String(t == null ? '' : t)), log: (line) => log(`AI check: ${line}`) });
+    },
+    onCheck: (c) => {
+      if (traces) traces.add('watch.check', { read: c.read, queue: c.queue, session: c.session, issue: c.issue,
+        outcome: c.outcome, calls: c.calls, ms: c.ms, err: c.stopped || undefined });
     },
   });
   const shotsDir = path.join(app.getPath('userData'), 'robots', 'confirmations');

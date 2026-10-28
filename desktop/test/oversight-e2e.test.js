@@ -22,7 +22,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { RobotRunner } = require('../src/robots');
 const { Overseer } = require('../src/overseer');
-const { bookingBrain: brain, checkBrain, to24 } = require('./helpers/brain');
+const { bookingBrain: brain, checkBrain, diagnoseBrain, to24 } = require('./helpers/brain');
 
 const DMQ = path.join(__dirname, '..', '..', 'dmq');
 const SERVER = process.env.LINERIGHT_SERVER_DIR || path.join(__dirname, '..', '..', '..', 'lineright-server');
@@ -185,6 +185,57 @@ test('a site described in plain words: the AI alone checks what is open, booking
       ['checked', 'human_check', 'failed']);
   } finally {
     site.server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a line the robots cannot read: the scout fails, and the AI check on the site\'s grant finds what changed, holding nothing',
+  { skip: !HAVE && 'needs lineright-server and Playwright', timeout: 240000 }, async () => {
+  const { runDiagnosis } = require('../src/agent/diagnose');
+  const { createState, createServer } = await import(pathToFileURL(STANDIN).href);
+  const state = createState({ gate: 'off', officeCount: 0, drift: 'offices', cancelIntervalMs: 1e9, busyDays: 2 });
+  const server = createServer(state);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-check-'));
+  const runner = new RobotRunner({ paths: { dmq: DMQ, browsers: null, host: HOST, packaged: false }, node: process.execPath,
+    stateDir: path.join(dir, 'robots'), env: { PATH: process.env.PATH, HOME: process.env.HOME } });
+  try {
+    // The site's check read: the scout, as the app runs it, on the office that failed.
+    const scout = await runner.run('scout', { protocol: 'RQP/1', kind: 'discovery.request',
+      target: { site: 'ca-dmv', connector: 'dmv.ca.gov.qmatic', queue: 'vehicle-registration' }, offices: ['Poway'],
+      window: [new Date().toISOString().slice(0, 10), '2027-12-31'], hours: ['08:00', '17:00'], timezone: 'America/Los_Angeles' },
+    { dmvBase: base, timeoutMs: 120000 });
+    assert.equal(scout.offers.length, 0, JSON.stringify(scout));
+    assert.match(scout.checked[0].error, /its button is not Select Location/);
+    assert.ok(runner.tail('scout').some((l) => /OFFICE_ERROR/.test(l)), 'the scout\'s log is kept for the AI');
+    // The grant that came back with the failed answer, and the AI on it.
+    const think = diagnoseBrain({ office: 'Poway' });
+    const reports = [];
+    const grant = { session_id: 41, issue_id: 3, paid_by: 'site', max_calls: 20, seconds: 180, site_name: 'California DMV',
+      queue_name: 'Vehicle registration', offices: ['Poway'], trouble: scout.message,
+      start_url: `${base}/portal/appointments/select-appointment-type?option=VR`, base_url: base,
+      guide: 'Search the office by city, press its "Select Location", pick an open day, see its times.' };
+    const done = await runDiagnosis({ runner, grant, result: scout, robotLog: runner.tail('scout'),
+      client: {
+        agentChat: async (id, body) => { assert.equal(id, 41, 'every call on the grant'); return think.chat(body); },
+        agentReport: async (id, body) => { reports.push({ id, body }); return { ok: true }; },
+      } });
+    assert.equal(done.diagnosis.outcome, 'site_changed', JSON.stringify({ done, last: think.heard.length
+      ? think.heard[think.heard.length - 1].messages.slice(-1)[0].content.slice(0, 2000) : null }, null, 1));
+    assert.match(done.diagnosis.cause, /"Choose this office"/);
+    assert.match(done.diagnosis.fix, /Choose this office/);
+    assert.ok(done.diagnosis.times_seen >= 1);
+    assert.match(think.heard[0].messages[1].content, /its button is not Select Location/, 'told what the robot said');
+    assert.equal(reports[0].body.stage, 'watch.check');
+    assert.equal(reports[0].body.diagnosis.outcome, 'site_changed');
+    assert.ok(reports[0].body.robot.log.length > 0);
+    assert.equal(state.bookings.length, 0, 'nothing booked');
+    assert.equal(state.holds.size, 0, 'nothing held');
+    assert.deepEqual(think.heard[0].tools.find((t) => t.function.name === 'finish').function.parameters.properties.outcome.enum,
+      ['read', 'site_changed', 'human_check', 'site_down', 'no_times', 'failed']);
+  } finally {
+    server.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

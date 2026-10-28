@@ -12,6 +12,10 @@
  *               look whether the slot is really gone, and book it if it is not
  *   confirming  it sent the booking and saw no confirmation number: read the
  *               page, and only read it
+ *
+ * And one moment that is no booking at all: the robots could not read a line's
+ * calendar, twice, on two computers, and the site asks this app's AI to find
+ * out why (`diagnoseTask`) — on the site's money, not the person's.
  */
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -138,4 +142,55 @@ function siteTask({ site = {}, kind = 'check', want = {}, allowed = [], seconds 
   return { kind: kind === 'book' ? 'book' : 'check', system, user };
 }
 
-module.exports = { overseeBooking, siteTask, dayWords, timeWords, RULES };
+/**
+ * The brief for finding out why the robots cannot read a line (the server's
+ * linewatch.py grants it). `grant` is what the site said: the line, the
+ * offices, the booking site's pages in plain words (`guide`), and the trouble
+ * the robots reported; `result` the scout's own answer this time, and
+ * `robotLog` the last lines it logged. The robot's words the AI is given are
+ * this computer's own: another app's could be written to steer it. Nothing is
+ * booked or held: the check ends at the list of times.
+ */
+function diagnoseTask({ grant = {}, result = {}, robotLog = [], seconds = 240, maxSteps = 20 }) {
+  const offices = (grant.offices || []).filter(Boolean);
+  const errors = (Array.isArray(result.checked) ? result.checked : [])
+    .filter((c) => c && (c.error || c.gate))
+    .map((c) => `- ${c.office}: ${c.error || 'stopped by a human check'}`);
+  const system = [
+    'You check a public booking website for the LineRight Regbot service, in a browser on a volunteer\'s computer.',
+    'The service\'s robots read this site\'s appointment calendar to see what times are free. They follow its pages as',
+    'they were when the robots were written, and now they cannot read it. Find out why, the way a person would: go',
+    'through the pages yourself following the guide, up to the list of appointment times for one of the offices named.',
+    '',
+    'Rules:',
+    '- Only look. Never press Confirm, Hold, Schedule, Book or anything that holds, books or reserves a time, and never',
+    '  type anyone\'s details: there is no person here, and no detail to type.',
+    '- A captcha or other human check is not yours to pass: if one blocks you, finish with human_check.',
+    '- Never sign in, pay, cancel, or leave the site.',
+    '- The numbers in square brackets name the controls of the latest reading of the page. After each action you get',
+    '  the page as it is then; if an action fails, look again before you try something else.',
+    '- Note the exact words of buttons, links and labels where the pages differ from the guide: the robot is fixed',
+    '  from what you write.',
+    '- Finish with read if you get to a list of times (say how many you saw), site_changed if the pages differ from the',
+    '  guide so the robot\'s way no longer works (and what you did instead), human_check, site_down, no_times if the site',
+    '  works and offers no times at all there, or failed. Always say the cause and the fix for the robot.',
+    `- Be quick: you have about ${seconds} seconds and ${maxSteps} steps.`,
+  ].join('\n');
+  const user = [
+    `Site: ${grant.site_name || 'the booking site'}${grant.start_url ? ` (starting at ${grant.start_url})` : ''}.`,
+    grant.queue_name ? `The line: ${grant.queue_name}.` : '',
+    offices.length ? `Offices to look at: ${offices.join('; ')}.` : '',
+    Array.isArray(grant.window) && grant.window.length === 2
+      ? `The dates that matter: ${dayWords(grant.window[0])} to ${dayWords(grant.window[1])}.` : '',
+    grant.guide ? `How this site's booking goes, step by step:\n${grant.guide}` : '',
+    '',
+    // This computer's own robot, just now: what another app said reaches the AI
+    // only as the site's words for it, never as that app wrote it.
+    `What the robot on this computer said just now: ${result.message || 'nothing: it gave no answer'}.`,
+    errors.length ? `At each office:\n${errors.slice(0, 6).join('\n')}` : '',
+    robotLog.length ? `The robot's last log lines:\n${robotLog.slice(-25).join('\n')}` : '',
+  ].filter((l) => l !== '').join('\n');
+  return { kind: 'diagnose', system, user };
+}
+
+module.exports = { overseeBooking, siteTask, diagnoseTask, dayWords, timeWords, RULES };

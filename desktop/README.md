@@ -335,6 +335,27 @@ it and the first that did not. The chip at the top of the board says the
 count and the typical lasting, and goes to the section. A site from before
 the feed has no such route, and the app shows nothing there.
 
+### How reading a line goes
+
+The site watches every line slowly, bid on or not (its `linewatch.py`): an app
+with nothing to read for the bidders is now and then handed a short look at
+the offices nobody has looked at for longest. So every line has something to
+show, and a line the robots cannot read is noticed. On the board, a chip says
+the soonest time seen on the line and where — or that the robots cannot read
+it, or that a human check stops them — and the recent-openings section starts
+with how reading those offices goes: how many were read in the last day, the
+trouble if there is any and what to do meanwhile, and the soonest time the last
+look at each office saw, with how long ago. A time seen hours ago may be gone:
+it is a rough guide, not a promise. The line cards on a site's page carry the
+same chip.
+
+When the robots cannot read a line, the site asks another app to look again;
+if that app has AI booking oversight on and its robot fails too, the site
+grants it an AI check: the app's AI goes through the booking site itself and
+reports what changed, on the site's money and not your credits (below, and
+[docs/ai-oversight.md](docs/ai-oversight.md)). The app says so in its status
+line while it does.
+
 ## My Bookings
 
 **My Bookings**, on the bar beside Sites and Console, lists your appointments.
@@ -663,7 +684,9 @@ report of each intervention so the robot can be fixed. On by default once you
 have bought credits; **Settings → AI booking oversight** turns it off. In
 developer mode the same AI can check — or book — a site described in plain
 words, with no robot written for it (**Help → Advanced → Try the AI on a site**).
-All of it, with what it may and may not do: [docs/ai-oversight.md](docs/ai-oversight.md).
+And when the robots cannot read a line at all, the site may ask this app's AI to
+look at the booking site and say why — paid for by the site, booking and typing
+nothing. All of it, with what it may and may not do: [docs/ai-oversight.md](docs/ai-oversight.md).
 
 ## What it does, in order
 
@@ -872,7 +895,7 @@ each:
 | `src/reader.js` | Looking for openings when the site hands this device a read, and answering it |
 | `src/booker.js` | Booking the person's own slot with the robot when the site hands it over, and what comes of it |
 | `src/overseer.js` | AI booking oversight: hearing the robot as it books, taking it over when it is stuck, and reporting what it did ([docs/ai-oversight.md](docs/ai-oversight.md)) |
-| `src/agent/` | The AI's parts: reading a page (`pagekit.js`), working a browser (`drivers.js`), its tools, its loop, what it is told, and a site described in words (`sitetask.js`) |
+| `src/agent/` | The AI's parts: reading a page (`pagekit.js`), working a browser (`drivers.js`), its tools, its loop, what it is told, a site described in words (`sitetask.js`), and the site's check of a line the robots cannot read (`diagnose.js`) |
 | `src/bookings.js` | The person's appointments and the reminders before each: a day, six hours (8 am–7 pm) and an hour before |
 | `src/dmv-cancel.js` | Cancelling one appointment on the DMV's View/Cancel page, in a tab, by its confirmation number |
 | `src/logbook.js` | The logs folder: the day's files, a folder per robot run, what is struck out before anything is written, and what goes after how long |

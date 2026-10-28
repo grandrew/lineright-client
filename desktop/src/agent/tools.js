@@ -18,6 +18,8 @@ const PLACEHOLDER = /\[([a-z_]{2,30})\]/g;
 /** What the model may finish with: the booking's ends, or a check's. */
 const BOOK_ENDS = ['booked', 'gone', 'unconfirmed', 'human_check', 'failed'];
 const CHECK_ENDS = ['checked', 'human_check', 'failed'];
+/** What a diagnosis may find: why the robots could not read a line (prompts.js `diagnoseTask`). */
+const DIAGNOSE_ENDS = ['read', 'site_changed', 'human_check', 'site_down', 'no_times', 'failed'];
 
 const fn = (name, description, properties = {}, required = []) => ({
   type: 'function',
@@ -25,9 +27,24 @@ const fn = (name, description, properties = {}, required = []) => ({
 });
 const REF = { type: 'integer', description: 'The number in square brackets before the element, from the latest look at the page.' };
 
+const DIAGNOSE_FINISH = fn('finish', 'End the check and say what you found.', {
+  outcome: { type: 'string', enum: DIAGNOSE_ENDS, description: 'read: you got through to the list of times as a person '
+    + 'would. site_changed: the pages differ from the guide so the robot\'s way no longer works. human_check: a captcha '
+    + 'or other human check is in the way. site_down: the site shows an error or does not load. no_times: the site works '
+    + 'and offers no times at the office. failed: you cannot tell.' },
+  cause: { type: 'string', description: 'What is different from the guide, or what is wrong: the page, the words on it, the address.' },
+  fix: { type: 'string', description: 'What the robot should do differently: the button or label to look for now, '
+    + 'the address, the step that changed. Exact words as the page shows them.' },
+  times_seen: { type: 'integer', description: 'How many appointment times you saw, if you got to a list of them.' },
+  findings: { type: 'array', description: 'A few of the times you saw.', items: { type: 'object', properties: {
+    where: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' },
+    time: { type: 'string', description: 'HH:MM, 24-hour' } } } },
+  summary: { type: 'string', description: 'One or two sentences: what you did and what you saw.' },
+}, ['outcome', 'cause', 'fix', 'summary']);
+
 /** Every tool, by name. */
 function schemas({ kind = 'book' } = {}) {
-  const finish = kind === 'check'
+  const finish = kind === 'diagnose' ? DIAGNOSE_FINISH : kind === 'check'
     ? fn('finish', 'End the task and say what you found.', {
       outcome: { type: 'string', enum: CHECK_ENDS },
       findings: { type: 'array', description: 'What is available, one item each.',
@@ -184,10 +201,13 @@ async function execute(call, { driver, values = {}, allowed = [], readOnly = fal
         submitted: Boolean(a.submitted),
         summary: String(a.summary || '').slice(0, 1000),
         findings: Array.isArray(a.findings) ? a.findings.slice(0, 50) : undefined,
+        ...(a.cause !== undefined ? { cause: String(a.cause || '').slice(0, 1500) } : {}),
+        ...(a.fix !== undefined ? { fix: String(a.fix || '').slice(0, 2000) } : {}),
+        ...(a.times_seen !== undefined ? { times_seen: Math.max(0, Math.floor(Number(a.times_seen) || 0)) } : {}),
       } };
     default:
       return { text: `There is no tool "${name}".` };
   }
 }
 
-module.exports = { schemas, toolsFor, execute, fillIn, argsOf, pageText, FINAL, BOOK_ENDS, CHECK_ENDS };
+module.exports = { schemas, toolsFor, execute, fillIn, argsOf, pageText, FINAL, BOOK_ENDS, CHECK_ENDS, DIAGNOSE_ENDS };

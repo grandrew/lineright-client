@@ -135,6 +135,16 @@ class RobotRunner {
     Object.assign(this, { paths, node, stateDir, env, platform, spawn, log, setTimeout: st, clearTimeout: ct, onRun,
       onFinish, logbook });
     this.running = new Map();   // child -> its kind, 'scout' or 'book'
+    this.tails = {};            // kind -> the end of its last run's log (stderr)
+  }
+
+  /**
+   * The last lines the last robot of `kind` logged: what it did before it
+   * answered. A scout's answer says only what it found; this says how it went,
+   * which is what the AI is shown when the scout could not read a line.
+   */
+  tail(kind, lines = 30) {
+    return String(this.tails[kind] || '').split(/\r?\n/).filter((l) => l.trim()).slice(-lines);
   }
 
   /** Whether this build has the robots at all (an unbundled checkout may not). */
@@ -212,6 +222,7 @@ class RobotRunner {
       child.on('error', (e) => done(failed(`The robot could not be started: ${e.message}`)));
       child.on('exit', (code, signal) => {
         ended = { code, signal: signal || undefined, timedOut: timedOut || undefined };
+        this.tails[kind] = err;
         if (timedOut) return done(failed(`The robot did not finish within ${Math.round(timeoutMs / 1000)}s.`));
         const answer = lastJson(out);
         if (answer) return done(answer);

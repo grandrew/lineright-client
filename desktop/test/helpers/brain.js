@@ -5,6 +5,9 @@
  * carries, as the model would get it, and answer with tool calls, as the model
  * would. `bookingBrain` books one slot on the DMV stand-in, whatever its words;
  * `checkBrain` pages its calendar to the first open day and reports it.
+ * `diagnoseBrain` finds out why a robot could not read a calendar, as the
+ * site's AI check does: it searches the office, presses its button whatever
+ * it says now, opens the first open day, and reports what had changed.
  * `serveBrain` puts one behind an address that speaks the model's API
  * (POST /chat/completions), for a regbot site to call as it would DeepSeek.
  */
@@ -114,6 +117,56 @@ function checkBrain({ where = 'Poway', months = 4 } = {}) {
 }
 
 /**
+ * The AI check of a line the robots cannot read (agent/diagnose.js): the
+ * office search, the office's button whatever its words, the first open day,
+ * its times — then the finish, with the button's words as the cause and the fix.
+ */
+function diagnoseBrain({ office: named = '', expected = 'Select Location', months = 4 } = {}) {
+  const heard = [];
+  const call = caller();
+  let said = '';
+  let paged = 0;
+  return {
+    heard,
+    async chat(body) {
+      heard.push(body);
+      const page = latestPage(body);
+      // The office the brief names, unless the test said which.
+      const brief = /Offices to look at: ([^;.\n]+)/.exec((body.messages[1] && body.messages[1].content) || '');
+      const office = named || (brief ? brief[1].trim() : 'Poway');
+      const times = [...page.matchAll(/^\[\d+\] button "(\d{1,2}:\d{2} [AP]M)"/gm)].map((m) => m[1]);
+      if (times.length) {
+        const changed = said && said !== expected;
+        return reply([call('finish', { outcome: changed ? 'site_changed' : 'read', times_seen: times.length,
+          cause: changed ? `The office's button says "${said}" now, not "${expected}".` : 'Nothing has changed that I could see.',
+          fix: changed ? `Press the office's button by "${said}" as well as "${expected}".` : 'None.',
+          summary: `Searched ${office}, pressed "${said}", and saw ${times.length} time(s) on the first open day.` })]);
+      }
+      const day = ref(page, 'button "\\d{1,2} Open Times"');
+      if (day) return reply([call('click', { ref: day })]);
+      if (/^## [A-Z][a-z]+ \d{4}$/m.test(page)) {
+        const later = ref(page, 'button "Next month[^"]*"(?! disabled)');
+        if (later && paged < months) {
+          paged += 1;
+          return reply([call('click', { ref: later })]);
+        }
+        return reply([call('finish', { outcome: 'no_times', cause: 'The calendar has no open day.', fix: 'None.', summary: 'Nothing open.' })]);
+      }
+      const card = new RegExp(`^### ${office}$[\\s\\S]*?^\\[(\\d+)\\] button "([^"]+)"`, 'm').exec(page);
+      if (card) {
+        said = card[2];
+        return reply([call('click', { ref: Number(card[1]) })]);
+      }
+      const box = ref(page, 'textbox "Search by city or ZIP" empty');
+      if (box) return reply([call('type_text', { ref: box, text: office })]);
+      const search = /textbox "Search by city or ZIP"[^\n]*\n(?:[^\n]*\n)*?\[(\d+)\] button "Search"/.exec(page);
+      if (search) return reply([call('click', { ref: Number(search[1]) })]);
+      return reply([call('finish', { outcome: 'failed', cause: 'Nothing on the page to do.', fix: '', summary: 'Stuck.' })]);
+    },
+  };
+}
+
+/**
  * A brain behind the model's API, on this machine: POST /chat/completions
  * answers as DeepSeek would, with `usage` counted roughly from the sizes.
  * Resolves to `{ url, close, heard }`.
@@ -142,4 +195,4 @@ async function serveBrain(brain, { port = 0 } = {}) {
   return { url: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => server.close(r)), heard: brain.heard };
 }
 
-module.exports = { bookingBrain, checkBrain, serveBrain, to24, latestPage };
+module.exports = { bookingBrain, checkBrain, diagnoseBrain, serveBrain, to24, latestPage };

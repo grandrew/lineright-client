@@ -98,6 +98,34 @@ charged the same way, and the site keeps the report.
 The site's own description of the DMV's pages (its `agent_guide`) is what the
 overseer reads too: the same plain words are how a new site would be added.
 
+## A line the robots cannot read: the site's AI check
+
+The site has every app look at its lines now and then (lineright-server's
+`linewatch.py`). When a look reads none of its offices, the site asks another
+app to look again (a *check* read). If that app's robot fails too and the app
+said it can run the AI (`ai` in what its reader says on every sync — only while
+AI booking oversight is on), the site's answer carries a **grant**: an AI
+session the site opened itself and pays for, bound to this app and that trouble.
+
+The app (`src/reader.js` `check`, `src/agent/diagnose.js`) then opens a bare
+browser on the booking site's start page (dmq's `rqp-browser.js`, which never
+leaves that site) and the AI goes through the pages as a person would — the
+site's guide to them, what the robots said, the scout's last log lines (the
+runner keeps them: `robots.tail('scout')`) — up to the list of times for one of
+the offices, never further. It may not press anything that holds or books a
+time, and there is no detail of anyone's to type. It finishes with one of
+`read`, `site_changed`, `human_check`, `site_down`, `no_times` or `failed`, the
+**cause**, and the **fix** for the robot, and the app sends that as the
+session's report (`stage: 'watch.check'`, `diagnosis`).
+
+The grant is a session row on the site, not a token the app could pass on: only
+this device may use it; it lapses unless its first call comes within a minute
+and each later one within a minute of the last; it ends after 20 calls or five
+minutes; nobody's credits are charged. The site grants at most three a day to
+one app and a dozen in all, within a daily dollar budget. While the AI checks,
+the app takes no new read; a booking hand-off is not held up by it. With
+oversight off the app does not say it can, so it is never handed a check.
+
 ## How it is built
 
 ```
@@ -122,6 +150,7 @@ robot process (dmq)                     the app (desktop)                       
 | `src/agent/loop.js` | Ask, act, tell, until finished or out of time, steps or credits; older page readings left out of what is sent |
 | `src/agent/prompts.js` | What the model is told, for each moment, and for a site described in words |
 | `src/agent/sitetask.js` | A site described in plain words, and the AI alone on it (developer mode) |
+| `src/agent/diagnose.js` | The site's AI check of a line the robots cannot read, on its grant |
 | `../dmq/src/control.js` | The robot's side: steps, the ask, and serving the page to the overseer |
 | `../dmq/bin/rqp-browser.js` | A browser with no robot's script in it, for a site task |
 
@@ -134,6 +163,9 @@ node scripts/oversight-live.js --model=standin   # the whole chain with a privat
 node scripts/oversight-live.js                   # the same with DeepSeek (DEEPSEEK_API_KEY in the environment)
 node scripts/oversight-live.js --drift=offices,labels,confirmation
 node scripts/oversight-live.js --case=task       # the AI alone checks a calendar it is told about in words
+node scripts/watch-live.js                       # watching lines: a private site, two apps, a stand-in whose office
+                                                 # button was renamed; the check read, the grant, the AI's diagnosis
+node scripts/watch-live.js --model=deepseek      # the same with DeepSeek (DEEPSEEK_API_KEY in the environment)
 ```
 
 The DMV stand-in (lineright-server's `testsite/`) changes under the robot on

@@ -7,7 +7,7 @@ const SITE = 'http://127.0.0.1:5000';
 const PRACTICE = 'http://127.0.0.1:8787';
 
 function world({ settings = {}, available = true, answer = null, reply = null, serverUrl = SITE,
-  giveBack = async () => ({ ok: true, released: true }) } = {}) {
+  giveBack = async () => ({ ok: true, released: true }), diagnose = null, aiAllowed = () => true } = {}) {
   const calls = { runs: [], answers: [], stops: [], released: [] };
   let release;
   const runner = {
@@ -18,6 +18,7 @@ function world({ settings = {}, available = true, answer = null, reply = null, s
       return answer && answer !== 'hold' ? answer : { kind: 'discovery.result', status: 'confirmed', offers: [{ office_code: 'P' }] };
     },
     stop: (kind) => { calls.stops.push(kind); },
+    tail: (kind) => [`${kind}: OFFICE_ERROR Redding: Timeout`],
   };
   const client = {
     serverUrl,
@@ -30,8 +31,10 @@ function world({ settings = {}, available = true, answer = null, reply = null, s
   };
   const store = { get: (key, fallback) => (key in settings ? settings[key] : fallback) };
   const states = [];
-  const reader = new Reader({ runner, getClient: () => client, getStore: () => store, onState: (s) => states.push(s) });
-  return { reader, calls, states, release: () => release && release() };
+  const checks = [];
+  const reader = new Reader({ runner, getClient: () => client, getStore: () => store, onState: (s) => states.push(s),
+    diagnose, aiAllowed, onCheck: (c) => checks.push(c) });
+  return { reader, calls, states, checks, release: () => release && release() };
 }
 
 const read = (id = 7, extra = {}) => ({
@@ -42,7 +45,8 @@ const read = (id = 7, extra = {}) => ({
 const settle = () => new Promise((r) => setImmediate(r));
 
 test('each sync says what the reader can do', () => {
-  assert.deepEqual(world().reader.capabilities(), { enabled: true, robots: ['dmq-rqp/1'], reading: null, busy: false, agreed: true });
+  assert.deepEqual(world().reader.capabilities(), { enabled: true, robots: ['dmq-rqp/1'], reading: null, busy: false, agreed: true,
+    ai: false });
   assert.equal(world({ settings: { readerEnabled: false } }).reader.capabilities().enabled, false);
   assert.equal(world({ available: false }).reader.capabilities().enabled, false, 'no robots on board');
   const { reader } = world();
@@ -238,4 +242,59 @@ test('stopping stops the robots that look, and nothing is answered after', async
   assert.equal(w.calls.answers.length, 0);
   w.reader.restart();
   assert.equal(w.reader.capabilities().enabled, true);
+});
+
+test('it says it can run the AI only with a way to, robots on board, and the person\'s AI on', () => {
+  const diagnose = async () => ({});
+  assert.equal(world({ diagnose }).reader.capabilities().ai, true);
+  assert.equal(world({ diagnose, aiAllowed: () => false }).reader.capabilities().ai, false, 'the person turned it off');
+  assert.equal(world({ diagnose, available: false }).reader.capabilities().ai, false);
+  assert.equal(world().reader.capabilities().ai, false, 'no way to run it');
+});
+
+const GRANT = { session_id: 41, issue_id: 3, paid_by: 'site', max_calls: 20, seconds: 300,
+  start_url: `${PRACTICE}/portal/appointments/select-appointment-type?option=RID`, base_url: PRACTICE, trouble: 'Timeout' };
+
+test('a check that fails here too runs the AI on the site\'s grant, and the app takes nothing new meanwhile', async () => {
+  let finish;
+  const seen = [];
+  const failed = { kind: 'discovery.result', status: 'confirmed', message: 'No slots readable', offers: [],
+    checked: [{ office: 'Redding', error: 'Timeout' }] };
+  const w = world({ answer: failed, reply: { status: 'failed', recorded: 0, offers: [], grant: GRANT },
+    diagnose: (job) => { seen.push(job); return new Promise((r) => { finish = r; }); } });
+  w.reader.offer([read(9, { purpose: 'check', check: { issue_id: 3, trouble: 'Timeout' } })]);
+  for (let i = 0; i < 5 && !seen.length; i += 1) await settle();
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].grant.session_id, 41);
+  assert.equal(seen[0].result.checked[0].error, 'Timeout', 'what the scout said just now');
+  assert.deepEqual(seen[0].robotLog, ['scout: OFFICE_ERROR Redding: Timeout']);
+  assert.equal(w.reader.capabilities().busy, true, 'nothing new while the AI looks');
+  assert.equal(w.reader.state().diagnosing.session, 41);
+  w.reader.offer([read(10)]);
+  assert.equal(w.calls.runs.length, 1, 'no second read meanwhile');
+  finish({ diagnosis: { outcome: 'site_changed', summary: 'renamed' }, calls: 4 });
+  for (let i = 0; i < 5 && w.reader.diagnosing; i += 1) await settle();
+  assert.equal(w.reader.capabilities().busy, false);
+  assert.equal(w.reader.state().lastCheck.outcome, 'site_changed');
+  assert.equal(w.checks.length, 1);
+  assert.deepEqual([w.checks[0].session, w.checks[0].issue, w.checks[0].calls], [41, 3, 4]);
+});
+
+test('with the AI off, a grant is left to lapse', async () => {
+  let ran = false;
+  const w = world({ reply: { status: 'failed', recorded: 0, offers: [], grant: GRANT },
+    diagnose: async () => { ran = true; return {}; }, aiAllowed: () => false });
+  w.reader.offer([read(11, { purpose: 'check' })]);
+  for (let i = 0; i < 5; i += 1) await settle();
+  assert.equal(ran, false);
+  assert.equal(w.reader.state().lastCheck, null);
+});
+
+test('a check that throws still ends, and says so', async () => {
+  const w = world({ reply: { status: 'failed', recorded: 0, offers: [], grant: GRANT },
+    diagnose: async () => { throw new Error('no browser'); } });
+  w.reader.offer([read(12, { purpose: 'check' })]);
+  for (let i = 0; i < 6 && !w.checks.length; i += 1) await settle();
+  assert.equal(w.checks[0].stopped, 'no browser');
+  assert.equal(w.reader.diagnosing, null);
 });

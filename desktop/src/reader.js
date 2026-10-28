@@ -23,6 +23,15 @@
  * before there were two said yes to looking with it. A site elsewhere than this machine has its lines on the real
  * DMV, so without the yes this app does not offer to read for it at all — and
  * every sync says whether it has one (`agreed`), which is what the site pays for.
+ *
+ * Not every read is for bidders. With nothing else to do, an app is now and
+ * then handed a slow look at a line nobody bids on (a `watch` read), so every
+ * line has something to show; and a line the robots could not read is looked
+ * at again (a `check` read). When this app's scout cannot read it either, the
+ * site's answer carries a grant — an AI session the site pays for — and the
+ * app's AI goes through the booking site itself to find out why
+ * (agent/diagnose.js). The app says it can (`ai`) only while the person has
+ * the AI on (Settings → AI booking oversight).
  */
 const { ROBOTS, targetAllowed, isRealDmv, isLoopback } = require('./robots');
 
@@ -38,10 +47,17 @@ class Reader {
    * @param {function} opts.getStore      the settings in use now
    * @param {function} [opts.onRead]      ({status, ms, offices, found, read}) after each read, for
    *                                      telemetry.js and the trace (traces.js)
+   * @param {function} [opts.diagnose]    ({grant, read, result, robotLog}) -> a promise: the AI's
+   *                                      check of a line the robots cannot read (agent/diagnose.js)
+   * @param {function} [opts.aiAllowed]   whether the person has the AI on
+   * @param {function} [opts.onCheck]     ({read, grant, diagnosis, stopped, ms}) after a check
    */
-  constructor({ runner, getClient, getStore, log = () => {}, onState = () => {}, onRead = () => {} }) {
-    Object.assign(this, { runner, getClient, getStore, log, onState, onRead });
+  constructor({ runner, getClient, getStore, log = () => {}, onState = () => {}, onRead = () => {},
+    diagnose = null, aiAllowed = () => false, onCheck = () => {} }) {
+    Object.assign(this, { runner, getClient, getStore, log, onState, onRead, diagnose, aiAllowed, onCheck });
     this.current = null;
+    this.diagnosing = null;
+    this.lastCheck = null;
     this.last = null;
     this.busy = false;
     this.stopped = false;
@@ -94,10 +110,21 @@ class Reader {
     }
   }
 
+  /** Whether this app can run the AI on a line the robots cannot read, when the site asks. */
+  canDiagnose() {
+    try {
+      return typeof this.diagnose === 'function' && this.runner.available() && Boolean(this.aiAllowed());
+    } catch {
+      return false;
+    }
+  }
+
   /** What each sync says about this app's reader (reads.parse_caps on the site). */
   capabilities() {
+    // While its AI checks a line, the app wants nothing new: busy, like booking.
     return { enabled: this.enabled(), robots: ROBOTS,
-      reading: this.current ? this.current.read_id : null, busy: this.busy, agreed: this.agreed() };
+      reading: this.current ? this.current.read_id : null, busy: this.busy || Boolean(this.diagnosing),
+      agreed: this.agreed(), ai: this.canDiagnose() };
   }
 
   state() {
@@ -108,7 +135,9 @@ class Reader {
       wanted: this.getStore().get('readerEnabled', true) !== false,
       available: this.runner.available(), agreed: this.agreed(), answered: this.decided(),
       reading: this.current ? { read_id: this.current.read_id, queue_name: this.current.queue_name,
-        site_name: this.current.site_name, offices: (this.current.request.offices || []).length } : null,
+        site_name: this.current.site_name, offices: (this.current.request.offices || []).length,
+        purpose: this.current.purpose || 'bids' } : null,
+      diagnosing: this.diagnosing, lastCheck: this.lastCheck,
     };
   }
 
@@ -177,7 +206,8 @@ class Reader {
         this.declined = true;
         result = refusal('The person has not let this app look at the real DMV from their computer.');
       } else {
-        this.log(`looking for openings on ${read.queue_name} — ${(read.request.offices || []).length} office(s)`);
+        const why = read.purpose === 'watch' ? 'watching' : read.purpose === 'check' ? 'checking again' : 'looking for openings on';
+        this.log(`${why} ${read.queue_name} — ${(read.request.offices || []).length} office(s)`);
         const seconds = Math.max(30, Math.min(Number(read.timeout_s) || 600, 600));
         result = await this.runner.run('scout', read.request, {
           dmvBase: read.base_url, solverUrl: read.captcha_solver_url || '', timeoutMs: seconds * 1000,
@@ -190,7 +220,7 @@ class Reader {
       const verdicts = {};
       for (const o of reply.offers || []) if (o && o.verdict) verdicts[o.verdict] = (verdicts[o.verdict] || 0) + 1;
       told = { status: reply.status || result.status, found: Number(reply.recorded) || 0, robot: result.status,
-        verdicts };
+        verdicts, ms: Date.now() - started, purpose: read.purpose || 'bids' };
       this.last = {
         read_id: read.read_id, queue_name: read.queue_name, at: Date.now(), status: reply.status,
         recorded: reply.recorded,
@@ -199,6 +229,8 @@ class Reader {
       this.log(`read ${read.read_id} on ${read.queue_name}: ${reply.status}, ${reply.recorded} opening(s)`
         + (reply.offers && reply.offers.length ? ` — ${reply.offers.map((o) => `${o.where}: ${o.verdict}`
           + (o.to && !o.to.you ? ` to #${o.to.rank}` : '')).join('; ')}` : ''));
+      // The robots could not read this line here either: the site pays for the AI to look.
+      if (reply.grant && !this.stopped) await this.check(read, result, reply.grant);
     } catch (err) {
       // Too late, or answered already: the site has moved on, and so does this.
       // A 429 is different. The site did not take the answer, so the read is
@@ -219,11 +251,48 @@ class Reader {
     } finally {
       if (told) {
         try {
-          this.onRead({ ...told, ms: Date.now() - started, offices, read: read.read_id, queue: read.queue_id });
+          this.onRead({ ms: Date.now() - started, ...told, offices, read: read.read_id, queue: read.queue_id });
         } catch { /* telemetry is never the problem */ }
       }
       this.answered.add(read.read_id);
       if (this.current === read) this.current = null;
+      this.emit();
+    }
+  }
+
+  /**
+   * The AI's check of a line the robots cannot read, on the grant the site
+   * sent (agent/diagnose.js). One at a time; while it runs the app takes no
+   * new read. A person who turned the AI off is never checked for: the grant
+   * lapses unused within the minute.
+   */
+  async check(read, result, grant) {
+    if (!this.canDiagnose() || this.diagnosing) {
+      this.log(`check ${grant.session_id} on ${read.queue_name}: not run (the AI is off here)`);
+      return;
+    }
+    const started = Date.now();
+    this.diagnosing = { session: grant.session_id, queue_name: read.queue_name, since: started };
+    this.emit();
+    let done = null;
+    let stopped = '';
+    try {
+      this.log(`check ${grant.session_id}: the AI looks at why ${read.queue_name} could not be read`);
+      done = await this.diagnose({ grant, read, result, robotLog: this.runner.tail ? this.runner.tail('scout') : [] });
+      stopped = (done && done.stopped) || '';
+      const d = (done && done.diagnosis) || {};
+      this.log(`check ${grant.session_id}: ${d.outcome || 'no outcome'}${d.summary ? ` — ${d.summary}` : ''}`);
+    } catch (err) {
+      stopped = err.message;
+      this.log(`check ${grant.session_id}: ${err.message}`);
+    } finally {
+      this.lastCheck = { session: grant.session_id, queue_name: read.queue_name, at: Date.now(),
+        outcome: done && done.diagnosis ? done.diagnosis.outcome : 'failed' };
+      this.diagnosing = null;
+      try {
+        this.onCheck({ read: read.read_id, queue: read.queue_id, session: grant.session_id, issue: grant.issue_id,
+          outcome: this.lastCheck.outcome, calls: done ? done.calls : 0, stopped, ms: Date.now() - started });
+      } catch { /* never the problem */ }
       this.emit();
     }
   }
@@ -251,6 +320,8 @@ class Reader {
   stop() {
     this.stopped = true;
     this.runner.stop('scout');
+    // The AI's check of a line, if one is running: it was only ever looking.
+    if (this.diagnosing) this.runner.stop('browse');
     this.current = null;
   }
 

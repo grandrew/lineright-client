@@ -522,3 +522,21 @@ table.bk-rest td{font-size:12.5px}
   .of-life,.of-out{grid-column:2}
   .of-out{flex-direction:row; align-items:center; justify-content:flex-start; text-align:left}
 }
+/* How reading a line goes (the site's linewatch.py): a chip, and the soonest seen at each office. */
+.chip-watch.ok{background:var(--ok-soft); color:var(--ok)}
+.chip-watch.bad{background:var(--bad-soft); color:var(--bad)}
+.chip-watch.warn{background:var(--gold-soft); color:var(--gold)}
+.chip-watch.muted{color:var(--muted)}
+.ow{border:1px solid var(--line-soft); border-radius:var(--r-sm); background:var(--surface-2); padding:10px 12px; margin:0 0 12px}
+.ow-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.ow-head .tiny{margin-left:auto}
+.ow-dot{width:9px; height:9px; border-radius:50%; background:var(--faint); flex:none}
+.ow-dot.ok{background:var(--ok)} .ow-dot.bad{background:var(--bad)} .ow-dot.warn{background:var(--gold-bright)}
+.ow-advice{margin:6px 0 0; padding-left:18px; font-size:13px; color:var(--muted)}
+.ow-advice li{margin:2px 0}
+.ow-list{display:flex; flex-direction:column}
+.ow-row{display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1.5fr) 88px; gap:10px; align-items:baseline;
+  padding:5px 0; border-top:1px solid var(--line-soft)}
+.ow-row:first-child{border-top:none}
+.ow-office{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.ow-when{white-space:nowrap; text-align:right}

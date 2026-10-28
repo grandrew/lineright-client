@@ -397,6 +397,68 @@
     return `How long: from the look that first saw it to the first look that found it gone, taken as the middle of the last look that saw it and the first that did not.${every} Times are the line's own clock (${(doc && doc.timezone) || 'UTC'}).`;
   }
 
+  // ------------------------------------------------- how reading the line goes
+  // The site watches every line slowly (its linewatch.py): what the last look at
+  // each office saw, and any trouble the robots have reading the line.
+  const WATCH_TONE = { ok: 'ok', trouble: 'bad', blocked: 'warn', unwatched: 'muted' };
+  const CHECKS = { due: 'Another app will look again soon.', waiting: 'Another app found the same; an AI check waits its turn.',
+    issued: 'Another app is looking again now.', agent: 'An AI is checking the booking site now.', skipped: '', passed: '', done: '' };
+
+  /** "3 h ago" from a stamp, against `nowMs`. */
+  function ago(stamp, nowMs = Date.now()) {
+    const t = Date.parse(stamp || '');
+    if (!Number.isFinite(t)) return '';
+    const s = Math.max(0, (nowMs - t) / 1000);
+    return s < 90 ? 'just now' : `${dur(s)} ago`;
+  }
+
+  /** A line's reading in a few words, for a chip: { text, tone, title }, or null. */
+  function watchChip(w, nowMs = Date.now()) {
+    if (!w) return null;
+    if (w.state === 'trouble') return { text: '⚠ The robots cannot read this line', tone: 'bad', title: `${w.label}.` };
+    if (w.state === 'blocked') return { text: '⚠ A human check stops the robots', tone: 'warn', title: `${w.label}.` };
+    if (w.soonest) {
+      return { text: `Soonest seen: ${slot(`${w.soonest.date} ${w.soonest.time || '00:00'}`)} at ${w.soonest.office}`, tone: 'ok',
+        title: `Seen ${ago(w.soonest.seen_at, nowMs)}. A time seen a while ago may be gone by now.` };
+    }
+    if (w.state === 'unwatched') return { text: 'Not looked at lately', tone: 'muted', title: `${w.label}.` };
+    return { text: 'Nothing open seen lately', tone: 'muted', title: w.read_at ? `Last read ${ago(w.read_at, nowMs)}.` : '' };
+  }
+
+  /** One office as the last look saw it. */
+  function watchRow(o, nowMs) {
+    const what = o.date ? `<b>${esc(slot(`${o.date} ${o.time || '00:00'}`))}</b>`
+      : o.ok ? '<span class="muted">nothing open</span>' : `<span class="warn">${esc(o.error || 'could not be read')}</span>`;
+    return `<div class="ow-row">
+        <div class="ow-office"><b>${esc(o.office)}</b>${o.miles !== null && o.miles !== undefined ? ` <span class="tiny muted">${esc(o.miles)} mi</span>` : ''}</div>
+        <div class="ow-soonest small">${what}${o.ok && o.found > 1 ? ` <span class="tiny muted">${esc(o.found)} times seen</span>` : ''}</div>
+        <div class="ow-when tiny muted">${esc(ago(o.read_at, nowMs))}</div>
+      </div>`;
+  }
+
+  /** The feed card's part on how reading these offices goes, and what each showed: HTML. */
+  function watchBlock(w, { shown = 8, nowMs = Date.now() } = {}) {
+    if (!w) return '';
+    const at = w.at || [];
+    const tone = WATCH_TONE[w.state] || 'muted';
+    const meta = [w.offices ? `${w.read_24h} of ${w.offices} offices read in 24 h` : '',
+      w.read_at ? `last read ${ago(w.read_at, nowMs)}` : ''].filter(Boolean).join(' · ');
+    const issue = w.issue;
+    const trouble = issue ? `<p class="small ${tone}" style="margin:6px 0 0">Since ${esc(ago(issue.since, nowMs))}: ${esc(issue.reads)} look${issue.reads === 1 ? '' : 's'} by ${esc(issue.apps)} app${issue.apps === 1 ? '' : 's'} could read nothing. ${esc(CHECKS[issue.check] || '')}</p>` : '';
+    const advice = (w.advice || []).length ? `<ul class="ow-advice">${w.advice.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : '';
+    const list = at.length ? `<div class="ow-list">${at.slice(0, shown).map((o) => watchRow(o, nowMs)).join('')}</div>
+        ${at.length > shown ? `<button type="button" class="btn btn-sm btn-block" data-ow-more style="margin-top:6px">Show all ${esc(at.length)}</button>` : ''}`
+      : '<p class="small muted" style="margin:6px 0 0">No office here has been looked at yet.</p>';
+    const unread = Number(w.unread) ? ` ${esc(w.unread)} not looked at yet.` : '';
+    return `<div class="ow" id="ofWatch">
+        <div class="ow-head"><span class="ow-dot ${esc(tone)}"></span><b class="small">${esc(w.label)}</b><span class="tiny muted">${esc(meta)}</span></div>
+        ${trouble}${advice}
+        <div class="panel-title" style="margin:12px 0 4px">Soonest seen at each office</div>
+        ${list}
+        <p class="tiny muted" style="margin:6px 0 0">As the last look at each office saw it: a time seen hours ago may be gone. Every office is looked at now and then, and those somebody bids on more often.${unread}</p>
+      </div>`;
+  }
+
   return { RANGE_WORDS, body, key, dur, short, lasted, outcome, fit, wall, offset, clock, day, slot, ahead,
-    hourText, scopeText, tiles, plot, legend, tip, rows, basis, yTop };
+    hourText, scopeText, tiles, plot, legend, tip, rows, basis, yTop, ago, watchChip, watchBlock };
 });
