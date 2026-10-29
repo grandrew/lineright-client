@@ -45,18 +45,38 @@
  * robot may have sent the form and booked the slot with nobody left to say so,
  * and the turn would run out as missed while the person has the appointment.
  *
- * None of this happens until the person has said yes ("Let the app book for
- * me", `robotBooking`), on the real DMV or a practice one alike: until then a
- * slot that is theirs opens on the booking page for them to book, which is what
- * they expect when they have not asked for anything else. A yes given before
- * there was one switch — to booking on the real DMV, `realDmvRobots` — counts.
+ * Whether it books is the person's ("Let the app book for me", `robotBooking`),
+ * on the real DMV or a practice one alike. Until they choose, it books once
+ * their profile holds what every booking form asks — name, email, phone
+ * (`profileReady`): a turn comes when it comes, often with nobody at the
+ * computer, and one left to run out costs them their place. Without those
+ * details, or once they have said no, a slot that is theirs opens on the
+ * booking page for them to book. A yes given before there was one switch — to
+ * booking on the real DMV, `realDmvRobots` — counts.
  */
 const path = require('node:path');
 const { targetAllowed } = require('./robots');
 
-/** Whether the person has let the app's robot book for them. */
-function mayBook(store) {
-  return Boolean(store.get('robotBooking', store.get('realDmvRobots', false)));
+/** What every DMV booking form asks for: with all of it, the app books unless told not to. */
+const BOOKS_WITH = ['first_name', 'last_name', 'email', 'phone'];
+
+/** Whether the profile holds every detail a booking form asks for. */
+function profileReady(values = {}) {
+  return BOOKS_WITH.every((key) => String((values || {})[key] || '').trim());
+}
+
+/** The person's own word on it — true, false — or null while they have not said. */
+function bookingChoice(store) {
+  const chosen = typeof store.chosen === 'function' ? store.chosen('robotBooking') : store.get('robotBooking') !== undefined;
+  if (chosen) return Boolean(store.get('robotBooking', false));
+  const legacy = store.get('realDmvRobots');
+  return legacy === undefined || legacy === null ? null : Boolean(legacy);
+}
+
+/** Whether the app's robot books for the person: their word, or by default with a full profile. */
+function mayBook(store, values = {}) {
+  const said = bookingChoice(store);
+  return said === null ? profileReady(values) : said;
 }
 
 /** How long a booking the site has not heard about is reported again. */
@@ -174,8 +194,8 @@ class Booker {
     if (h.booker && !h.booker.you && !h.booker.silent) return { ok: false, why: 'elsewhere', device: h.booker.name };
     if (!this.runner.available()) return { ok: false, why: 'no-robot' };
     if (!targetAllowed(h.robot.base_url, this.getClient().serverUrl)) return { ok: false, why: 'target' };
-    if (!mayBook(store)) return { ok: false, why: 'not-agreed' };
     const values = this.getProfile();
+    if (!mayBook(store, values)) return { ok: false, why: 'not-agreed' };
     const missing = (h.robot.requires || []).filter((key) => !String(values[key] || '').trim());
     if (missing.length) return { ok: false, why: 'profile', missing };
     return { ok: true };
@@ -336,4 +356,4 @@ class Booker {
   }
 }
 
-module.exports = { mayBook, Booker, budgetMs, definitive };
+module.exports = { mayBook, bookingChoice, profileReady, BOOKS_WITH, Booker, budgetMs, definitive };

@@ -657,8 +657,10 @@ once — *Check lines and earn credits* is the button — since it is automated
 traffic from your own address, and Settings turns it off again. Without it the
 app does not offer the site to read at all, and gives back a read handed to it
 anyway. **Let the app book for me** is booking appointments in your name, on
-the real DMV or a practice one, off until you tick it. The time of each yes is
-kept, and a yes to booking on the real DMV given before there were two counts as
+the real DMV or a practice one. It is on by default once the profile has your
+name, email and phone, since a turn comes when it comes and one left to run out
+costs your place; it says so once when it turns on, and off stays off. The time
+of each yes is kept, and a yes to booking on the real DMV given before there were two counts as
 a yes to looking too. Expect the
 real DMV to ask headless browsers for a human check: then the reads come back
 blocked, and bookings open the page for you.

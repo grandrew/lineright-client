@@ -55,7 +55,7 @@ const { Stack, locate, NO_SERVER } = require('./stack');
 const reset = require('./reset');
 const { RobotRunner, isLoopback } = require('./robots');
 const { Reader } = require('./reader');
-const { Booker, mayBook, definitive } = require('./booker');
+const { Booker, mayBook, bookingChoice, definitive } = require('./booker');
 const { Overseer } = require('./overseer');
 const { runSiteTask } = require('./agent/sitetask');
 const { runDiagnosis } = require('./agent/diagnose');
@@ -1019,6 +1019,7 @@ function handleDoc(doc) {
   send('sync:doc', withNeeds(doc));
   noteBookings(doc.bookings);
   noteOversightTerms(doc.agent);
+  noteBookingDefault();
   noteAppsPolicy(doc.apps);
   if (reader && !builtin()) {
     if (doc.reader) reader.notePace(doc.reader);
@@ -1259,6 +1260,19 @@ function noteOversight(o) {
     : 'The robot got stuck on the DMV\'s pages. AI oversight has taken its browser over and is finishing the booking'
       + ` (${o.active.steps} step${o.active.steps === 1 ? '' : 's'} so far, ${o.active.credits} credit${o.active.credits === 1 ? '' : 's'}).`;
   if (card.text !== text) setCard(o.active.job_id, { ...card, title: 'AI oversight is finishing your booking', text });
+}
+
+/**
+ * Said once: the app books the person's turns itself now, because their profile
+ * is full and they have not said otherwise (booker.js `mayBook`).
+ */
+function noteBookingDefault() {
+  if (builtin() || store.get('robotBookingNoticed', false) || bookingChoice(store) !== null) return;
+  if (!profile || !mayBook(store, profile.values())) return;
+  store.set('robotBookingNoticed', true);
+  send('toast', { kind: 'ok', ms: 30000, text: 'The app books your turns itself now: when a slot is yours, its robot '
+    + 'books it with your profile\'s details, even when you are away, so the turn does not run out. '
+    + 'Settings → This computer\'s robots → "Let the app book for me" turns it off.' });
 }
 
 function noteOversightTerms(terms) {
@@ -1875,7 +1889,7 @@ function startTrace() {
     mode: shareMode(), developer: developer.on, cpus: os.cpus().length,
     mem_gb: Math.round(os.totalmem() / 1e8) / 10, server: originOf(client.serverUrl) || undefined,
     paired: client.paired, profile: profileShape(), reader: store.get('readerEnabled', true) !== false,
-    robot_booking: mayBook(store),
+    robot_booking: mayBook(store, profile ? profile.values() : {}), robot_booking_default: bookingChoice(store) === null,
   });
 }
 
@@ -2029,7 +2043,9 @@ function settingsView() {
     // openings when asked, whether it may look at the real DMV, and whether it
     // may book a slot that is the person's (booker.js) — anywhere.
     readerEnabled: store.get('readerEnabled', true) !== false,
-    robotBooking: mayBook(store),
+    robotBooking: mayBook(store, profile ? profile.values() : {}),
+    // On by default with a full profile, until the person says otherwise (booker.js).
+    robotBookingDefault: bookingChoice(store) === null,
     // A sound with each reminder before an appointment (bookings.js).
     reminderSound: store.get('reminderSound', true) !== false,
     // AI booking oversight (overseer.js): whether the person has it on, and the site's terms.

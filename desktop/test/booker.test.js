@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { Booker, budgetMs } = require('../src/booker');
+const { Booker, budgetMs, mayBook, bookingChoice, profileReady } = require('../src/booker');
 
 const SITE = 'http://127.0.0.1:5000';
 const PRACTICE = 'http://127.0.0.1:8787';
@@ -59,18 +59,27 @@ test('the app books a hand-off itself only when it has everything it needs', () 
   assert.equal(world({ available: false }).booker.wants(handoff()).why, 'no-robot');
   assert.equal(booker.wants(handoff({ robot: { ...handoff().robot, base_url: 'https://dmv.example' } })).why, 'target');
   const real = handoff({ robot: { ...handoff().robot, base_url: 'https://www.dmv.ca.gov', captcha_solver_url: null } });
-  assert.equal(world({ serverUrl: 'https://regbot.example', settings: {} }).booker.wants(real).why, 'not-agreed');
+  assert.equal(world({ serverUrl: 'https://regbot.example', settings: { robotBooking: false } }).booker.wants(real).why,
+    'not-agreed');
   assert.equal(world({ serverUrl: 'https://regbot.example' }).booker.wants(real).ok, true);
+  assert.equal(world({ serverUrl: 'https://regbot.example', settings: {} }).booker.wants(real).ok, true,
+    'nothing said and a full profile: it books');
   assert.equal(world({ serverUrl: 'https://regbot.example', settings: { realDmvRobots: true } }).booker.wants(real).ok, true,
     'a yes to booking on the real DMV from before there was one switch');
   assert.deepEqual(world({ profile: { first_name: 'Ada' } }).booker.wants(handoff()),
     { ok: false, why: 'profile', missing: ['last_name', 'email', 'phone'] });
 });
 
-test('without the person\'s yes the page opens instead, on a practice DMV as on the real one', () => {
-  assert.equal(world({ settings: {} }).booker.wants(handoff()).why, 'not-agreed');
+test('until the person says, the app books once the profile is full; a no stays a no', () => {
+  assert.equal(world({ settings: {} }).booker.wants(handoff()).ok, true, 'nothing said, a full profile');
+  const half = { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.invalid' };
+  assert.equal(world({ settings: {}, profile: half }).booker.wants(handoff()).why, 'not-agreed',
+    'without a phone the page opens for them, as before');
+  assert.equal(world({ settings: { robotBooking: false } }).booker.wants(handoff()).why, 'not-agreed', 'their no');
   assert.equal(world({ settings: { robotBooking: false, realDmvRobots: true } }).booker.wants(handoff()).why, 'not-agreed',
     'the one switch, turned off, is off');
+  assert.equal(world({ settings: { realDmvRobots: false } }).booker.wants(handoff()).why, 'not-agreed',
+    'a no from before there was one switch');
   // A booking this computer's robot already made is still said, yes or no.
   const key = '127.0.0.1:5000/rqp1-job-77-20260926';
   const done = world({ settings: {}, records: { [key]: { kind: 'booking.result', status: 'confirmed', confirmation: 'TS-1' } } });
@@ -319,4 +328,17 @@ test('closing waits for a booking under way: the robot finishes, and the site he
   stuck.booker.book(handoff());
   await new Promise((r) => setImmediate(r));
   assert.equal(await stuck.booker.finish(40), false);
+});
+
+test('the default: the person\'s own word first, then a full profile', () => {
+  const store = (saved) => ({ get: (k, d) => (k in saved ? saved[k] : d), chosen: (k) => k in saved });
+  const full = { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.invalid', phone: '5555550100' };
+  assert.equal(profileReady(full), true);
+  assert.equal(profileReady({ ...full, email: '  ' }), false);
+  assert.equal(bookingChoice(store({})), null);
+  assert.equal(mayBook(store({}), full), true);
+  assert.equal(mayBook(store({}), {}), false);
+  assert.equal(mayBook(store({ robotBooking: false }), full), false);
+  assert.equal(mayBook(store({ robotBooking: true }), {}), true, 'their yes, whatever the profile (wants() says what is missing)');
+  assert.equal(mayBook(store({ realDmvRobots: true }), {}), true);
 });

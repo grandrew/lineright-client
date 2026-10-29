@@ -25,6 +25,12 @@
  * nobody used is the one tab the app may load the next turn in, or close
  * (turntabs.js). Only input from the person counts: a page loading, the
  * autofill typing, and the app showing a tab do not.
+ *
+ * Keyboard focus goes to whichever face is showing. A BaseWindow does not hand
+ * it to its views by itself, as a BrowserWindow does: on Windows, a window
+ * focused again, or a tab closed or hidden, left the keys with a view nobody
+ * could see. A form in the app still took clicks — a drop-down opened — but
+ * nothing typed reached it until the app was restarted.
  */
 const { EventEmitter } = require('node:events');
 const { WebContentsView } = require('electron');
@@ -47,7 +53,28 @@ class Shell extends EventEmitter {
     this.seq = 0;
     win.contentView.addChildView(chromeView);
     win.on('resize', () => this.layout());
+    win.on('focus', () => this.focusActive());
+    // The app's page, loaded or loaded again, has the keys while it is the face showing.
+    chromeView.webContents.on('did-finish-load', () => { if (this.active === null) this.focusActive(); });
     this.layout();
+  }
+
+  /** The view that is showing: the app, or the tab being looked at. */
+  shownView() {
+    const tab = this.active === null ? null : this.tabs.get(this.active);
+    return tab ? tab.view : this.chromeView;
+  }
+
+  /**
+   * Give the keys to the face that is showing — only while the window has the
+   * focus, so a turn's tab opening behind another program does not take it.
+   */
+  focusActive() {
+    try {
+      if (typeof this.win.isFocused === 'function' && !this.win.isFocused()) return;
+      const wc = this.shownView().webContents;
+      if (wc && !wc.isDestroyed()) wc.focus();
+    } catch { /* a view going away: the next change focuses again */ }
   }
 
   // ------------------------------------------------------------ geometry
@@ -128,6 +155,7 @@ class Shell extends EventEmitter {
     if (!this.tabs.has(id)) return;
     this.active = id;
     this.layout();
+    this.focusActive();
     this.changed();
   }
 
@@ -135,6 +163,7 @@ class Shell extends EventEmitter {
   showApp() {
     this.active = null;
     this.layout();
+    this.focusActive();
     this.changed();
   }
 
@@ -190,6 +219,7 @@ class Shell extends EventEmitter {
     if (this.active === id) {
       this.active = null;
       this.layout();
+      this.focusActive();
     }
   }
 

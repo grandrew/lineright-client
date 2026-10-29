@@ -540,3 +540,10 @@ table.bk-rest td{font-size:12.5px}
 .ow-row:first-child{border-top:none}
 .ow-office{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .ow-when{white-space:nowrap; text-align:right}
+/* A bid that ended in the last day: what became of it, after a restart too. */
+.ended-card{padding:12px 16px; margin-bottom:14px}
+aside .ended-card{margin-bottom:0}
+.ended-row{display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-top:1px solid var(--line-soft)}
+.ended-row:first-of-type{border-top:none; padding-top:2px}
+.ended-row > .tag{flex:none; margin-top:2px}
+.ended-actions{display:flex; gap:6px; flex:none}

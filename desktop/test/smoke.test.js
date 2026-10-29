@@ -904,8 +904,8 @@ test("the app's robot books the person's slot once they let it, and the page ope
     const site = await bookingSite(dmv.base, options);
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-book-'));
     seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
-    // Settings → Let the app book for me, ticked.
-    if (agreed) fs.writeFileSync(path.join(userData, 'regbot.json'), JSON.stringify({ v: 2, robotBooking: true }));
+    // Settings → Let the app book for me: ticked, unticked, or (null) never touched — on by default with a full profile.
+    if (agreed !== null) fs.writeFileSync(path.join(userData, 'regbot.json'), JSON.stringify({ v: 2, robotBooking: agreed }));
     try {
       const started = Date.now();
       const result = await runApp({ electron, display, port: site.port, userData, exitAfter,
@@ -917,7 +917,7 @@ test("the app's robot books the person's slot once they let it, and the page ope
     }
   };
   try {
-    // Not let to book for them: the page opens at once, and nothing is claimed or run.
+    // Told not to book for them: the page opens at once, and nothing is claimed or run.
     const asked = await book('BOOKED_SUCCESS', {}, { agreed: false });
     assert.deepEqual(asked.seen.claims, []);
     assert.deepEqual(asked.seen.booked, []);
@@ -951,6 +951,11 @@ test("the app's robot books the person's slot once they let it, and the page ope
     const replay = JSON.parse(fs.readFileSync(path.join(booked.userData, 'robots', 'rqp-bookings.json'), 'utf8'));
     assert.deepEqual(Object.keys(replay), [`127.0.0.1:${booked.port}/rqp1-job-77-20260926101500`],
       'the replay key names the site it came from');
+
+    // Never asked, with a full profile: it books by default.
+    const byDefault = await book('BOOKED_SUCCESS', {}, { agreed: null });
+    assert.deepEqual(byDefault.seen.claims, [77], 'on by default with a full profile');
+    assert.equal(byDefault.seen.booked.length, 1);
 
     // The robot could not finish: the page opens for the person, as a hand-off always has.
     const stopped = await book('FOUND_AND_STOPPED');
@@ -1635,7 +1640,11 @@ async function openingsStub() {
       return json(200, { protocol: 'RQP/1', poll_after_ms: 1000, user: { id: 1, nickname: 'super_manly', balance: 500, escrow: 46 },
         positions: [{ ...mine, queue_id: 9, queue_name: line, site_slug: 'ca-dmv', site_name: 'California DMV', field_size: 1,
           window: ['2026-10-01', '2026-12-31'], hours: ['08:00', '17:00'] }],
-        handoffs: [], settled: [], reports: [], widened: [], prefs: { auto_widen: false }, advice: null });
+        handoffs: [], reports: [], widened: [], prefs: { auto_widen: false }, advice: null,
+        // A bid on line 10 whose turn ran out two hours ago: it is on no board, and the console says why.
+        settled: [{ bid_id: 7, queue_id: 10, queue_name: 'REAL ID application', site_name: 'California DMV', site_slug: 'ca-dmv',
+          status: 'expired', confirmation: '', amount: 46, settled_at: stamp(7200),
+          note: 'Your turn ran out before you booked or passed it, so the slot went on and you left the line. ⧗33 of your ⧗46 came back (70%).' }] });
     }
     const board = url.pathname.match(/^\/api\/client\/queues\/(9|10)$/);
     if (board) {
@@ -1688,6 +1697,9 @@ test('recent openings: the venues being looked at, a bid\'s own offices, how lon
     assert.match(await card(), /The apps read this line lately[\s\S]*42 of 187 offices read in 24 h[\s\S]*Soonest seen at each office[\s\S]*Los Gatos[\s\S]*Tue, Nov 3 · 9:40 AM[\s\S]*nothing open[\s\S]*could not be read/i);
     assert.match(await ui.evaluate("(document.querySelector('.board-head .chip-watch') || {}).innerText || ''"),
       /Soonest seen: Tue, Nov 3 · 9:40 AM at Los Gatos/);
+    // The bid that ended here is said above the join form, after a restart too.
+    assert.match(await until(() => ui.evaluate("(document.querySelector('aside .ended-card') || {}).innerText || ''"), 10000, 'the ended bid'),
+      /Your last bid here[\s\S]*Ended[\s\S]*Your turn ran out before you booked or passed it/i);
 
     // Choosing offices on the join form narrows it to them.
     await ui.evaluate(`(() => { const f = document.getElementById('bidForm'); const set = (n, v) => { const el = f.querySelector('[name=' + n + ']');
@@ -1714,6 +1726,10 @@ test('recent openings: the venues being looked at, a bid\'s own offices, how lon
     // A line with a bid: its own offices, each held up against it.
     await ui.evaluate("document.querySelector('[data-page=console]').click()");
     await until(() => ui.evaluate("Boolean(document.querySelector('[data-feed-open=\"8\"]'))"), 10000, 'the position');
+    assert.match(await ui.evaluate("(document.querySelector('.ended-card') || {}).innerText || ''"),
+      /Ended in the last day[\s\S]*REAL ID application[\s\S]*Your turn ran out[\s\S]*Bid again/i);
+    await ui.evaluate("document.querySelector('[data-ended-away=\"7\"]').click()");
+    assert.equal(await ui.evaluate("Boolean(document.querySelector('.ended-card'))"), false, 'put away');
     await ui.evaluate("document.querySelector('[data-feed-open=\"8\"]').click()");
     await until(() => seen.openings.some((o) => o.bid_id === 8), 10000, 'asked about the bid');
     assert.match(await until(async () => { const x = await card(); return /your bid would take/.test(x) && x; }, 10000, 'the console tab'),

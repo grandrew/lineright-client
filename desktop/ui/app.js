@@ -1102,7 +1102,7 @@
       state.route = { ...state.route, change: false };
       openChange(b);
     }
-    const shape = `${b.mine ? b.mine.status : 'none'}|${b.handoff ? b.handoff.job_id : ''}|${paired()}|${state.change ? state.change.bidId : ''}`;
+    const shape = `${b.mine ? b.mine.status : 'none'}|${b.handoff ? b.handoff.job_id : ''}|${paired()}|${state.change ? state.change.bidId : ''}|${b.mine ? '' : endedLately(state.doc, q.id).map((x) => x.bid_id).join(',')}`;
     const editing = document.activeElement && document.activeElement.closest('#bidForm, #changePanel');
     if (page.querySelector('#boardRows') && (shape === state.boardShape || editing)) {
       // Patch in place: the rows and the numbers, not the form somebody is typing in.
@@ -1114,7 +1114,7 @@
       return;
     }
     state.boardShape = shape;
-    const side = b.mine ? youPanel(b) : joinPanel(b);
+    const side = b.mine ? youPanel(b) : `${endedCard(endedLately(state.doc, q.id), { board: true })}${joinPanel(b)}`;
     const offers = byOffers(q);
     page.innerHTML = `<div class="wrap" style="--accent-raw:${esc(q.accent)}">
       ${q.mock ? `<div class="note test-note" style="margin-bottom:14px">${TEST_NOTE}</div>` : ''}
@@ -1161,6 +1161,7 @@
       </div>
     </div>`;
     wireBoard(b);
+    wireEnded(page, () => { state.boardShape = ''; renderBoard(); });
     if (state.change) wireChange(b);
     if (paired() && b.openings_feed) mountFeed(boardFeedContext(b));
     if (!state.boardTimer) {
@@ -2275,6 +2276,59 @@
     if (state.route.page === 'bookings' && !state.bookingAsk) renderBookings();
   }
 
+  // -------------------------------------------------------- bids that ended
+  // A bid that ended — booked, run out, withdrawn — leaves the board and the
+  // console's positions at once. The banner that says why goes with a restart,
+  // and the bid then looked as if it had never been. So what ended in the last
+  // day stays on the console, and on its line's board, until it is put away.
+  const ENDED_FOR_MS = 24 * 3600 * 1000;
+  const ENDED_WORDS = { fulfilled: 'Booked', expired: 'Ended', failed: 'Failed', cancelled: 'Withdrawn' };
+  const ENDED_KEY = 'lr.endedSeen';
+
+  function endedSeen() {
+    try { return new Set(JSON.parse(localStorage.getItem(ENDED_KEY) || '[]').map(Number)); } catch { return new Set(); }
+  }
+
+  function putEndedAway(bidId) {
+    const seen = [...endedSeen(), Number(bidId)].slice(-50);
+    try { localStorage.setItem(ENDED_KEY, JSON.stringify(seen)); } catch { /* this session only */ }
+    state.endedHidden = new Set([...(state.endedHidden || []), Number(bidId)]);
+  }
+
+  /** The person's bids that ended in the last day and were not put away, newest first. */
+  function endedLately(doc, queueId = null) {
+    const seen = endedSeen();
+    for (const id of state.endedHidden || []) seen.add(id);
+    return ((doc && doc.settled) || []).filter((x) => x && !['active', 'processing'].includes(x.status)
+      && Date.now() - Date.parse(x.settled_at || '') < ENDED_FOR_MS && !seen.has(Number(x.bid_id))
+      && (queueId === null || Number(x.queue_id) === Number(queueId)));
+  }
+
+  function endedText(x) {
+    if (x.note) return x.note;
+    return x.status === 'fulfilled' ? 'Booked.' : x.status === 'cancelled' ? 'You withdrew it, and its credits came back.'
+      : 'It ended without a booking.';
+  }
+
+  function endedCard(list, { board = false } = {}) {
+    if (!list.length) return '';
+    return `<div class="card ended-card"><div class="panel-title" style="margin:0 0 6px">${board ? 'Your last bid here' : 'Ended in the last day'}</div>${list.map((x) => `
+      <div class="ended-row">
+        <span class="tag tag-${esc(x.status)}">${esc(ENDED_WORDS[x.status] || x.status)}</span>
+        <div style="min-width:0; flex:1">
+          <div>${board ? '' : `<a data-board="${num(x.queue_id)}"><strong>${esc(x.queue_name)}</strong></a> `}<span class="tiny muted">${board ? '' : `${esc(x.site_name)} · `}${esc(ago(x.settled_at))} · bid ${coins(x.amount)}</span></div>
+          <div class="small" style="margin-top:2px">${esc(endedText(x))}${x.confirmation ? ` Confirmation <b class="num">${esc(x.confirmation)}</b>.` : ''}</div>
+        </div>
+        <div class="ended-actions">${!board && x.status !== 'fulfilled' ? `<button class="btn btn-sm" data-board="${num(x.queue_id)}">Bid again</button>` : ''}<button class="btn btn-sm btn-ghost" data-ended-away="${num(x.bid_id)}" title="Put this away">✕</button></div>
+      </div>`).join('')}</div>`;
+  }
+
+  function wireEnded(root, redraw) {
+    for (const b of root.querySelectorAll('[data-ended-away]')) {
+      b.addEventListener('click', () => { putEndedAway(b.dataset.endedAway); redraw(); });
+    }
+  }
+
   function renderConsole() {
     const page = $('page');
     if (!paired()) return needSignin('The console');
@@ -2292,7 +2346,7 @@
     const tab = state.consoleTab;
     let body = '';
     if (tab === 'positions') {
-      body = `<div class="card">${positions.length ? positions.map((p) => `
+      body = `${endedCard(endedLately(doc))}<div class="card">${positions.length ? positions.map((p) => `
         <div class="pos-card" style="--accent-raw:${esc(p.accent)}">
           <div class="pos-rank ${p.rank === 1 ? 'lead' : ''}">${num(p.rank)}</div>
           <div style="min-width:0">
@@ -2371,6 +2425,7 @@
       ${body}
     </div>`;
     for (const b of page.querySelectorAll('.tabs button')) b.addEventListener('click', () => { state.consoleTab = b.dataset.tab; renderConsole(); });
+    wireEnded(page, renderConsole);
     for (const b of page.querySelectorAll('[data-feed-open]')) b.addEventListener('click', () => { state.feedPick = Number(b.dataset.feedOpen); state.consoleTab = 'openings'; renderConsole(); });
     for (const b of page.querySelectorAll('[data-feed-pick]')) b.addEventListener('click', () => { state.feedPick = Number(b.dataset.feedPick); renderConsole(); });
     if (tab === 'openings' && positions.length) {
@@ -3617,7 +3672,7 @@
         <span class="field-help">Now and then the site asks this app to look at a line's offices and report what it sees, from this computer, with a browser the app runs out of sight. What it finds goes to whoever is first — which may be you. With nothing else to do it also looks, slowly, at lines nobody bids on, so every line shows what was seen lately.${s.publicSite ? ' On the real DMV it is automated traffic from your own internet address, a few pages at a time, so it waits for your yes.' : ''}${perHour ? ` The site adds ${perHour} to your credits for every hour this app is checking.` : ''}</span></label></div>
       <div class="check"><input type="checkbox" id="s-bookforme" ${s.robotBooking ? 'checked' : ''}>
         <label for="s-bookforme"><span class="small"><b>Let the app book for me</b>${s.publicSite ? ' — on the real DMV (dmv.ca.gov)' : ''}</span>
-        <span class="field-help">Off until you say so: when a slot is yours, the booking page opens in a tab with your details filled in, and you book it. On, the app's robot books it with the details in your profile while that tab says what it is doing, then shows you the DMV's confirmation; if it cannot finish, the tab is yours to book in.${s.publicSite ? ' A booking it makes is a real appointment in your name.' : ''}</span></label></div>
+        <span class="field-help">On, when a slot is yours the app's robot books it with the details in your profile — even when you are away from the computer, so the turn does not run out — while a tab says what it is doing, then shows you the DMV's confirmation; if it cannot finish, the tab is yours to book in. Off, the booking page opens in a tab with your details filled in, and you book it.${s.publicSite ? ' A booking it makes is a real appointment in your name.' : ''}${s.robotBookingDefault ? (s.robotBooking ? ' <b>On by default</b>, because your profile has your name, email and phone.' : ' It turns on by itself once your profile has your name, email and phone, unless you turn it off here.') : ''}</span></label></div>
       <p class="tiny muted" style="margin:8px 0 0" id="s-robots-now">${r.booking ? `Booking ${esc(r.booking.where)} now.` : r.diagnosing ? `The AI is checking why ${esc(r.diagnosing.queue_name)} cannot be read, for the site.` : r.reading ? `${r.reading.purpose === 'watch' ? 'Watching' : 'Looking at'} ${esc(r.reading.queue_name)} now — ${num(r.reading.offices)} office${r.reading.offices === 1 ? '' : 's'}.` : lastLine}</p>
       ${bookedLine && !r.booking ? `<p class="tiny muted" style="margin:4px 0 0">${bookedLine}</p>` : ''}
     </div>`;
