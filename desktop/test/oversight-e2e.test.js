@@ -2,7 +2,7 @@
 /**
  * AI oversight, end to end on this machine: the real booking robot (dmq's
  * handler, in its own process, in a real headless browser) books on the DMV
- * stand-in (lineright-server's testsite) after the stand-in has "changed"
+ * stand-in (simulators/ca-dmv) after the stand-in has "changed"
  * under it — its buttons and labels renamed, its confirmation laid out anew
  * (the stand-in's `drift`). The robot gets stuck, offers its page over the
  * channel, and the app's real overseer takes over with the real agent loop
@@ -11,8 +11,8 @@
  * So everything is exercised but the language model itself — that is the
  * live check (scripts/oversight-live.js).
  *
- * Needs the lineright-server checkout beside this one (LINERIGHT_SERVER_DIR),
- * and Playwright's Chromium; skipped without them.
+ * Needs the robots' Playwright and its Chromium (npm ci in dmq); skipped
+ * without them.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -25,8 +25,7 @@ const { Overseer } = require('../src/overseer');
 const { bookingBrain: brain, checkBrain, diagnoseBrain, to24 } = require('./helpers/brain');
 
 const DMQ = path.join(__dirname, '..', '..', 'dmq');
-const SERVER = process.env.LINERIGHT_SERVER_DIR || path.join(__dirname, '..', '..', '..', 'lineright-server');
-const STANDIN = path.join(SERVER, 'testsite', 'server.js');
+const STANDIN = path.join(__dirname, '..', '..', 'simulators', 'ca-dmv', 'server.js');
 const HAVE = fs.existsSync(STANDIN) && fs.existsSync(path.join(DMQ, 'bin', 'rqp-handler.js'))
   && fs.existsSync(path.join(DMQ, 'node_modules', 'playwright'));
 const HOST = path.join(__dirname, '..', 'host');

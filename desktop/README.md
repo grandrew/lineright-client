@@ -129,7 +129,7 @@ starts, in this order and each as its own process:
 
 | Process | What it is | Runs on |
 |---|---|---|
-| DMV stand-in | the server checkout's `testsite/`, serving the whole office catalogue — what the robots practise on and a hand-off opens | the app's own binary as Node (`ELECTRON_RUN_AS_NODE`) |
+| DMV stand-in | this repository's DMV simulator, `simulators/ca-dmv/` (an installed app uses the server checkout's copy), serving the whole office catalogue — what the robots practise on and a hand-off opens | the app's own binary as Node (`ELECTRON_RUN_AS_NODE`) |
 | Website | the server's `regbot/app.py`: the JSON API the screens read, and the website itself | the server's Python |
 | Queue processor | the server's `regbot/worker.py`: discovery, dispatch, hand-offs, settling | the server's Python |
 | Control room | the server's `regbot/admin.py`, started the first time it is opened | the server's Python |
@@ -142,7 +142,7 @@ the supervisor.
 
 * **Only on loopback.** Every one binds `127.0.0.1`, on the port it had last
   time if that is free and any free one if not, and says so on one line when
-  it is ready (the server's `regbot/desktop_host.py` and `testsite/standin.mjs`). Nothing is reachable
+  it is ready (the server's `regbot/desktop_host.py` and the simulator's `standin.mjs`). Nothing is reachable
   from another machine.
 * **Watched.** One that exits is started again after 1 s, 2 s, 4 s … up to
   30 s, and Settings → Server shows it and the last thing it said. A Python that

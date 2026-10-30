@@ -85,8 +85,11 @@ function locate({
   const server = findServer({ appPath, env, exists });
   const regbot = server ? path.join(server, 'regbot') : null;
   const python = serverPython(regbot, { env, platform, exists });
-  const standinFile = server ? path.join(server, 'testsite', 'standin.mjs') : null;
-  const standin = standinFile && exists(standinFile) ? standinFile : null;
+  // The DMV stand-in: this repository's simulators/ca-dmv in a checkout, else
+  // the server checkout's own copy (testsite/), which an installed app uses.
+  const own = packaged ? null : path.join(path.dirname(appPath), 'simulators', 'ca-dmv', 'standin.mjs');
+  const theirs = server ? path.join(server, 'testsite', 'standin.mjs') : null;
+  const standin = [own, theirs].find((file) => file && exists(file)) || null;
   if (packaged) {
     const stack = path.join(resourcesPath, 'stack');
     return {

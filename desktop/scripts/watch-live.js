@@ -125,7 +125,7 @@ async function until(what, test, ms) {
 
 async function main() {
   const drift = args.drift === undefined ? 'offices' : String(args.drift === true ? '' : args.drift);
-  const { createState, createServer } = await import(pathToFileURL(path.join(SERVER_DIR, 'testsite', 'server.js')).href);
+  const { createState, createServer } = await import(pathToFileURL(path.join(ROOT, '..', 'simulators', 'ca-dmv', 'server.js')).href);
   const state = createState({ gate: 'off', officeCount: 0, drift, cancelIntervalMs: 1e9, busyDays: 2 });
   const dmv = createServer(state);
   await new Promise((resolve) => dmv.listen(0, '127.0.0.1', resolve));

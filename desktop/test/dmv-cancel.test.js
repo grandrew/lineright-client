@@ -1,9 +1,9 @@
 'use strict';
 /**
- * The cancel guide (src/dmv-cancel.js), and — with a lineright-server checkout
- * beside this one (or LINERIGHT_SERVER_DIR) and the robots' Playwright — the
- * guide run in a real browser on the stand-in's "View/Cancel Appointment"
- * page, which keeps the live DMV page's ids and words.
+ * The cancel guide (src/dmv-cancel.js), and — with the robots' Playwright —
+ * the guide run in a real browser on the DMV simulator's "View/Cancel
+ * Appointment" page (simulators/ca-dmv), which keeps the live DMV page's ids
+ * and words.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -12,11 +12,10 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { cancelValues, cancelScript, pickItem, listWords } = require('../src/dmv-cancel');
 
-const SERVER = path.resolve(process.env.LINERIGHT_SERVER_DIR || path.join(__dirname, '..', '..', '..', 'lineright-server'));
-const STANDIN = path.join(SERVER, 'testsite', 'server.js');
+const STANDIN = path.join(__dirname, '..', '..', 'simulators', 'ca-dmv', 'server.js');
 let playwright = null;
 try { playwright = require(path.join(__dirname, '..', '..', 'dmq', 'node_modules', 'playwright')); } catch { /* skipped below */ }
-const skip = !fs.existsSync(STANDIN) ? `no lineright-server checkout at ${SERVER} (or LINERIGHT_SERVER_DIR)`
+const skip = !fs.existsSync(STANDIN) ? `no DMV simulator at ${STANDIN}`
   : !playwright ? 'the robots\' Playwright is not installed (npm ci in dmq)' : false;
 
 test('the details the DMV page asks for, as the page wants them', () => {
@@ -73,7 +72,7 @@ test('on the View/Cancel page it cancels that appointment and leaves the others'
   const base = `http://127.0.0.1:${server.address().port}`;
   const post = async (where, body) => (await fetch(base + where, { method: 'POST',
     headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
-  const { slotsFor } = await import(pathToFileURL(path.join(SERVER, 'testsite', 'world.js')).href);
+  const { slotsFor } = await import(pathToFileURL(path.join(path.dirname(STANDIN), 'world.js')).href);
   const office = state.offices.find((o) => o.name === 'Poway');
   const days = slotsFor(state, office.code, 'VR').filter((d) => d.times.length);
   const to24 = (label) => {

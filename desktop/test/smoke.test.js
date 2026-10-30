@@ -2066,12 +2066,11 @@ test('the DMV changed under the robot: AI oversight takes it over in the app and
   { timeout: 240000 }, async (t) => {
   const electron = electronPath();
   const display = xvfb();
-  const serverDir = process.env.LINERIGHT_SERVER_DIR || path.join(__dirname, '..', '..', '..', 'lineright-server');
-  const standInJs = path.join(serverDir, 'testsite', 'server.js');
+  const standInJs = path.join(__dirname, '..', '..', 'simulators', 'ca-dmv', 'server.js');
   if (!electron || !fs.existsSync(electron)) return t.skip('electron is not installed (npm install)');
   if (!display.ok) return t.skip('no display: install xvfb or set DISPLAY');
   if (!fs.existsSync(path.join(DMQ, 'bin', 'rqp-handler.js'))) return t.skip('no ../dmq checkout');
-  if (!fs.existsSync(standInJs)) return t.skip('no lineright-server checkout for the DMV stand-in');
+  if (!fs.existsSync(standInJs)) return t.skip('no DMV simulator (simulators/ca-dmv)');
   const { bookingBrain, to24 } = require('./helpers/brain');
   const { pathToFileURL } = require('node:url');
   const { createState, createServer, slotsFor } = await import(pathToFileURL(standInJs).href);

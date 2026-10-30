@@ -13,7 +13,8 @@
  *   node scripts/oversight-live.js --server=URL --token-file=F   a site of your own, as a paired device
  *   node scripts/oversight-live.js --app=dist-X/linux-unpacked   the robots a packaged build carries, on its own binary
  *
- * A private site is the lineright server from LINERIGHT_SERVER_DIR (default
+ * The DMV is this repository's simulator (simulators/ca-dmv). A private site
+ * is the lineright server from LINERIGHT_SERVER_DIR (default
  * ../../lineright-server), on a free port with a database of its own in a
  * temporary folder: an account is made there with a simulated purchase of 500
  * credits, and a device token for it. The model's key goes to that site only,
@@ -107,7 +108,7 @@ print(json.dumps(s, default=str))
 }
 
 async function standIn(drift) {
-  const { createState, createServer, slotsFor } = await import(pathToFileURL(path.join(SERVER_DIR, 'testsite', 'server.js')).href);
+  const { createState, createServer, slotsFor } = await import(pathToFileURL(path.join(ROOT, '..', 'simulators', 'ca-dmv', 'server.js')).href);
   const state = createState({ gate: 'off', officeCount: 0, drift, cancelIntervalMs: 1e9 });
   const server = createServer(state);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

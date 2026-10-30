@@ -1,0 +1,16 @@
+{
+  "name": "lineright-testsite",
+  "version": "1.0.0",
+  "description": "A local stand-in for the California DMV appointment site: what LineRight Regbot's robots are developed and tested against",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "test:robots": "TESTSITE=1 node --test test/robots.test.js"
+  }
+}

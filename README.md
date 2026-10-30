@@ -14,8 +14,10 @@ in, when the site wants a person.
 |---|---|
 | [`desktop/`](desktop/) | The Electron app: screens, sign-in by code, the profile kept on this machine, bringing details across from a browser, the robots it runs for the site, booking a hand-off, the numbers it shares when its person says so, and the trace the site asks for, with the person taken out. Its [README](desktop/README.md) is the long version. |
 | [`dmq/`](dmq/) | The California DMV robots (Node + Playwright): look for openings (`bin/rqp-scout.js`) and book one (`bin/rqp-handler.js`) over RQP/1 envelopes on a pipe, and the office catalogue. Its [README](dmq/README.md) says how they work, and where they stop. |
+| [`simulators/`](simulators/) | Copies of booking sites that run on your own computer, which the robots are built and tested against so that no test takes a real appointment. [`ca-dmv/`](simulators/ca-dmv/) is the California DMV's. |
+| [`docs/adding-a-line.md`](docs/adding-a-line.md) | Bringing a line for another booking site: what a line is made of, what can be built here today, and what is still missing. |
 
-Installers for Windows and Linux are on the [releases page](https://github.com/grandrew/lineright-client/releases),
+Installers for Windows, macOS and Linux are on the [releases page](https://github.com/grandrew/lineright-client/releases),
 which is also where an installed app updates itself from.
 
 ## What leaves your computer
@@ -56,15 +58,15 @@ The app talks to it only over its JSON API, as any client could, and pairs with
 an account there by a code the person approves in their browser — the app never
 sees their password.
 
-The maintainers keep two more things with the server: a stand-in of the DMV
-appointment site, which the robots' browser flows are tested against end to end
-so that no test ever consumes a real appointment, and the long-running tests
-that run real apps against it. With a checkout of the server beside this one
-(`../lineright-server`, or `LINERIGHT_SERVER_DIR`), the app in **developer
-mode** (View → Developer mode, or `npm start -- --developer`) also offers
-**Practice on this computer**, which runs that server and the stand-in locally,
-and a few tests that hold the two halves to one contract stop skipping. Nothing
-of the server is ever built into an installer.
+The maintainers keep the long-running tests that run real apps against the
+server with it. The DMV simulator the robots are tested against is here, in
+[`simulators/ca-dmv/`](simulators/ca-dmv/), and runs without the server. With a
+checkout of the server beside this one (`../lineright-server`, or
+`LINERIGHT_SERVER_DIR`), the app in **developer mode** (View → Developer mode,
+or `npm start -- --developer`) also offers **Practice on this computer**, which
+runs that server and the simulator locally, and a few tests that hold the two
+halves to one contract stop skipping. Nothing of the server, and no simulator,
+is ever built into an installer.
 
 Developer mode is also where the made-up sites a development server lists are
 shown — marked as test sites — and where the app can be pointed at another
@@ -84,7 +86,8 @@ npm test                # smoke runs need a display (xvfb-run on Linux)
 and the robots' own tests:
 
 ```bash
-cd dmq && npm test
+cd dmq && npm test && cd ..
+cd simulators/ca-dmv && npm test && npm run test:robots   # the robots through the DMV simulator
 ```
 
 Installers are built by `.github/workflows/desktop-release.yml` when a

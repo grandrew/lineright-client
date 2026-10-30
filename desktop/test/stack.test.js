@@ -409,6 +409,11 @@ test('a checkout finds lineright-server beside it, with its virtualenv, else wha
   assert.equal(found.standin, standin, "the DMV stand-in is the server checkout's");
   assert.equal(locate({ packaged: false, appPath: app, platform: 'linux', env: {}, exists: some(host) }).standin, null,
     'a checkout from before the stand-in moved there has none');
+  const own = path.resolve('/src/lineright-client/simulators/ca-dmv/standin.mjs');
+  assert.equal(locate({ packaged: false, appPath: app, platform: 'linux', env: {}, exists: some(host, standin, own) }).standin,
+    own, "this repository's own simulator comes first");
+  assert.equal(locate({ packaged: true, resourcesPath: '/opt/r', appPath: app, platform: 'linux', env: {},
+    exists: some(host, standin, own) }).standin, standin, 'an installed app has none of its own');
   assert.equal(found.python, venv);
   assert.equal(found.dmq, path.resolve('/src/lineright-client/dmq'));
   assert.equal(found.host, path.join(app, 'host'));

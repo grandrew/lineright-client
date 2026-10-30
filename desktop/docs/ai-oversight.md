@@ -168,7 +168,7 @@ node scripts/watch-live.js                       # watching lines: a private sit
 node scripts/watch-live.js --model=deepseek      # the same with DeepSeek (DEEPSEEK_API_KEY in the environment)
 ```
 
-The DMV stand-in (lineright-server's `testsite/`) changes under the robot on
+The DMV stand-in (`simulators/ca-dmv/`) changes under the robot on
 request — `{"drift": "labels"}` to `/__admin/config`, or `TESTSITE_DRIFT` —
 renaming the buttons and labels the robot looks for, the office button, or
 how the confirmation is laid out.
