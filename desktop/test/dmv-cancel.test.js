@@ -13,6 +13,7 @@ const { pathToFileURL } = require('node:url');
 const { cancelValues, cancelScript, pickItem, listWords } = require('../src/dmv-cancel');
 
 const STANDIN = path.join(__dirname, '..', '..', 'simulators', 'ca-dmv', 'server.js');
+require('./helpers/browsers');
 let playwright = null;
 try { playwright = require(path.join(__dirname, '..', '..', 'dmq', 'node_modules', 'playwright')); } catch { /* skipped below */ }
 const skip = !fs.existsSync(STANDIN) ? `no DMV simulator at ${STANDIN}`

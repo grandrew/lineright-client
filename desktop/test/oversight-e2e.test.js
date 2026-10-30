@@ -23,6 +23,7 @@ const { pathToFileURL } = require('node:url');
 const { RobotRunner } = require('../src/robots');
 const { Overseer } = require('../src/overseer');
 const { bookingBrain: brain, checkBrain, diagnoseBrain, to24 } = require('./helpers/brain');
+const { browsers } = require('./helpers/browsers');
 
 const DMQ = path.join(__dirname, '..', '..', 'dmq');
 const STANDIN = path.join(__dirname, '..', '..', 'simulators', 'ca-dmv', 'server.js');
@@ -59,7 +60,7 @@ async function book(drift, { oversight = true } = {}) {
     getStatus: () => ({ available: oversight, step_credits: 1.7, session_credits: 150 }),
     log: (m) => log.push(m),
   });
-  const runner = new RobotRunner({ paths: { dmq: DMQ, browsers: null, host: HOST, packaged: false }, node: process.execPath,
+  const runner = new RobotRunner({ paths: { dmq: DMQ, browsers, host: HOST, packaged: false }, node: process.execPath,
     stateDir: path.join(dir, 'robots'), env: { PATH: process.env.PATH, HOME: process.env.HOME } });
   const h = { job_id: 77, queue_name: 'Vehicle registration', site_name: 'California DMV', connector: 'dmv.ca.gov.qmatic',
     slot: { office_name: 'Poway', date: site.target.date, time: site.target.time },
@@ -156,7 +157,7 @@ test('a site described in plain words: the AI alone checks what is open, booking
   const reports = [];
   const opened = [];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-task-'));
-  const runner = new RobotRunner({ paths: { dmq: DMQ, browsers: null, host: HOST, packaged: false }, node: process.execPath,
+  const runner = new RobotRunner({ paths: { dmq: DMQ, browsers, host: HOST, packaged: false }, node: process.execPath,
     stateDir: path.join(dir, 'robots'), env: { PATH: process.env.PATH, HOME: process.env.HOME } });
   try {
     const run = await runSiteTask({
@@ -197,7 +198,7 @@ test('a line the robots cannot read: the scout fails, and the AI check on the si
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-check-'));
-  const runner = new RobotRunner({ paths: { dmq: DMQ, browsers: null, host: HOST, packaged: false }, node: process.execPath,
+  const runner = new RobotRunner({ paths: { dmq: DMQ, browsers, host: HOST, packaged: false }, node: process.execPath,
     stateDir: path.join(dir, 'robots'), env: { PATH: process.env.PATH, HOME: process.env.HOME } });
   try {
     // The site's check read: the scout, as the app runs it, on the office that failed.
