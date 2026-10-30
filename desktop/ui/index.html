@@ -49,6 +49,8 @@
     </div>
   </div>
 
+  <!-- Keep the app open, or it can't book: at every start until told not to (keepopen.js). -->
+  <div id="keepbar" class="hidden" role="note"></div>
   <div id="banner" class="hidden"></div>
   <div id="situation" class="hidden"></div>
   <div id="foundform" class="section hidden"></div>
@@ -63,6 +65,8 @@
 <div id="modal" class="hidden"></div>
 <!-- My Bookings asks here before it cancels an appointment (bookings.js). -->
 <div id="askbox" class="hidden"></div>
+<!-- Said once at start, over everything, until the person has understood it (keepopen.js). -->
+<div id="keepbox" class="hidden"></div>
 
 <script src="charts.js"></script>
 <script src="advice.js"></script>
@@ -72,6 +76,7 @@
 <script src="bookings.js"></script>
 <script src="situation.js"></script>
 <script src="bidchange.js"></script>
+<script src="keepopen.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

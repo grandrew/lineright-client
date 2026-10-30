@@ -547,3 +547,23 @@ aside .ended-card{margin-bottom:0}
 .ended-row:first-of-type{border-top:none; padding-top:2px}
 .ended-row > .tag{flex:none; margin-top:2px}
 .ended-actions{display:flex; gap:6px; flex:none}
+/* Keep the app open (keepopen.js): a bar along the top at each start, and a notice over the app once */
+#keepbar{display:flex; align-items:center; gap:12px; padding:7px 14px; background:var(--accent-soft);
+  border-bottom:1px solid color-mix(in srgb,var(--accent-raw) 22%,transparent); font-size:13px}
+#keepbar.hidden, body.mode-tab #keepbar{display:none}
+#keepbar .mark{font-size:17px; color:var(--accent)}
+#keepbar .text{flex:1; min-width:0}
+#keepbar .text b{color:var(--accent)}
+#keepbar .actions{display:flex; gap:10px; align-items:center; flex-shrink:0}
+.keep-never{display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none}
+.keep-never input{margin:0}
+#keepbox{position:fixed; inset:0; z-index:42; display:flex; align-items:center; justify-content:center; padding:16px;
+  background:color-mix(in srgb,var(--ink-base) 38%,transparent)}
+#keepbox.hidden{display:none}
+#keepbox .modal{width:100%; max-width:460px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
+  box-shadow:0 24px 60px -20px rgba(16,26,45,.45); padding:24px 26px}
+#keepbox h2{font-size:19px; margin:0 0 10px}
+#keepbox p{margin:0 0 8px}
+.keep-list{margin:10px 0 12px; padding-left:20px}
+.keep-list li{margin:4px 0}
+@media (max-width: 720px){#keepbar{flex-wrap:wrap} #keepbar .actions{width:100%; justify-content:flex-end}}

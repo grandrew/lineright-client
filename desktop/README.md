@@ -672,6 +672,18 @@ site says otherwise, one app's time per account). The status line says *checking
 lines, +⧗0.2/h* while it counts, and **Credits** shows the hours, what they
 earned, and the weekly top-up back to ⧗35 that every account gets.
 
+**Keeping the app running.** The app books a turn only while it is open, on a
+computer that is on, awake and online. So it keeps the computer from going to
+sleep while it runs (`src/awake.js`: Electron's power-save blocker,
+`prevent-app-suspension` — the screen still turns off and locks). It cannot stop
+a laptop's lid from putting it to sleep, nor a shutdown. The window says so
+twice (`ui/keepopen.js`): a short notice over the app at start, until its
+person ticks *Understood, do not show this again*, and a bar along the top at
+every start, until they tick *Don't remind me again* and close it. Settings →
+Keeping the app running turns the staying awake off and the bar back on. When
+the computer slept anyway and wakes after two minutes or more, the app says for
+how long, and syncs at once.
+
 ## AI booking oversight
 
 When the robot gets stuck booking your slot — the DMV changed a page under it —
@@ -894,6 +906,7 @@ each:
 | `src/server-choice.js` | Which server a run talks to, and with what token: `--practice`, `--server`, Settings, `config.json` |
 | `src/developer.js` | Developer mode: whether it is on and what holds it on, and which sites are made-up test sites |
 | `src/robots.js` | Runs the DMV robots (`../dmq`'s scout and booking handler) for the regbot site, on the app's own binary, and decides where they may go |
+| `src/awake.js` | Keeping the computer awake while the app runs |
 | `src/reader.js` | Looking for openings when the site hands this device a read, and answering it |
 | `src/booker.js` | Booking the person's own slot with the robot when the site hands it over, and what comes of it |
 | `src/overseer.js` | AI booking oversight: hearing the robot as it books, taking it over when it is stuck, and reporting what it did ([docs/ai-oversight.md](docs/ai-oversight.md)) |

@@ -47,6 +47,8 @@
     checkoutTimer: null,
     advRange: '1h', advTimer: null, advPreview: null, advTrace: false,
     again: null,       // the weekly re-import, when it is asking: {due, sources, busy, result} (reimport.js)
+    keepBarClosed: false,    // the keep-the-app-open bar, closed with × this run (keepopen.js)
+    keepNoticeClosed: false, // its notice, closed with OK this run
     againKey: '',
     bookings: null,    // the appointments, each with its next reminder and how a cancel goes (src/bookings.js)
     bookingsAll: null, bookingsAllAt: 0, bookingsLoading: false, bookingsPainted: 0,
@@ -3508,6 +3510,50 @@
     if (primary) setTimeout(() => primary.focus(), 0);
   }
 
+  // ------------------------------------------------------------- keeping the app open
+  // keepopen.js: the notice over the app when it starts, and the bar along the top.
+  function renderKeep() {
+    const K = window.keepOpen;
+    const s = state.settings;
+    const bar = $('keepbar');
+    const barShown = K.showBar(s, state.keepBarClosed);
+    if (barShown && !bar.innerHTML) {
+      bar.innerHTML = K.bar();
+      $('keepbar-close').addEventListener('click', async () => {
+        const never = $('keepbar-never').checked;
+        state.keepBarClosed = true;
+        renderKeep();
+        if (!never) return;
+        try {
+          state.settings = await call('settings:set', { keepOpenRemind: false });
+          toast('ok', 'No more reminders. Settings → Keeping the app running turns them back on.');
+        } catch (err) {
+          toast('bad', err.message);
+        }
+      });
+    }
+    if (!barShown) bar.innerHTML = '';
+    bar.classList.toggle('hidden', !barShown);
+    const box = $('keepbox');
+    const noticeShown = K.showNotice(s) && !state.keepNoticeClosed;
+    if (noticeShown && !box.innerHTML) {
+      box.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="keep-title">${K.notice(s)}</div>`;
+      const ok = async () => {
+        const never = $('keep-never').checked;
+        state.keepNoticeClosed = true;
+        renderKeep();
+        if (!never) return;
+        try { state.settings = await call('settings:set', { keepOpenUnderstood: true }); } catch (err) { toast('bad', err.message); }
+      };
+      $('keep-ok').addEventListener('click', ok);
+      box.onkeydown = (e) => { if (e.key === 'Escape') ok(); };
+      setTimeout(() => { const b = $('keep-ok'); if (b) b.focus(); }, 0);
+    }
+    if (!noticeShown) { box.innerHTML = ''; box.onkeydown = null; }
+    box.classList.toggle('hidden', !noticeShown);
+    fit();
+  }
+
   // ------------------------------------------------------------- settings
   function updateText(u) {
     switch ((u || {}).phase) {
@@ -3633,6 +3679,21 @@
       <div class="check" style="margin-bottom:0"><input type="checkbox" id="s-autowiden" ${prefs.auto_widen ? 'checked' : ''}>
         <label for="s-autowiden"><span class="small"><b>Widen my bids by themselves</b></span>
         <span class="field-help">When a bid's time passes with nothing booked, its reach climbs a step — 5 hours becomes a day, 5 days two weeks — and again each day after, until a booking comes. It keeps its amount and its place in line. This sets every bid you have now and the ones you place next; a bid's own board can still switch it for that bid.</span></label></div></div>`;
+  }
+
+  // Keeping the app running (the main process's awake.js, keepopen.js): the
+  // computer kept awake, and the bar at every start.
+  function keepPanel(s) {
+    const a = s.keepAwake || {};
+    const k = s.keepOpen || {};
+    return `<div class="panel" id="s-keep"><div class="panel-title">Keeping the app running</div>
+      <p class="small" style="margin:0 0 10px">The app books your turn only while it is open and the computer is on, awake and online. Closing a laptop's lid puts it to sleep, whatever is set here.</p>
+      <div class="check"><input type="checkbox" id="s-awake" ${a.on !== false ? 'checked' : ''}>
+        <label for="s-awake"><span class="small"><b>Keep this computer awake while the app runs</b></span>
+        <span class="field-help">The computer does not go to sleep by itself while the app is open. The screen still turns off and locks as usual.${a.on !== false && a.held === false ? ' <b>This computer did not agree to stay awake:</b> set it never to sleep in its power settings.' : ''}</span></label></div>
+      <div class="check" style="margin-bottom:0"><input type="checkbox" id="s-keepremind" ${k.remind !== false ? 'checked' : ''}>
+        <label for="s-keepremind"><span class="small"><b>Remind me at every start to keep the app open</b></span>
+        <span class="field-help">A bar along the top of the app.</span></label></div></div>`;
   }
 
   function remindersPanel(s) {
@@ -3796,6 +3857,7 @@
       <div id="settingsForm" class="stack">
         ${serverPanel(s)}
         ${biddingPanel()}
+        ${keepPanel(s)}
         ${remindersPanel(s)}
         <div class="panel"><div class="panel-title">Updates</div>
           <p class="small" style="margin:0 0 10px"><span id="s-update-text">${esc(updateText(s.updates))}</span> <button class="btn btn-sm" id="s-check" ${s.updates && s.updates.phase === 'disabled' ? 'disabled' : ''} style="margin-left:8px">Check now</button></p>
@@ -3848,6 +3910,23 @@
       });
     }
     on('s-remtry', () => api.call('bookings:try'));
+    const awakeBox = $('s-awake');
+    if (awakeBox) {
+      awakeBox.addEventListener('change', guarded(async () => {
+        state.settings = await call('settings:set', { keepAwake: awakeBox.checked });
+        toast(awakeBox.checked ? 'ok' : 'warn', awakeBox.checked ? 'The computer stays awake while the app runs.'
+          : 'The computer may go to sleep as it is set to — and then the app cannot book your turn.');
+        renderSettings(false);
+      }));
+    }
+    const remindBox = $('s-keepremind');
+    if (remindBox) {
+      remindBox.addEventListener('change', guarded(async () => {
+        state.settings = await call('settings:set', { keepOpenRemind: remindBox.checked });
+        if (remindBox.checked) state.keepBarClosed = false;
+        renderKeep();
+      }));
+    }
     const widenBox = $('s-autowiden');
     if (widenBox) {
       widenBox.addEventListener('change', async () => {
@@ -4094,7 +4173,7 @@
     if (again && again.due) { state.again = again; renderAgain(); }
   });
   api.call('settings:get').then((s) => {
-    state.settings = s; state.stack = s.stack; renderStatus(); renderDev();
+    state.settings = s; state.stack = s.stack; renderStatus(); renderDev(); renderKeep();
     // The help and the sign-in screen say more in developer mode.
     if (s.developer && s.developer.on && ['help', 'signin'].includes(state.route.page)) render();
   });

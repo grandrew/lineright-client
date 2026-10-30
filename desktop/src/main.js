@@ -29,7 +29,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const {
   app, BaseWindow, WebContentsView, ipcMain, Menu, Notification, dialog, safeStorage, session,
-  shell: osShell, powerMonitor,
+  shell: osShell, powerMonitor, powerSaveBlocker,
 } = require('electron');
 
 const { Store, bundled } = require('./store');
@@ -67,6 +67,7 @@ const { watchTab } = require('./pagelog');
 const { Scrubber } = require('./scrub');
 const { TraceStore } = require('./traces');
 const { TraceTaps } = require('./tracetaps');
+const { Awake } = require('./awake');
 
 const CHROME_BASE = 98;          // tab strip + address bar + the line, in browser mode
 const SITES_EVERY_MS = 10 * 60 * 1000;
@@ -206,6 +207,8 @@ let sharing = false;              // a share is on its way to the site
 let shareAccepted = null;         // what the site said, on the last sync, about taking shares
 let autoShareAfter = 0;           // no automatic share before this (epoch ms): after a refusal
 let asked = null;                 // the lines this person asked for, as the last sync said: id -> answered_at
+let awake = null;                 // keeping the computer from sleeping while the app runs (awake.js)
+let sleptAt = 0;                  // when the computer last went to sleep anyway (epoch ms), 0 when awake
 let generation = 0;               // counts resets: a robot's answer from before one is dropped
 const opened = new Set();         // hand-off job ids a tab was opened for
 const confirmationTabs = new Map(); // hand-off job id -> the tab its DMV confirmation opened in
@@ -1266,6 +1269,41 @@ function noteOversight(o) {
  * Said once: the app books the person's turns itself now, because their profile
  * is full and they have not said otherwise (booker.js `mayBook`).
  */
+/**
+ * The computer went to sleep anyway — a laptop's lid closed, the power button,
+ * a battery run down — and woke again. While it slept the app looked at nothing
+ * and booked nothing: once it is back, the person hears for how long, and the
+ * app asks the site straight away what it missed.
+ */
+function wireSleep() {
+  try {
+    powerMonitor.on('suspend', () => {
+      sleptAt = Date.now();
+      log('the computer is going to sleep: the app cannot check lines or book until it wakes');
+    });
+    powerMonitor.on('resume', () => noteWoke());
+  } catch { /* not on this system */ }
+}
+
+/** Asleep for less than this is not worth a word. */
+const SLEEP_SAID_MS = 2 * 60000;
+
+function noteWoke(now = Date.now()) {
+  const from = sleptAt;
+  sleptAt = 0;
+  if (loop) loop.poke();
+  if (!from) return;
+  const minutes = Math.round((now - from) / 60000);
+  log(`the computer woke after ${minutes} min asleep`);
+  if (now - from < SLEEP_SAID_MS) return;
+  const hours = Math.floor(minutes / 60);
+  const asleep = hours ? `${hours} hour${hours === 1 ? '' : 's'}${minutes % 60 ? ` ${minutes % 60} min` : ''}` : `${minutes} minutes`;
+  const bidding = Boolean(lastDoc && (lastDoc.positions || []).length);
+  send('toast', { kind: 'warn', ms: 30000, text: `This computer was asleep for ${asleep}${bidding
+    ? ', so the app could not book your turn if it came meanwhile' : ', and the app could do nothing meanwhile'}. `
+    + 'Keep the app open and the computer on: closing a laptop\'s lid puts it to sleep.' });
+}
+
 function noteBookingDefault() {
   if (builtin() || store.get('robotBookingNoticed', false) || bookingChoice(store) !== null) return;
   if (!profile || !mayBook(store, profile.values())) return;
@@ -1890,6 +1928,7 @@ function startTrace() {
     mem_gb: Math.round(os.totalmem() / 1e8) / 10, server: originOf(client.serverUrl) || undefined,
     paired: client.paired, profile: profileShape(), reader: store.get('readerEnabled', true) !== false,
     robot_booking: mayBook(store, profile ? profile.values() : {}), robot_booking_default: bookingChoice(store) === null,
+    keep_awake: store.get('keepAwake', true) !== false,
   });
 }
 
@@ -2048,6 +2087,10 @@ function settingsView() {
     robotBookingDefault: bookingChoice(store) === null,
     // A sound with each reminder before an appointment (bookings.js).
     reminderSound: store.get('reminderSound', true) !== false,
+    // Keeping the app running: the computer kept awake (awake.js), and the
+    // notice and the reminder that say to keep the app open (ui/keepopen.js).
+    keepAwake: awake ? awake.state() : { on: store.get('keepAwake', true) !== false, held: false },
+    keepOpen: { understood: Boolean(store.get('keepOpenUnderstood', false)), remind: store.get('keepOpenRemind', true) !== false },
     // AI booking oversight (overseer.js): whether the person has it on, and the site's terms.
     oversight: overseer ? overseer.state() : null,
     realDmvChecks: reader ? reader.mayLookAtRealDmv() : false,
@@ -2436,7 +2479,8 @@ function wireIpc() {
   // -- the rest
   handle('settings:get', () => settingsView());
   handle('settings:set', async ({ serverMode: mode, serverUrl, updateUrl, clientName, readerEnabled, robotBooking,
-    checking, realDmvChecks, reimportRemind, logKeepDays, reminderSound, aiOversight }) => {
+    checking, realDmvChecks, reimportRemind, logKeepDays, reminderSound, aiOversight,
+    keepAwake, keepOpenUnderstood, keepOpenRemind }) => {
     // Another server, practice and an update feed of the app's own are for the
     // people who work on regbot: developer mode's, wherever the asking came from.
     const elsewhere = mode === 'builtin' || mode === 'remote'
@@ -2473,6 +2517,12 @@ function wireIpc() {
       store.set('reminderSound', reminderSound);
       sendBookings();
     }
+    if (typeof keepAwake === 'boolean') {
+      store.set('keepAwake', keepAwake);
+      if (awake) awake.apply();
+    }
+    if (typeof keepOpenUnderstood === 'boolean') store.set('keepOpenUnderstood', keepOpenUnderstood);
+    if (typeof keepOpenRemind === 'boolean') store.set('keepOpenRemind', keepOpenRemind);
     if (typeof aiOversight === 'boolean') {
       // Kept with when it was said: it lets the app spend the person's bought credits.
       store.set('aiOversight', aiOversight);
@@ -2504,6 +2554,7 @@ function wireIpc() {
     if (traces) {
       // What was switched, by name: never an address or a name.
       const said = { mode, readerEnabled, robotBooking, checking, realDmvChecks, reimportRemind,
+        keepAwake, keepOpenUnderstood, keepOpenRemind,
         logKeepDays: logKeepDays === undefined ? undefined : Number(logKeepDays) };
       const changed = Object.fromEntries(Object.entries(said).filter(([, v]) => typeof v === 'boolean'
         || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && /^[a-z]{1,12}$/.test(v))));
@@ -2642,6 +2693,7 @@ async function resetEverything() {
     if (closing) return;
     if (telemetry) telemetry.clear();
     loadState();
+    if (awake) awake.apply();
     if (traces) {
       traces.reset();
       scrubber.setProfile(profile.values());
@@ -2821,6 +2873,10 @@ async function main() {
   wireTelemetry();
   loadState();
   wireTraces();
+  // Asleep, the computer books nothing: the app keeps it awake while it runs, unless told not to.
+  awake = new Awake({ blocker: powerSaveBlocker, store: { get: (key, fallback) => store.get(key, fallback) }, log });
+  awake.apply();
+  wireSleep();
   // What is older than the logs are kept for goes: now, and every hour after.
   logbook.prune();
   pruneTimer = setInterval(() => logbook.prune(), 60 * 60 * 1000);
