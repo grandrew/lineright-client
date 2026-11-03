@@ -319,6 +319,15 @@ class SyncClient {
     return this.request('/api/client/account', { method: 'GET' });
   }
 
+  /** What happened to this person's bids, turns, bookings and credits, the newest first
+   *  (the site's history.py): `before` an instant for the page after the last. */
+  async history(before = '', limit = 50) {
+    const q = new URLSearchParams();
+    if (before) q.set('before', String(before));
+    if (limit) q.set('limit', String(limit));
+    return this.request(`/api/client/history${q.toString() ? `?${q}` : ''}`, { method: 'GET' });
+  }
+
   /** Every appointment this person's bids ended in, the latest first (the site's bookings.py). */
   async bookings() {
     return this.request('/api/client/bookings', { method: 'GET' });

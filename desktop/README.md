@@ -684,6 +684,24 @@ Keeping the app running turns the staying awake off and the bar back on. When
 the computer slept anyway and wakes after two minutes or more, the app says for
 how long, and syncs at once.
 
+**What happened, and never a silent nothing.** The site keeps the history of a
+person's bids, turns, bookings and credits — every bid's events (joined,
+raised, the turn, passed, ran out, booked, withdrawn, ended and what came
+back), credits bought, given and earned (a day to an entry), and an
+appointment that is tomorrow or has been — and words each entry (its
+`history.py`). **History** in the top bar lists it all, under each day, the
+newest first, a page at a time, with a button where there is something to do
+(bid again, My Bookings). The website's account page shows the same. Each sync
+carries the significant ones of the last fortnight, and the newest that nobody
+closed stays on a bar along the top (`ui/events.js`) until it is closed with ×;
+then the one before it shows, so none goes by unseen, and closed ones are
+remembered across restarts (`src/appevents.js`). The app adds its own entries
+there: on a Mac, an update macOS refused to install — the app is signed ad
+hoc, with no Apple Developer ID, so every update fails its signature check —
+says so with the four steps to replace the app by hand and a button to the
+download page; Settings → Updates says it too. A Mac app too old to say it
+gets the same from the site, as a suggestion it already shows.
+
 ## AI booking oversight
 
 When the robot gets stuck booking your slot — the DMV changed a page under it —
@@ -907,6 +925,7 @@ each:
 | `src/developer.js` | Developer mode: whether it is on and what holds it on, and which sites are made-up test sites |
 | `src/robots.js` | Runs the DMV robots (`../dmq`'s scout and booking handler) for the regbot site, on the app's own binary, and decides where they may go |
 | `src/awake.js` | Keeping the computer awake while the app runs |
+| `src/appevents.js` | This app's own history entries (a Mac update to make by hand), and the events closed on the bar |
 | `src/reader.js` | Looking for openings when the site hands this device a read, and answering it |
 | `src/booker.js` | Booking the person's own slot with the robot when the site hands it over, and what comes of it |
 | `src/overseer.js` | AI booking oversight: hearing the robot as it books, taking it over when it is stuck, and reporting what it did ([docs/ai-oversight.md](docs/ai-oversight.md)) |

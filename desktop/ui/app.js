@@ -49,6 +49,9 @@
     again: null,       // the weekly re-import, when it is asking: {due, sources, busy, result} (reimport.js)
     keepBarClosed: false,    // the keep-the-app-open bar, closed with × this run (keepopen.js)
     keepNoticeClosed: false, // its notice, closed with OK this run
+    events: { app: [], closed: [] }, // this app's own history entries, and the events closed on the bar (events.js)
+    eventKey: '',      // what the bar shows now
+    history: null,     // the History page: {events, more, before, loading, error}
     againKey: '',
     bookings: null,    // the appointments, each with its next reminder and how a cancel goes (src/bookings.js)
     bookingsAll: null, bookingsAllAt: 0, bookingsLoading: false, bookingsPainted: 0,
@@ -297,7 +300,7 @@
     const link = (label, page, params) => `<a data-go="${esc(JSON.stringify({ page, params: params || {} }))}">${esc(label)}</a>`;
     const here = (label) => `<span class="here">${esc(label)}</span>`;
     // The two top-level screens are already named by the buttons beside the crumbs.
-    if (r.page === 'sites' || r.page === 'console' || r.page === 'bookings') { /* nothing */ }
+    if (r.page === 'sites' || r.page === 'console' || r.page === 'bookings' || r.page === 'history') { /* nothing */ }
     else if (r.page === 'site') { const d = state.siteDocs[r.slug]; parts.push(link('Sites', 'sites'), here(d ? d.site.name : r.slug)); }
     else if (r.page === 'board') {
       const b = state.board && state.board.queue.id === Number(r.id) ? state.board : null;
@@ -727,6 +730,7 @@
       case 'board': return renderBoard();
       case 'console': return renderConsole();
       case 'bookings': return renderBookings();
+      case 'history': state.history = null; return renderHistory();
       case 'profile': return renderProfile();
       case 'import': return renderImport();
       case 'settings': state.resetAsk = false; return renderSettings(true);
@@ -3510,6 +3514,82 @@
     if (primary) setTimeout(() => primary.focus(), 0);
   }
 
+  // ------------------------------------------------------------- what happened
+  // events.js: the bar with the newest significant event nobody closed, and
+  // the History page with all of it, the site's and this app's own.
+  function eventAct(what, e) {
+    if (!e) return;
+    if (what === 'close') {
+      api.call('events:close', { key: e.key }).then((v) => { if (v) state.events = v; renderEventBar(); }).catch(() => {});
+      state.events.closed = [...state.events.closed, e.key];
+      renderEventBar();
+    } else if (what === 'bid_again' || what === 'board') {
+      go('board', { id: e.queue_id });
+    } else if (what === 'bookings') {
+      go('bookings');
+    } else if (what === 'history') {
+      go('history');
+    } else if (what === 'download' && e.url) {
+      api.call('tabs:external', { url: e.url });
+    }
+  }
+
+  function renderEventBar() {
+    const box = $('eventbar');
+    const E = window.eventsBar;
+    const { event, more } = E.pick(state.doc && state.doc.events, state.events.app, state.events.closed);
+    const key = event ? `${event.key}|${more}|${event.title}|${event.text}` : '';
+    if (key === state.eventKey) return;
+    state.eventKey = key;
+    if (!event) { box.innerHTML = ''; box.className = 'hidden'; fit(); return; }
+    box.className = `ev-${['ok', 'bad', 'warn', 'info'].includes(event.tone) ? event.tone : 'info'}`;
+    box.innerHTML = E.bar(event, more);
+    for (const b of box.querySelectorAll('[data-ev]')) b.addEventListener('click', () => eventAct(b.dataset.ev, event));
+    fit();
+  }
+
+  async function loadHistory(older) {
+    const h = state.history || (state.history = { events: [], more: false, before: '', loading: false, error: '' });
+    if (h.loading) return;
+    h.loading = true;
+    h.error = '';
+    try {
+      const r = await call('server:history', { before: older ? h.before : '', limit: 50 });
+      const got = Array.isArray(r.events) ? r.events : [];
+      h.events = older ? [...h.events, ...got] : got;
+      h.more = Boolean(r.more);
+      h.before = r.before || (got.length ? got[got.length - 1].at : h.before);
+    } catch (err) {
+      h.error = err.message;
+    }
+    h.loading = false;
+    if (state.route.page === 'history') renderHistory();
+  }
+
+  function renderHistory() {
+    const page = $('page');
+    const signedIn = paired();
+    if (signedIn && !state.history) { loadHistory(false); }
+    const h = state.history || { events: [], more: false, loading: signedIn };
+    const all = window.eventsBar.merged(h.events, state.events.app);
+    page.innerHTML = `<div class="wrap" style="max-width:860px">
+      <div class="between"><h1 style="font-size:24px; margin:0">History</h1>
+        ${signedIn ? '<button class="btn btn-sm btn-ghost" id="hist-refresh">Refresh</button>' : ''}</div>
+      <p class="small muted" style="margin:6px 0 16px">Everything that happened to your bids, turns, bookings and credits, the newest first,
+        kept by the site for your account — on every computer you use. Closing a note on the bar at the top never removes it from here.</p>
+      ${signedIn ? '' : '<div class="note warn" style="margin-bottom:12px">Sign in to see your bids\' history. <a id="hist-signin">Sign in</a></div>'}
+      ${h.error ? `<div class="note bad" style="margin-bottom:12px">Could not load the history: ${esc(h.error)}</div>` : ''}
+      ${h.loading && !all.length ? '<div class="empty">Loading…</div>' : `<div class="hist">${window.eventsBar.timeline(all)}</div>`}
+      ${h.more ? `<div style="margin-top:14px"><button class="btn" id="hist-more" ${h.loading ? 'disabled' : ''}>${h.loading ? 'Loading…' : 'Show older'}</button></div>` : ''}
+    </div>`;
+    const byKey = new Map(all.map((e) => [e.key, e]));
+    for (const b of page.querySelectorAll('.hist [data-ev]')) b.addEventListener('click', () => eventAct(b.dataset.ev, byKey.get(b.dataset.key)));
+    const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+    on('hist-more', () => loadHistory(true));
+    on('hist-refresh', () => { state.history = null; renderHistory(); });
+    on('hist-signin', () => go('signin'));
+  }
+
   // ------------------------------------------------------------- keeping the app open
   // keepopen.js: the notice over the app when it starts, and the bar along the top.
   function renderKeep() {
@@ -3564,7 +3644,9 @@
       case 'downloading': return `downloading… ${u.percent || 0}%`;
       case 'ready': return `version ${u.version || ''} downloaded — restart to install`;
       case 'none': return u.version ? `up to date (${u.version})` : (u.message || 'up to date');
-      case 'error': return `error — ${u.message || ''}`;
+      case 'error': return u.manual
+        ? `${u.version ? `version ${u.version} is out, but` : 'an update is out, but'} this Mac cannot install it by itself: download it and replace the app by hand (the bar at the top says how)`
+        : `error — ${u.message || ''}`;
       default: return '';
     }
   }
@@ -4104,12 +4186,13 @@
     creditsLive(before, doc);
     afterBuyCheck(doc);
     endedTurns(before, doc);
-    renderWho(); renderBanner(false); renderAgain();
+    renderWho(); renderBanner(false); renderAgain(); renderEventBar();
     if (state.form && !doc) { state.form = null; renderFound(); }
     if (state.route.page === 'console' && doc) renderConsole();
     if (state.route.page === 'sites' && !wasPaired && doc) renderSites();
   });
   api.on('sync:status', (status) => { state.status = status; renderStatus(); });
+  api.on('events:state', (v) => { state.events = v || state.events; renderEventBar(); if (state.route.page === 'history') renderHistory(); });
   api.on('pair:state', (pair) => {
     const was = paired();
     state.pair = pair;
@@ -4172,6 +4255,7 @@
     const again = await api.call('import:again-state');
     if (again && again.due) { state.again = again; renderAgain(); }
   });
+  api.call('events:get').then((v) => { state.events = v || state.events; renderEventBar(); });
   api.call('settings:get').then((s) => {
     state.settings = s; state.stack = s.stack; renderStatus(); renderDev(); renderKeep();
     // The help and the sign-in screen say more in developer mode.

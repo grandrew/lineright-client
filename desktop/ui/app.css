@@ -567,3 +567,33 @@ aside .ended-card{margin-bottom:0}
 .keep-list{margin:10px 0 12px; padding-left:20px}
 .keep-list li{margin:4px 0}
 @media (max-width: 720px){#keepbar{flex-wrap:wrap} #keepbar .actions{width:100%; justify-content:flex-end}}
+/* The last thing that happened that matters, until closed (events.js), and the History page */
+#eventbar{display:flex; align-items:flex-start; gap:12px; padding:8px 14px; font-size:13px;
+  border-bottom:1px solid var(--line); background:var(--accent-soft)}
+#eventbar.hidden, body.mode-tab #eventbar{display:none}
+#eventbar.ev-ok{background:var(--ok-soft)}
+#eventbar.ev-bad{background:var(--bad-soft)}
+#eventbar.ev-warn{background:var(--gold-soft)}
+#eventbar .mark{font-size:17px; width:22px; text-align:center; line-height:1.3}
+#eventbar .text{flex:1; min-width:0}
+#eventbar.ev-ok .mark, #eventbar.ev-ok .text b{color:var(--ok)}
+#eventbar.ev-bad .mark, #eventbar.ev-bad .text b{color:var(--bad)}
+#eventbar.ev-warn .mark, #eventbar.ev-warn .text b{color:var(--gold)}
+#eventbar.ev-info .mark, #eventbar.ev-info .text b{color:var(--accent)}
+#eventbar .ev-when{display:block; margin-top:2px; font-size:11.5px; color:var(--muted)}
+#eventbar .ev-steps{margin:4px 0 0; padding-left:20px}
+#eventbar .ev-steps li{margin:1px 0}
+#eventbar .actions{display:flex; gap:6px; align-items:center; flex-shrink:0}
+.hist-day{font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:18px 2px 8px}
+.hist-group{background:var(--surface); border:1px solid var(--line-soft); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--lift)}
+.hist-row{display:grid; grid-template-columns:24px 70px minmax(0,1fr) auto; gap:10px; align-items:start; padding:10px 14px;
+  border-top:1px solid var(--line-soft); font-size:13.5px}
+.hist-row:first-child{border-top:0}
+.hist-icon{font-size:15px; text-align:center; color:var(--muted)}
+.hist-time{font-family:var(--mono); font-size:12px; color:var(--muted); padding-top:1px}
+.hist-ok .hist-icon, .hist-ok .hist-what b{color:var(--ok)}
+.hist-bad .hist-icon, .hist-bad .hist-what b{color:var(--bad)}
+.hist-warn .hist-icon, .hist-warn .hist-what b{color:var(--gold)}
+.hist-act{align-self:center}
+@media (max-width: 720px){#eventbar{flex-wrap:wrap} #eventbar .actions{width:100%; justify-content:flex-end}
+  .hist-row{grid-template-columns:24px minmax(0,1fr)} .hist-time{grid-column:2} .hist-what{grid-column:2} .hist-act{grid-column:2}}

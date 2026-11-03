@@ -37,6 +37,7 @@
       <button data-page="sites">Sites</button>
       <button data-page="console">Console</button>
       <button data-page="bookings" id="nav-bookings" title="Your appointments, and cancelling one">My Bookings<span id="bk-count" class="bk-count hidden" aria-live="polite"></span></button>
+      <button data-page="history" title="Everything that happened to your bids, turns, bookings and credits">History</button>
     </nav>
     <div id="crumbs"></div>
     <div id="right">
@@ -49,6 +50,8 @@
     </div>
   </div>
 
+  <!-- The last thing that happened that matters, until it is closed (events.js). -->
+  <div id="eventbar" class="hidden" role="status" aria-live="polite"></div>
   <!-- Keep the app open, or it can't book: at every start until told not to (keepopen.js). -->
   <div id="keepbar" class="hidden" role="note"></div>
   <div id="banner" class="hidden"></div>
@@ -77,6 +80,7 @@
 <script src="situation.js"></script>
 <script src="bidchange.js"></script>
 <script src="keepopen.js"></script>
+<script src="events.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

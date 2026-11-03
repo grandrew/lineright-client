@@ -68,6 +68,7 @@ const { Scrubber } = require('./scrub');
 const { TraceStore } = require('./traces');
 const { TraceTaps } = require('./tracetaps');
 const { Awake } = require('./awake');
+const { AppEvents, needsManualUpdate, manualUpdate } = require('./appevents');
 
 const CHROME_BASE = 98;          // tab strip + address bar + the line, in browser mode
 const SITES_EVERY_MS = 10 * 60 * 1000;
@@ -209,6 +210,8 @@ let autoShareAfter = 0;           // no automatic share before this (epoch ms): 
 let asked = null;                 // the lines this person asked for, as the last sync said: id -> answered_at
 let awake = null;                 // keeping the computer from sleeping while the app runs (awake.js)
 let sleptAt = 0;                  // when the computer last went to sleep anyway (epoch ms), 0 when awake
+let appEvents = null;             // this app's own entries in the history, and the events closed on the bar (appevents.js)
+let updateOffered = '';           // the version the update feed last offered
 let generation = 0;               // counts resets: a robot's answer from before one is dropped
 const opened = new Set();         // hand-off job ids a tab was opened for
 const confirmationTabs = new Map(); // hand-off job id -> the tab its DMV confirmation opened in
@@ -2225,6 +2228,15 @@ function wireIpc() {
   });
   handle('server:withdraw', async ({ bid_id }) => { const r = await client.withdrawBid(bid_id); loop.poke(); return r; });
   handle('server:account', async () => { await serverReady(); return client.account(); });
+  // The history (the site's history.py), a page at a time, and the bar's events (appevents.js).
+  handle('server:history', async ({ before, limit } = {}) => { await serverReady(); return client.history(before, limit); });
+  handle('events:get', () => (appEvents ? appEvents.view() : { app: [], closed: [] }));
+  handle('events:close', ({ key }) => {
+    if (!appEvents || typeof key !== 'string' || !key) return appEvents ? appEvents.view() : null;
+    appEvents.close(key);
+    if (traces) traces.add('ui.event_closed', { kind: String(key).split(':')[0] });
+    return appEvents.view();
+  });
   handle('server:revoke', ({ client_id }) => client.revokeDevice(client_id));
   handle('server:nickname', async ({ nickname }) => {
     const r = await client.setNickname(nickname);
@@ -2626,7 +2638,19 @@ function wireUpdates() {
     isPackaged: app.isPackaged,
     force: process.env.REGBOT_FORCE_UPDATES === '1',
     log,
-    onState: (state) => { updateState = state; trace(`update: ${JSON.stringify(state)}`); send('update:state', state); },
+    onState: (state) => {
+      if (state.phase === 'available' && state.version) updateOffered = state.version;
+      // A Mac refuses an update its app is not signed for (ad hoc, no Apple
+      // Developer ID): its person is told how to replace the app by hand.
+      const manual = state.phase === 'error' && needsManualUpdate(process.platform, state.message);
+      updateState = manual ? { ...state, manual: true, version: updateOffered } : state;
+      trace(`update: ${JSON.stringify(updateState)}`);
+      send('update:state', updateState);
+      if (manual && appEvents && appEvents.add(manualUpdate({ version: updateOffered, site: siteUrl() }))) {
+        log(`update ${updateOffered || ''} cannot be installed by itself on this Mac: said on the bar, with how to do it by hand`);
+        send('events:state', appEvents.view());
+      }
+    },
   });
 }
 
@@ -2877,6 +2901,7 @@ async function main() {
   awake = new Awake({ blocker: powerSaveBlocker, store: { get: (key, fallback) => store.get(key, fallback) }, log });
   awake.apply();
   wireSleep();
+  appEvents = new AppEvents({ store: { get: (key, fallback) => store.get(key, fallback), set: (key, value) => store.set(key, value) } });
   // What is older than the logs are kept for goes: now, and every hour after.
   logbook.prune();
   pruneTimer = setInterval(() => logbook.prune(), 60 * 60 * 1000);

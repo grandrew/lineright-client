@@ -13,6 +13,8 @@ const EVENTS = new Set([
   'app:navigate', 'autofill:done', 'stack:state', 'robots:state', 'import:due', 'developer:state',
   // the person's appointments and how cancelling one goes (bookings.js), and a reminder's sound
   'bookings:state', 'bookings:chime',
+  // this app's own history entries, and the events closed on the bar (appevents.js)
+  'events:state',
 ]);
 const CALLS = new Set([
   // the browser half
@@ -23,6 +25,8 @@ const CALLS = new Set([
   'server:advice', 'server:quote', 'server:change', 'server:options', 'server:widen-options',
   'server:prefs', 'server:openings',
   'server:withdraw', 'server:account', 'server:topup', 'server:revoke', 'server:nickname',
+  // what happened, a page at a time (the site's history.py), and the bar's events closed
+  'server:history', 'events:get', 'events:close',
   // credits: the balance kept on the site, and buying more through its payment page
   'server:credits', 'server:payment', 'server:payment-open', 'server:payment-cancel',
   // asking for a line on a booking site the site does not cover yet
