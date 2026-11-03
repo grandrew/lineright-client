@@ -778,7 +778,10 @@ test('a booking page in a tab is written down: its network, what was clicked and
   const site = await bookingSite(dmv.base);
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-smoke-logs-'));
   seedProfile(userData, { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.test', phone: '5555550123' });
-  // Not let to book for them: the turn's page opens, for the person to book on.
+  // Not let to book for them: the turn's page opens, for the person to book on. Said
+  // outright: with a full profile the robot books by default, and on a slow computer
+  // its failing try reopened the page after the person had typed in it.
+  fs.writeFileSync(path.join(userData, 'regbot.json'), JSON.stringify({ v: 2, robotBooking: false }));
   const run = startApp({ electron, display, port: site.port, userData, exitAfter: 16000, extra: ['--remote-debugging-port=0'] });
   let page = null;
   try {
