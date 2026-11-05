@@ -70,6 +70,38 @@ test('the app books a hand-off itself only when it has everything it needs', () 
     { ok: false, why: 'profile', missing: ['last_name', 'email', 'phone'] });
 });
 
+test('a Yosemite campsite is booked with the person\'s Recreation.gov sign-in, for that run alone', async () => {
+  const request = { protocol: 'RQP/1', kind: 'booking.request', job_id: 78, idempotency_key: 'rqp1-job-78',
+    target: { site: 'yosemite', connector: 'recreation.gov.camps', queue: 'yosemite-campsite' },
+    slot: { window: ['2027-06-01', '2027-06-03'], allocated: { office_code: '232447', campsite_id: '100', date: '2027-06-02', nights: 2 } },
+    personal_data: { campgrounds: ['Upper Pines'], nights: 2, party_size: 2 } };
+  const h = handoff({ job_id: 78, queue_name: 'Yosemite campsite',
+    robot: { name: 'rgov-rqp/1', base_url: 'https://www.recreation.gov', captcha_solver_url: null,
+      requires: ['first_name', 'last_name', 'email', 'phone', 'card_number'], request } });
+  const runs = [];
+  const signIns = [];
+  const runner = { available: (envelope) => envelope.target.connector === 'recreation.gov.camps',
+    run: async (kind, envelope, opts) => { runs.push({ kind, envelope, opts }); return { status: 'confirmed', confirmation: '0123456789-1' }; },
+    recorded: () => null };
+  const client = { serverUrl: 'https://regbot.example', claim: async () => ({ ok: true }), booked: async () => ({ ok: true }) };
+  const store = { get: (key, fallback) => (key === 'robotBooking' ? true : fallback) };
+  const booker = new Booker({ runner, getClient: () => client, getStore: () => store,
+    getProfile: () => ({ ...PROFILE, card_number: '4242424242424242' }),
+    signInFor: (base, envelope) => {
+      const signIn = { base, connector: envelope.target.connector, file: '/tmp/signin.json', done: () => { signIn.deleted = true; } };
+      signIns.push(signIn);
+      return signIn;
+    } });
+  assert.deepEqual(booker.wants(h), { ok: true });
+  const atDmv = handoff({ robot: { ...h.robot, base_url: 'https://www.dmv.ca.gov' } });
+  assert.equal(booker.wants(atDmv).why, 'target', 'a Yosemite booking never goes to the DMV');
+  const outcome = await booker.book(h);
+  assert.equal(outcome.kind, 'booked');
+  assert.equal(runs[0].opts.storageState, '/tmp/signin.json');
+  assert.equal(runs[0].envelope.personal_data.card_number, '4242424242424242', 'the card, from the profile, as the line requires');
+  assert.deepEqual(signIns.map((s) => [s.base, s.connector, s.deleted]), [['https://www.recreation.gov', 'recreation.gov.camps', true]]);
+});
+
 test('until the person says, the app books once the profile is full; a no stays a no', () => {
   assert.equal(world({ settings: {} }).booker.wants(handoff()).ok, true, 'nothing said, a full profile');
   const half = { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.invalid' };
@@ -148,6 +180,27 @@ test('anything else opens the page for the person, saying why, and an unconfirme
   assert.equal(unconfirmed.booker.wants(handoff()).why, 'tried');
   const failed = world({ result: { status: 'unavailable', message: 'The robot did not finish within 240s.' } });
   assert.match((await failed.booker.book(handoff())).why, /did not finish/);
+});
+
+test('on Recreation.gov: a declined card says nothing was charged and where the campsite is held', async () => {
+  const camp = (extra = {}) => handoff({ robot: { ...handoff().robot, name: 'rgov-rqp/1',
+    request: { ...handoff().robot.request, target: { connector: 'recreation.gov.camps', queue: 'yosemite-campsite' } } }, ...extra });
+  const declined = world({ result: { status: 'rejected', payment_declined: true, cart_url: 'https://www.recreation.gov/cart', held_until: '7:14 AM' } });
+  const page = await declined.booker.book(camp());
+  assert.equal(page.kind, 'page');
+  assert.equal(page.declined, true);
+  assert.equal(page.cart, 'https://www.recreation.gov/cart');
+  assert.match(page.why, /declined the card.*nothing was charged.*cart until 7:14 AM/);
+  assert.deepEqual(declined.calls.booked, []);
+  const signin = await world({ result: { status: 'unavailable', gate: { kind: 'signin' } } }).booker.book(camp());
+  assert.equal(signin.signin, true);
+  assert.match(signin.why, /^Recreation\.gov wants you signed in/);
+  const unsure = await world({ result: { status: 'rejected', unconfirmed: true } }).booker.book(camp());
+  assert.match(unsure.why, /no reservation number, so you may have been charged/);
+  const gate = await world({ result: { status: 'unavailable', gate: { kind: 'hcaptcha' } } }).booker.book(camp());
+  assert.match(gate.why, /^Recreation\.gov asked for a human check/);
+  const dmv = await world({ result: { status: 'unavailable', gate: { kind: 'recaptcha' } } }).booker.book(handoff());
+  assert.match(dmv.why, /^The DMV asked for a human check/, 'the DMV\'s turns are worded as before');
 });
 
 test('another device of the person that claimed it first books it; this one stands back', async () => {

@@ -33,7 +33,12 @@
  * (agent/diagnose.js). The app says it can (`ai`) only while the person has
  * the AI on (Settings → AI booking oversight).
  */
-const { ROBOTS, targetAllowed, isRealDmv, isLoopback } = require('./robots');
+const { ROBOTS, targetAllowed, isRealSite, isLoopback } = require('./robots');
+
+/** What a read is to look at: a DMV read's offices, or a Yosemite read's campgrounds. */
+function places(request) {
+  return (request && (request.offices || request.campgrounds)) || [];
+}
 
 function refusal(message) {
   return { protocol: 'RQP/1', kind: 'discovery.result', status: 'rejected', message, offers: [], checked: [] };
@@ -135,7 +140,8 @@ class Reader {
       wanted: this.getStore().get('readerEnabled', true) !== false,
       available: this.runner.available(), agreed: this.agreed(), answered: this.decided(),
       reading: this.current ? { read_id: this.current.read_id, queue_name: this.current.queue_name,
-        site_name: this.current.site_name, offices: (this.current.request.offices || []).length,
+        site_name: this.current.site_name, offices: places(this.current.request).length,
+        ...(this.current.request.campgrounds ? { campgrounds: true } : {}),
         purpose: this.current.purpose || 'bids' } : null,
       diagnosing: this.diagnosing, lastCheck: this.lastCheck,
     };
@@ -194,20 +200,21 @@ class Reader {
     this.emit();
     const client = this.getClient();
     const started = Date.now();
-    const offices = (read.request && read.request.offices || []).length;
+    const offices = places(read.request).length;
     let told = null;
     try {
       let result;
-      if (!targetAllowed(read.base_url, client.serverUrl)) {
+      if (!targetAllowed(read.base_url, client.serverUrl, read.request)) {
         this.declined = true;
         result = refusal(`This app does not send its robots to ${read.base_url}.`);
-      } else if (isRealDmv(read.base_url) && !this.mayLookAtRealDmv()) {
+      } else if (isRealSite(read.base_url) && !this.mayLookAtRealDmv()) {
+        // One yes for looking at a real booking site, the DMV's or Recreation.gov's.
         // Asked once; after this the app stops offering until the person says yes.
         this.declined = true;
-        result = refusal('The person has not let this app look at the real DMV from their computer.');
+        result = refusal(`The person has not let this app look at ${new URL(read.base_url).host} from their computer.`);
       } else {
         const why = read.purpose === 'watch' ? 'watching' : read.purpose === 'check' ? 'checking again' : 'looking for openings on';
-        this.log(`${why} ${read.queue_name} — ${(read.request.offices || []).length} office(s)`);
+        this.log(`${why} ${read.queue_name} — ${places(read.request).length} ${read.request.campgrounds ? 'campground' : 'office'}(s)`);
         const seconds = Math.max(30, Math.min(Number(read.timeout_s) || 600, 600));
         result = await this.runner.run('scout', read.request, {
           dmvBase: read.base_url, solverUrl: read.captcha_solver_url || '', timeoutMs: seconds * 1000,

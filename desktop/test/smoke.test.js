@@ -756,7 +756,7 @@ test('the app looks for openings when the site asks, with its own scout, and ans
     assert.equal(answer.offers.length, 2);
     assert.ok(answer.offers.every((o) => o.office_name === 'Poway' && o.slot_date === day));
     // `ai`: AI booking oversight is on unless the person turns it off, so the site may ask it to check a line.
-    assert.deepEqual(seen.bodies[0].reader, { enabled: true, robots: ['dmq-rqp/1'], reading: null, busy: false, agreed: true,
+    assert.deepEqual(seen.bodies[0].reader, { enabled: true, robots: ['dmq-rqp/1', 'rgov-rqp/1'], reading: null, busy: false, agreed: true,
       ai: true });
     assert.equal(result.robots.last.read_id, 5);
     assert.equal(result.robots.last.offers[0].verdict, 'passed');

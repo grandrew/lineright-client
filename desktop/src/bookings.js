@@ -19,6 +19,8 @@
  * (`timezone`).
  */
 
+const { siteWords } = require('./sites');
+
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 /** The six-hour reminder comes between these hours of the day. */
@@ -229,7 +231,7 @@ class Reminders {
   view() {
     const now = this.now();
     return {
-      list: this.list.map((b) => ({ ...b, next: nextReminder(b, this.fired, now) })),
+      list: this.list.map((b) => ({ ...b, next: nextReminder(b, this.fired, now), site: siteWords(b) })),
       coming: this.coming().length,
     };
   }

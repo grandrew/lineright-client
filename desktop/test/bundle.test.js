@@ -63,10 +63,14 @@ test("the staged stack is the robots and how they start, and none of the server"
   bundle.stageStack(out, () => {});
   const has = (p) => fs.existsSync(path.join(out, p));
   for (const p of ['dmq/bin/rqp-handler.js', 'dmq/bin/rqp-scout.js', 'dmq/src/bot.js', 'dmq/catalog/ca-dmv-offices.json',
-    'dmq/node_modules/playwright/package.json', 'dmq/node_modules/playwright-core/lib', 'host/robot-preload.cjs']) {
+    'dmq/node_modules/playwright/package.json', 'dmq/node_modules/playwright-core/lib', 'host/robot-preload.cjs',
+    'rgov/bin/rqp-handler.js', 'rgov/bin/rqp-scout.js', 'rgov/src/checkout.js', 'rgov/catalog/yosemite-campgrounds.json']) {
     assert.ok(has(p), `${p} is staged`);
   }
-  assert.deepEqual(fs.readdirSync(out).sort(), ['dmq', 'host'], 'no server');
+  assert.deepEqual(fs.readdirSync(out).sort(), ['dmq', 'host', 'rgov'], 'no server');
+  assert.deepEqual(fs.readdirSync(path.join(out, 'rgov')).sort(), ['bin', 'catalog', 'package.json', 'src'],
+    'the Recreation.gov robots and nothing else: no stand-in, no tests, and dmq\'s Playwright rather than a second one');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(out, 'rgov', 'package.json'), 'utf8')).dependencies, undefined);
   assert.deepEqual(fs.readdirSync(path.join(out, 'host')), ['robot-preload.cjs'], 'no Python host, no stand-in');
   assert.deepEqual(fs.readdirSync(path.join(out, 'dmq')).sort(), ['bin', 'catalog', 'node_modules', 'package.json', 'src'],
     'the robots and nothing else: no DMV stand-in, no tests');

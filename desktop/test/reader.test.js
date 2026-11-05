@@ -45,7 +45,7 @@ const read = (id = 7, extra = {}) => ({
 const settle = () => new Promise((r) => setImmediate(r));
 
 test('each sync says what the reader can do', () => {
-  assert.deepEqual(world().reader.capabilities(), { enabled: true, robots: ['dmq-rqp/1'], reading: null, busy: false, agreed: true,
+  assert.deepEqual(world().reader.capabilities(), { enabled: true, robots: ['dmq-rqp/1', 'rgov-rqp/1'], reading: null, busy: false, agreed: true,
     ai: false });
   assert.equal(world({ settings: { readerEnabled: false } }).reader.capabilities().enabled, false);
   assert.equal(world({ available: false }).reader.capabilities().enabled, false, 'no robots on board');

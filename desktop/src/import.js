@@ -21,7 +21,9 @@
  *   passwords       The app has never seen one and this is no place to start.
  *                   A sign-in that carries over as a cookie needs no password
  *                   here; a sign-in that does not is one to do in the browser.
- *   payment cards    Nothing in this app asks for one.
+ *   payment cards    Typed into the profile by the person, for a line that
+ *                   pays as it books, or not at all: never lifted from a
+ *                   browser's saved cards.
  *   history,        There is nowhere to put them. This app is a browser only
  *   bookmarks       while a booking page is open; a bookmark bar it does not
  *                   have is not a thing to import into.

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { RobotRunner, robotEnv, targetAllowed, isRealDmv, lastJson, REAL_DMV } = require('../src/robots');
+const { RobotRunner, robotEnv, targetAllowed, isRealDmv, isRealSite, lastJson, PACKAGES, REAL_DMV, REAL_RGOV } = require('../src/robots');
 
 const tmpdir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'regbot-robots-'));
 const DMQ = path.join(__dirname, '..', '..', 'dmq');
@@ -90,6 +90,61 @@ test('a robot goes to the real DMV, or to a practice one only when the site is o
   assert.equal(targetAllowed('not a url', 'http://127.0.0.1:5000'), false);
   assert.equal(isRealDmv('https://www.dmv.ca.gov/'), true);
   assert.equal(isRealDmv('http://127.0.0.1:8787'), false);
+});
+
+const RGOV = { protocol: 'RQP/1', kind: 'discovery.request',
+  target: { site: 'yosemite', connector: 'recreation.gov.camps', queue: 'yosemite-campsite' }, campgrounds: ['232447'] };
+const DMV = { protocol: 'RQP/1', kind: 'discovery.request', target: { connector: 'dmv.ca.gov.qmatic', queue: 'real-id' } };
+
+test('each booking system\'s robots go to its own real site and no other', () => {
+  const remote = 'https://regbot.example';
+  assert.equal(targetAllowed(REAL_RGOV, remote, RGOV), true);
+  assert.equal(targetAllowed(`${REAL_RGOV}/`, remote, RGOV), true);
+  assert.equal(targetAllowed(REAL_DMV, remote, RGOV), false, 'the Yosemite robots are never sent to the DMV');
+  assert.equal(targetAllowed(REAL_RGOV, remote, DMV), false, 'nor the DMV robots to Recreation.gov');
+  assert.equal(targetAllowed(REAL_RGOV, remote, { target: {} }), false, 'an envelope without a connector is the DMV\'s');
+  assert.equal(targetAllowed(REAL_RGOV, remote, { target: { connector: 'tickets.example' } }), false);
+  assert.equal(targetAllowed('http://127.0.0.1:8788', 'http://127.0.0.1:5000', RGOV), true, 'practice, all on this machine');
+  assert.equal(targetAllowed('http://127.0.0.1:8788', remote, RGOV), false);
+  assert.equal(isRealSite(REAL_RGOV), true);
+  assert.equal(isRealSite('https://recreation.gov.example'), false);
+});
+
+test('the Recreation.gov robots read where the site is from their own variable, and get a sign-in only to book', () => {
+  const env = robotEnv({ env: { PATH: '/bin', RGOV_BASE_URL: 'https://evil', RGOV_STORAGE_STATE: '/stolen.json' },
+    paths: { browsers: null, host: '/h', packaged: true }, platform: 'linux', stateDir: '/s',
+    dmvBase: `${REAL_RGOV}/`, pkg: PACKAGES['recreation.gov.camps'], storageState: '/s/signin.json' });
+  assert.equal(env.RGOV_BASE_URL, REAL_RGOV);
+  assert.equal(env.DMV_BASE_URL, undefined);
+  assert.equal(env.RGOV_STORAGE_STATE, undefined, 'a scout, or anything not booking, never gets the sign-in');
+  assert.equal(env.RUN_LOG_PATH, path.join('/s', 'rgov-robot.log'));
+  const booking = robotEnv({ env: {}, paths: { browsers: null, host: '/h', packaged: true }, platform: 'linux', stateDir: '/s',
+    dmvBase: REAL_RGOV, pkg: PACKAGES['recreation.gov.camps'], allowBooking: true, storageState: '/s/signin.json',
+    solverUrl: 'http://127.0.0.1:1/solve' });
+  assert.equal(booking.RGOV_STORAGE_STATE, '/s/signin.json');
+  assert.equal(booking.CAPTCHA_SOLVER_URL, undefined);
+});
+
+test('an envelope runs the robots its connector names, and one this app has none for is refused', async () => {
+  const say = (who) => `let s=''; process.stdin.on('data', d => s += d); process.stdin.on('end', () => {
+    console.log(JSON.stringify({ kind: 'discovery.result', status: 'confirmed', offers: [], who: '${who}',
+      dmv: process.env.DMV_BASE_URL || '', rgov: process.env.RGOV_BASE_URL || '', cwd: process.cwd() })); });`;
+  const dmq = fakeDmq(say('dmq'));
+  const rgov = fakeDmq(say('rgov'));
+  const run = new RobotRunner({ paths: { dmq, rgov, browsers: null, host: HOST, packaged: false }, node: process.execPath,
+    stateDir: path.join(tmpdir(), 'robots'), env: { PATH: process.env.PATH } });
+  const camp = await run.run('scout', RGOV, { dmvBase: 'http://127.0.0.1:8788' });
+  assert.equal(camp.who, 'rgov');
+  assert.equal(camp.rgov, 'http://127.0.0.1:8788');
+  assert.equal(camp.dmv, '');
+  assert.equal(fs.realpathSync(camp.cwd), fs.realpathSync(rgov));
+  assert.equal((await run.run('scout', DMV, { dmvBase: 'http://127.0.0.1:8787' })).who, 'dmq');
+  assert.equal((await run.run('scout', { offices: ['Poway'] }, {})).who, 'dmq', 'no connector: the DMV, as before');
+  const none = await run.run('scout', { target: { connector: 'tickets.example' } }, {});
+  assert.equal(none.status, 'unavailable');
+  assert.match(none.message, /no robots for tickets\.example/);
+  assert.equal(run.available(RGOV), true);
+  assert.equal(new RobotRunner({ paths: { dmq, host: HOST } }).available(RGOV), false, 'a build without rgov/ has none');
 });
 
 test('the answer is the last JSON line, whatever was logged before it', () => {

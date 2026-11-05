@@ -53,7 +53,18 @@ const menu = require('./menu');
 const updater = require('./updater');
 const { Stack, locate, NO_SERVER } = require('./stack');
 const reset = require('./reset');
-const { RobotRunner, isLoopback } = require('./robots');
+const { RobotRunner, isLoopback, packageFor } = require('./robots');
+const { siteOf, connectorOf } = require('./sites');
+
+/** Whether `url` is on the same site as `base`: the only place a robot's answer may send a tab. */
+function sameOrigin(url, base) {
+  try {
+    const to = new URL(url);
+    return /^https?:$/.test(to.protocol) && to.origin === new URL(base).origin;
+  } catch {
+    return false;
+  }
+}
 const { Reader } = require('./reader');
 const { Booker, mayBook, bookingChoice, definitive } = require('./booker');
 const { Overseer } = require('./overseer');
@@ -183,7 +194,7 @@ let stack = null;                 // the built-in server, while that is the one 
 let reregistering = false;        // the built-in site is being restarted to learn the app's token again
 let closing = false;              // shutdown() has begun
 let resetting = false;            // Settings → Start over is under way
-let robots = null;                // the DMV robots this app runs for the regbot site (robots.js)
+let robots = null;                // the robots this app runs for the regbot site, DMV and Recreation.gov (robots.js)
 let reader = null;                // looking for openings when the site asks (reader.js)
 let booker = null;                // booking the person's own slot (booker.js)
 let overseer = null;              // AI oversight of that booking robot, when the person has bought it (overseer.js)
@@ -511,6 +522,44 @@ async function putCookies(taking) {
     )));
   }
   return out;
+}
+
+/** Electron's sameSite, as a Playwright storage state spells it. */
+const SAME_SITE = { no_restriction: 'None', lax: 'Lax', strict: 'Strict', unspecified: 'Lax' };
+
+/**
+ * The person's sign-in to a booking site that books only for a signed-in
+ * person, for one robot run (booker.js `signInFor`).
+ *
+ * The robot's browser is not this app's: it is the Chromium the robots carry,
+ * started afresh for each run. So the cookies this app's own browser holds for
+ * that site — that site's alone, never the rest of the jar — are written down
+ * as a Playwright storage state for the robot to open its browser with, in a
+ * file only this user can read, deleted the moment the run ends. The DMV books
+ * nobody by account, and its robots get nothing.
+ */
+async function signInFor(baseUrl, envelope) {
+  const pkg = packageFor(envelope);
+  if (!pkg || pkg.dir !== 'rgov') return null;
+  let host;
+  try { host = new URL(baseUrl).hostname; } catch { return null; }
+  const all = await session.fromPartition(tabs.partition).cookies.get({});
+  const cookies = all
+    .filter((c) => {
+      const domain = String(c.domain || '').replace(/^\./, '');
+      return domain.includes('.') && (domain === host || host.endsWith(`.${domain}`));
+    })
+    .map((c) => ({
+      name: c.name, value: c.value, domain: c.domain, path: c.path || '/',
+      expires: c.session || !c.expirationDate ? -1 : c.expirationDate,
+      httpOnly: Boolean(c.httpOnly), secure: Boolean(c.secure), sameSite: SAME_SITE[c.sameSite] || 'Lax',
+    }));
+  if (!cookies.length) return null;
+  const dir = path.join(app.getPath('userData'), 'robots');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `signin-${process.pid}-${Date.now()}.json`);
+  fs.writeFileSync(file, JSON.stringify({ cookies, origins: [] }), { mode: 0o600 });
+  return { file, done: () => fs.rmSync(file, { force: true }) };
 }
 
 /**
@@ -931,6 +980,8 @@ function cancelProgress(id, phase, text = '', tabId = null) {
 function cancelBooking(id) {
   const b = reminders && reminders.find(id);
   if (!b || b.status !== 'booked') throw new Error('That appointment is not among your bookings any more.');
+  const site = siteOf(b);
+  if (site.key === 'rgov') return handCancel(b, site);
   if (!b.manage_url) {
     throw new Error(`The app cannot cancel appointments on ${b.site_name || 'this site'}. Cancel it on that site, then mark it cancelled here.`);
   }
@@ -955,6 +1006,28 @@ function cancelBooking(id) {
   cancelProgress(b.id, 'cancelling', 'Cancelling it on the DMV page… If the DMV asks you to prove you are a person, do it in the page.', tabId);
   if (!tab.loading) runCancel(tab);
   return { tab: tabId };
+}
+
+/**
+ * A Recreation.gov reservation is cancelled by the person, in their own
+ * account: Recreation.gov keeps a fee for it, and more close to arrival, and
+ * agreeing to that is not the app's to do. So the app opens the reservation —
+ * its own page when the site sent one, the account's list otherwise — and says
+ * what it costs; the person cancels it there and marks it cancelled here.
+ */
+function handCancel(b, site) {
+  const url = sameOrigin(b.manage_url, site.reservations) ? b.manage_url : site.reservations;
+  const was = cancelling.get(b.id);
+  if (was && was.tabId && tabs.tabs.has(was.tabId)) {
+    tabs.select(was.tabId);
+    return { tab: was.tabId, already: true, handed: true };
+  }
+  const tabId = tabs.open(url, { kind: 'page', title: `Cancel — ${b.office_name} ${b.date}` });
+  log(`cancelling booking ${b.id} (${whereBooked(b)}, reservation ${b.confirmation}): opened ${url} for the person`);
+  if (traces) traces.add('booking.cancel', { booking: b.id, step: 'handed' });
+  cancelProgress(b.id, 'handed', `Cancel reservation ${b.confirmation || ''} on the Recreation.gov page, then mark it cancelled here. `
+    + 'Recreation.gov keeps a $10 fee, and the first night\'s fee if you cancel the day before you arrive or later.', tabId);
+  return { tab: tabId, handed: true };
 }
 
 function runCancel(tab) {
@@ -1155,8 +1228,11 @@ function takeHandoff(h, note = '') {
     // The page opens all the same, for the person to see where they are being
     // booked: covered while the robot is at the DMV's form, so that a booking by
     // hand cannot be made beside it.
+    const site = siteOf(h);
     setCard(h.job_id, { kind: 'booking', title: 'Your app is booking this for you', where: describeHandoff(h),
-      text: 'Its robot is filling in the DMV\'s form out of sight, with the details in your profile. '
+      connector: connectorOf(h),
+      text: `Its robot is filling in ${site.form} out of sight, with the details in your profile`
+        + (site.key === 'rgov' ? ', and paying with the card in it. ' : '. ')
         + 'Nothing to do here — please do not book it on this page as well. If the robot cannot finish, '
         + 'this page is yours to book it on.' });
     turnTab(h);
@@ -1261,9 +1337,10 @@ function noteOversight(o) {
   if (!o || !o.active) return;
   const card = turnCards.get(o.active.job_id);
   if (!card || card.kind !== 'booking') return;
+  const site = siteOf(card.connector);
   const text = o.active.stage === 'confirming'
-    ? 'The robot sent the booking and could not see the DMV\'s confirmation. AI oversight is reading the page for it — nothing more is pressed.'
-    : 'The robot got stuck on the DMV\'s pages. AI oversight has taken its browser over and is finishing the booking'
+    ? `The robot sent the booking and could not see ${site.their} confirmation. AI oversight is reading the page for it — nothing more is pressed.`
+    : `The robot got stuck on ${site.pages}. AI oversight has taken its browser over and is finishing the booking`
       + ` (${o.active.steps} step${o.active.steps === 1 ? '' : 's'} so far, ${o.active.credits} credit${o.active.credits === 1 ? '' : 's'}).`;
   if (card.text !== text) setCard(o.active.job_id, { ...card, title: 'AI oversight is finishing your booking', text });
 }
@@ -1319,7 +1396,7 @@ function noteBookingDefault() {
 function noteOversightTerms(terms) {
   if (!terms || !terms.available || !overseer || !overseer.on() || store.get('aiOversightNoticed', false)) return;
   store.set('aiOversightNoticed', true);
-  send('toast', { kind: 'ok', ms: 30000, text: 'AI booking oversight is on: when the app\'s robot gets stuck on the DMV\'s pages, '
+  send('toast', { kind: 'ok', ms: 30000, text: 'AI booking oversight is on: when the app\'s robot gets stuck on a booking site\'s pages, '
     + `an AI takes its browser over and finishes the booking — about ${terms.step_credits} credit${terms.step_credits === 1 ? '' : 's'} a step, `
     + `at most ${terms.session_credits} a booking, from the credits you bought. Settings → AI booking oversight turns it off.` });
 }
@@ -1331,21 +1408,23 @@ function afterBooking(h, outcome) {
     return;
   }
   const where = describeHandoff(h);
+  const site = siteOf(h);
   // Whatever came of it, the page is the person's again; booked, it says so;
   // another device of theirs at it, it says that.
   if (outcome.kind !== 'booked' && outcome.kind !== 'elsewhere') setCard(h.job_id, null);
   if (outcome.kind === 'booked') {
-    log(`booked ${where} — DMV confirmation ${outcome.confirmation}`
+    log(`booked ${where} — ${site.host} confirmation ${outcome.confirmation}`
         + (outcome.unreported ? ` (the site did not record it: ${outcome.unreported})` : ''));
     notify(`Booked — ${h.queue_name}`, `${where}. Confirmation ${outcome.confirmation}.`, h);
-    const helped = outcome.overseen ? ' The robot got stuck on the DMV\'s pages, and AI oversight finished it.' : '';
+    const helped = outcome.overseen ? ` The robot got stuck on ${site.pages}, and AI oversight finished it.` : '';
     send('toast', outcome.unreported
       ? { kind: 'warn', ms: 20000, text: `Booked ${where} — confirmation ${outcome.confirmation}.${helped} The LineRight Regbot site did not record it: ${outcome.unreported}` }
       : { kind: 'ok', ms: 15000, text: `Booked ${where} — confirmation ${outcome.confirmation}.${helped}` });
     const shown = showConfirmation(h, outcome);
     if (shown) confirmationTabs.set(h.job_id, shown);
     setCard(h.job_id, { kind: 'booked', title: '✓ Booked', where, reference: `Confirmation ${outcome.confirmation}`,
-      text: (shown ? 'The DMV\'s confirmation is open in the next tab. ' : 'Keep this number: it is what the DMV knows the appointment by. ')
+      text: (shown ? `${site.Their} confirmation is open in the next tab. `
+        : `Keep this number: it is what ${site.name} knows the ${site.thing} by. `)
         + (outcome.unreported ? `LineRight Regbot has not recorded it yet: ${outcome.unreported}`
           : 'LineRight Regbot has it recorded, and your bid is settled.') });
   } else if (outcome.kind === 'gone' && outcome.quiet) {
@@ -1365,14 +1444,22 @@ function afterBooking(h, outcome) {
     // The page, for the person to finish: while the slot is still theirs —
     // loaded afresh, the calendar under the cover being minutes old by now.
     const now = lastDoc && lastDoc.handoffs.find((x) => x.job_id === h.job_id);
-    if (now) {
+    // A declined card leaves the campsite in the person's cart, on the booking
+    // site itself: that is the page to pay on, not the booking page.
+    const cart = outcome.declined && sameOrigin(outcome.cart, h.robot && h.robot.base_url) ? outcome.cart : '';
+    if (cart) {
+      const tab = tabs.tabFor(h.job_id);
+      if (tab && !tab.view.webContents.isDestroyed()) tab.view.webContents.loadURL(cart).catch(() => {});
+      else tabs.open(cart, { kind: 'page', title: `Your cart — ${h.queue_name}` });
+      send('toast', { kind: 'warn', ms: 30000, text: outcome.why });
+    } else if (now) {
       const tab = tabs.tabFor(h.job_id);
       if (tab && now.open_url && !tab.view.webContents.isDestroyed()) tab.view.webContents.loadURL(now.open_url).catch(() => {});
       offerHandoff(now, outcome.why);
     } else {
       log(`${where}: ${outcome.why} — and it is no longer held for you`);
       send('toast', { kind: 'warn', ms: 15000, text: `The app could not book ${where}, and it is no longer held for you.`
-        + (outcome.unconfirmed ? ' The DMV may have booked it anyway: check your email for a confirmation.' : '') });
+        + (outcome.unconfirmed ? ` ${site.Name} may have booked it anyway: check your email for a confirmation.` : '') });
     }
   }
   if (loop) loop.poke();
@@ -1384,7 +1471,7 @@ function afterBooking(h, outcome) {
  */
 function closingNote(h, outcome) {
   const where = describeHandoff(h);
-  log(`${where}: ${outcome.kind} as the app closed${outcome.confirmation ? ` (DMV confirmation ${outcome.confirmation})` : ''}`);
+  log(`${where}: ${outcome.kind} as the app closed${outcome.confirmation ? ` (${siteOf(h).host} confirmation ${outcome.confirmation})` : ''}`);
   const note = outcome.kind === 'booked'
     ? { title: `Booked — ${h.queue_name}`, body: `${where}. Confirmation ${outcome.confirmation}.` }
     : outcome.kind === 'page'
@@ -1612,9 +1699,9 @@ async function lookAtEnded(id) {
   if (!tab || readingEnded.has(id)) return;
   readingEnded.add(id);
   try {
-    const parse = await parseConfirmation();
     const wc = tab.view.webContents;
     if (wc.isDestroyed()) return;
+    const parse = await parseConfirmation({ open_url: wc.getURL() });
     const loads = tab.loads;
     let ref = null;
     if (parse) {
@@ -1666,8 +1753,8 @@ function sweepTurnTabs() {
 const turnCards = new Map();
 
 function elsewhereCard(h, device) {
-  return { kind: 'booking', title: `${device} is booking this for you`, where: describeHandoff(h),
-    text: `Another of your computers has this one, and its robot is at the DMV's form. Nothing to do here — `
+  return { kind: 'booking', title: `${device} is booking this for you`, where: describeHandoff(h), connector: connectorOf(h),
+    text: `Another of your computers has this one, and its robot is at ${siteOf(h).form}. Nothing to do here — `
       + 'please do not book it on this page as well. Should it stop answering, this computer takes it over.' };
 }
 
@@ -1742,7 +1829,7 @@ function showConfirmation(h, outcome) {
   }
   let page = null;
   try {
-    page = outcome.shot ? confirmations.page({ ...outcome, where: describeHandoff(h) }) : null;
+    page = outcome.shot ? confirmations.page({ ...outcome, where: describeHandoff(h), site: siteOf(h) }) : null;
   } catch (err) {
     log(`could not show the confirmation picture: ${err.message}`);
   }
@@ -1757,22 +1844,27 @@ function showConfirmation(h, outcome) {
  * that number. Somebody who booked and never pressed the button would
  * otherwise have their turn run out on them, and leave the line.
  */
-let confirmationParser = null;
+const confirmationParsers = new Map();   // robots' folder -> Promise of their parseConfirmation
 const bookedInTab = new Set();    // job ids said booked from their tab, or being said
 const lookingAt = new Set();      // tab ids being read right now
 
-function parseConfirmation() {
-  if (!confirmationParser) {
-    const dmq = robots && robots.paths ? robots.paths.dmq : null;
-    const file = dmq ? path.join(dmq, 'src', 'selectors.js') : '';
-    confirmationParser = file && fs.existsSync(file)
+/**
+ * How the robots for a booking site read a confirmation number — the DMV's,
+ * or Recreation.gov's. `of` is a hand-off, or `{ open_url }` for a page whose
+ * turn is over and no longer says.
+ */
+function parseConfirmation(of) {
+  const dir = robots ? robots.dirFor({ target: { connector: siteOf(of).connector } }) : null;
+  if (!confirmationParsers.has(dir)) {
+    const file = dir ? path.join(dir, 'src', 'selectors.js') : '';
+    confirmationParsers.set(dir, file && fs.existsSync(file)
       ? import(pathToFileURL(file).href).then((m) => m.parseConfirmation, (err) => {
         log(`cannot read booking confirmations: ${err.message}`);
         return null;
       })
-      : Promise.resolve(null);
+      : Promise.resolve(null));
   }
-  return confirmationParser;
+  return confirmationParsers.get(dir);
 }
 
 async function checkHandoffTab(id) {
@@ -1784,7 +1876,7 @@ async function checkHandoffTab(id) {
   if (!h) return;
   lookingAt.add(id);
   try {
-    const parse = await parseConfirmation();
+    const parse = await parseConfirmation(h);
     const wc = tab.view.webContents;
     if (!parse || wc.isDestroyed()) return;
     const text = await wc.executeJavaScript('document.body ? document.body.innerText : ""').catch(() => '');
@@ -2961,7 +3053,7 @@ async function main() {
   });
   booker = new Booker({
     runner: robots, reader, getClient: () => client, getStore: () => store,
-    getProfile: () => profile.values(), shotsDir, overseer,
+    getProfile: () => profile.values(), shotsDir, overseer, signInFor,
     log: (message) => log(`booker: ${message}`),
     onState: () => send('robots:state', robotsState()),
     onOutcome: (r) => {

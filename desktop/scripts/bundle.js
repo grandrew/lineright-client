@@ -69,6 +69,12 @@ const NEVER = new Set(['__pycache__', '.pytest_cache', '.DS_Store', 'node_module
 
 /** What of ../dmq the robots need: the two RQP entry points, the bot, the catalogue. */
 const DMQ_PARTS = ['bin', 'src', 'catalog'];
+/**
+ * And of ../rgov, the Recreation.gov robots: the same three. They bring no
+ * node_modules of their own — they use dmq's shared modules and its Playwright,
+ * from beside it (rgov/src/shared.js), so the two stay one version.
+ */
+const RGOV_PARTS = ['bin', 'src', 'catalog'];
 
 function stageStack(out, log) {
   const dmq = path.join(REPO, 'dmq');
@@ -89,8 +95,16 @@ function stageStack(out, log) {
     const from = path.dirname(require.resolve(`${name}/package.json`));
     copyTree(from, path.join(out, 'dmq', 'node_modules', name), (rel, e) => e.name === '.local-browsers');
   }
+  const rgov = path.join(REPO, 'rgov');
+  if (!fs.existsSync(rgov)) throw new Error(`${rgov} is missing: the app bundles the robots, so build from a full checkout`);
+  for (const part of RGOV_PARTS) copyTree(path.join(rgov, part), path.join(out, 'rgov', part), (rel, e) => NEVER.has(e.name));
+  const rpkg = JSON.parse(fs.readFileSync(path.join(rgov, 'package.json'), 'utf8'));
+  fs.writeFileSync(path.join(out, 'rgov', 'package.json'), `${JSON.stringify({
+    name: rpkg.name, version: rpkg.version, private: true, type: rpkg.type,
+    description: `${rpkg.description} — the part the lineright desktop app runs`,
+  }, null, 2)}\n`);
   copyTree(path.join(ROOT, 'host'), path.join(out, 'host'), (rel, e) => NEVER.has(e.name));
-  log(`staged dmq (with playwright ${require('playwright/package.json').version}) and the host in ${out}`);
+  log(`staged dmq (with playwright ${require('playwright/package.json').version}), rgov and the host in ${out}`);
 }
 
 // ---------------------------------------------------------------- per target

@@ -23,6 +23,19 @@ test('the picture of a confirmation is shown on a page that says what it is', ()
   assert.match(html, /href="https:\/\/www\.dmv\.ca\.gov\/portal\/appointments\/confirmation"/);
 });
 
+test('a Recreation.gov confirmation is called one, and links back to Recreation.gov', () => {
+  const at = dir();
+  const shot = path.join(at, 'camp.png');
+  fs.writeFileSync(shot, 'png');
+  const site = require('../src/sites').siteOf('recreation.gov.camps');
+  const html = fs.readFileSync(confirmations.page({ shot, confirmation: '0123456789-1', where: 'Upper Pines, site 044',
+    url: 'https://www.recreation.gov/checkout/confirmation?reservation=0123456789-1', site }), 'utf8');
+  assert.match(html, /your Recreation\.gov confirmation/);
+  assert.match(html, /Recreation\.gov&#39;s confirmation page as this computer/);
+  assert.match(html, /open it on Recreation\.gov&#39;s site/);
+  assert.doesNotMatch(html, /DMV/);
+});
+
 test('no picture, no page; an address that is not a web page is left out', () => {
   const at = dir();
   assert.equal(confirmations.page({ shot: path.join(at, 'none.png'), confirmation: 'TS-1' }), null);
