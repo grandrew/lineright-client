@@ -125,7 +125,7 @@ a new card can try.
 
 The feed is. The campsite, order, cart and payment pages are written to the flow
 Recreation.gov shows a person, found by role and label (`src/selectors.js`), and
-driven end to end against the stand-in in `test/standin.mjs` — but not against
+driven end to end against the simulator in `../simulators/recreation-gov/` — but not against
 the live site, because that means putting a real campsite in a real cart. To
 check them, by hand, with a stay you actually want:
 
@@ -161,9 +161,9 @@ robot in memory, never through the operating system's environment.
 ## Tests
 
 ```bash
-npm test             # offline: no network, no browser (the stand-in's feed over loopback)
-npm run test:e2e     # the checkout in Chromium against the stand-in (needs ../dmq's Playwright browser)
+npm test             # offline: no network, no browser (the simulator's feed over loopback)
 npm run test:live    # two read-only requests to recreation.gov's feed
+cd ../simulators/recreation-gov && npm run test:robots   # the checkout in Chromium, through the simulator
 ```
 
 Run the live checks sparingly. It is a public service, and every campsite on it

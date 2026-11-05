@@ -10,7 +10,6 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "test:e2e": "E2E=1 node --test test/checkout.e2e.test.js",
     "test:live": "LIVE=1 node --test test/live.test.js"
   }
 }

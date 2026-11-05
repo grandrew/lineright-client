@@ -10,7 +10,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { startStandin, addCampsite } from './standin.mjs';
+import { startStandin, addCampsite } from '../../simulators/recreation-gov/standin.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCOUT = path.join(HERE, '..', 'bin', 'rqp-scout.js');

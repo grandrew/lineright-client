@@ -1206,6 +1206,10 @@ function runGuide(tab) {
 function armGuide(h) {
   const tab = tabs && tabs.tabFor(h.job_id);
   if (!tab || !h.slot) return;
+  // The guide walks the DMV's booking page (dmv-guide.js). Another site's turn
+  // opens its own page and is the person's to book there: a guide that does
+  // not know the page would only press the wrong things on it.
+  if (siteOf(h).key !== 'dmv') return;
   tab.guideSlot = h.slot;
   tab.guideWhere = describeHandoff(h);
   if (!tab.loading) runGuide(tab);

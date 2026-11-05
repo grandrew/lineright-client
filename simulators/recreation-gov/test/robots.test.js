@@ -1,19 +1,19 @@
 /**
- * The booking robot, end to end, in a real browser, against the stand-in
- * (test/standin.mjs): campsite page, order details, cart, payment and the
- * confirmation, and each way a booking can end short of one. Nothing here goes
- * near recreation.gov. Needs Playwright's Chromium (`npx playwright install
- * chromium` in ../dmq), so it runs with E2E=1: `npm run test:e2e`.
+ * The Recreation.gov booking robot (../../../rgov), end to end, in a real
+ * browser, against this stand-in: campsite page, order details, cart, payment
+ * and the confirmation, and each way a booking can end short of one. Nothing
+ * here goes near recreation.gov. Needs Playwright's Chromium (`npx playwright
+ * install chromium` in ../../dmq), so it is opt-in: `npm run test:robots`.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { startStandin, addCampsite, SESSION, DECLINED_CARD } from './standin.mjs';
+import { startStandin, addCampsite, SESSION, DECLINED_CARD } from '../standin.mjs';
 
-const skip = process.env.E2E === '1' ? false : 'set E2E=1 (needs Playwright Chromium)';
-const { run } = await import('../src/checkout.js');
+const skip = process.env.RGOV_SIM === '1' ? false : 'set RGOV_SIM=1 (or: npm run test:robots; needs Playwright Chromium)';
+const { run } = await import('../../../rgov/src/checkout.js');
 
 function envFor(site, { signedIn = true, ...over } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rgov-e2e-'));

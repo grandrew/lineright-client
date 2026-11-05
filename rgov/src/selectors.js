@@ -8,9 +8,10 @@
  * else for the hold's fifteen minutes. They are written to the flow the site
  * shows a person — campsite page, order details, cart, payment, confirmation —
  * and found the way a person finds them, by role and label rather than by
- * class names, so that a re-styling does not break them. test/standin.mjs
- * draws pages these selectors work on; when the live site disagrees, change it
- * here, change the stand-in to match, and say in the comment when it was seen.
+ * class names, so that a re-styling does not break them. The simulator in
+ * ../simulators/recreation-gov/ draws pages these selectors work on; when the
+ * live site disagrees, change it here, change the simulator to match, and say
+ * in the comment when it was seen.
  *
  * Every lookup searches every frame of the page, since a payment form is often
  * a frame of the payment processor's.

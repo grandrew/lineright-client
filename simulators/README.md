@@ -9,6 +9,7 @@ of it runs there, so no test ever takes an appointment somebody needs.
 | | |
 |---|---|
 | [`ca-dmv/`](ca-dmv/) | The California DMV's appointment site: offices, a busy calendar, cancellations, the human check, booking, cancelling, and the site changing under the robot. The robots in [`../dmq/`](../dmq/) are tested against it. |
+| [`recreation-gov/`](recreation-gov/) | Recreation.gov's campsite availability feed and booking flow — order details, cart, payment, confirmation — with a declined card, a silent order, a campsite gone at the cart, a waiting room and a rate limit on demand. The Yosemite robots in [`../rgov/`](../rgov/) are tested against it. |
 
 ```bash
 cd ca-dmv

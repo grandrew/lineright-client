@@ -3,9 +3,10 @@ import { findCampground } from './catalog.js';
 
 /**
  * Where Recreation.gov lives. Overridable so the robots can be pointed at a
- * local stand-in of the site (`RGOV_BASE_URL=http://127.0.0.1:8788`, see
- * test/standin.mjs) and driven end to end — feed, cart, payment and all —
- * without touching recreation.gov or anybody's card. Defaults to the real site.
+ * local stand-in of the site (`RGOV_BASE_URL=http://127.0.0.1:8788`, the
+ * simulator in ../simulators/recreation-gov/) and driven end to end — feed,
+ * cart, payment and all — without touching recreation.gov or anybody's card.
+ * Defaults to the real site.
  */
 export const DEFAULT_BASE_URL = 'https://www.recreation.gov';
 

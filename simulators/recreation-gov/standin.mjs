@@ -2,7 +2,9 @@
  * A stand-in of Recreation.gov, on loopback, for the booking robot's flow to
  * be driven end to end — feed, campsite page, order details, cart, payment,
  * confirmation — without touching recreation.gov, holding anybody's campsite
- * or charging anybody's card.
+ * or charging anybody's card. The robots it tests are ../../rgov/.
+ *
+ *   node standin.mjs [--port=8788]      a few open campsites at Upper Pines, a person signed in by visiting /__signin
  *
  * It is not a copy of the site. It draws the pages the robot's selectors
  * (src/selectors.js) expect, which are what the site shows a person; when the
@@ -17,13 +19,18 @@
  * A signed-in person carries the cookie `rgov_session=ok`.
  */
 import http from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const SESSION = { name: 'rgov_session', value: 'ok' };
 export const DECLINED_CARD = '4000000000000002';
 
+/** Every page says what it is: a person may be shown one, and must never take it for the real site. */
 function page(title, body, { signedIn = false } = {}) {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${title} | Recreation.gov (stand-in)</title></head><body>
 <header><a href="/">Recreation.gov</a> ${signedIn ? '<a href="/account">My Account</a>' : '<a href="/log-in">Log In</a>'}</header>
+<p class="notice"><strong>This is a stand-in.</strong> A copy of Recreation.gov's booking flow on this computer, for testing
+appointment software: the campsites are made up, nothing is reserved and no card is charged.</p>
 <main>${body}</main></body></html>`;
 }
 
@@ -57,7 +64,7 @@ export function freshState() {
   };
 }
 
-export async function startStandin({ state = freshState() } = {}) {
+export async function startStandin({ state = freshState(), port = 0 } = {}) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://standin');
     state.requests.push(`${req.method} ${url.pathname}`);
@@ -94,6 +101,11 @@ export async function startStandin({ state = freshState() } = {}) {
       }
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify({ campsites, count: Object.keys(campsites).length }));
+    }
+
+    // A person signing in, in the stand-in: no password, just the cookie.
+    if (url.pathname === '/__signin') {
+      return send(302, '', { location: '/', 'set-cookie': `${SESSION.name}=${SESSION.value}; Path=/; HttpOnly; SameSite=Lax` });
     }
 
     if (url.pathname === '/log-in') {
@@ -195,10 +207,10 @@ export async function startStandin({ state = freshState() } = {}) {
     return send(404, page('Not found', '<h1>Not found</h1>', { signedIn }));
   });
 
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
+  await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve));
+  const { port: listening } = server.address();
   return {
-    url: `http://127.0.0.1:${port}`,
+    url: `http://127.0.0.1:${listening}`,
     state,
     close: () => new Promise((resolve) => server.close(resolve)),
   };
@@ -210,4 +222,24 @@ export function addCampsite(state, { id, facility = '232447', site = '044', loop
   for (const night of open) nights[night] = 'Available';
   state.campsites[id] = { facility, site, loop, max, nights };
   return state.campsites[id];
+}
+
+/** `npm start`: the stand-in on 127.0.0.1, with three Upper Pines campsites open over the coming fortnight. */
+async function main(argv) {
+  const port = Number((argv.find((a) => a.startsWith('--port=')) || '--port=8788').split('=')[1]);
+  const state = freshState();
+  const today = new Date().toISOString().slice(0, 10);
+  const nights = (from, n) => Array.from({ length: n }, (_, i) => addDays(from, i));
+  addCampsite(state, { id: '100', site: '044', open: nights(addDays(today, 3), 4) });
+  addCampsite(state, { id: '101', site: '045', open: nights(addDays(today, 7), 2) });
+  addCampsite(state, { id: '102', site: '112', open: nights(addDays(today, 10), 5) });
+  const site = await startStandin({ state, port });
+  console.log(`Recreation.gov stand-in on ${site.url} — campsites 100, 101, 102 at Upper Pines (232447); visit /__signin to sign in`);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main(process.argv.slice(2)).catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
 }

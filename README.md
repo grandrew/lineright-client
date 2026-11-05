@@ -14,7 +14,7 @@ in, when the site wants a person.
 |---|---|
 | [`desktop/`](desktop/) | The Electron app: screens, sign-in by code, the profile kept on this machine, bringing details across from a browser, the robots it runs for the site, booking a hand-off, the numbers it shares when its person says so, and the trace the site asks for, with the person taken out. Its [README](desktop/README.md) is the long version. |
 | [`dmq/`](dmq/) | The California DMV robots (Node + Playwright): look for openings (`bin/rqp-scout.js`) and book one (`bin/rqp-handler.js`) over RQP/1 envelopes on a pipe, and the office catalogue. Its [README](dmq/README.md) says how they work, and where they stop. |
-| [`simulators/`](simulators/) | Copies of booking sites that run on your own computer, which the robots are built and tested against so that no test takes a real appointment. [`ca-dmv/`](simulators/ca-dmv/) is the California DMV's. |
+| [`simulators/`](simulators/) | Copies of booking sites that run on your own computer, which the robots are built and tested against so that no test takes a real appointment. [`ca-dmv/`](simulators/ca-dmv/) is the California DMV's, [`recreation-gov/`](simulators/recreation-gov/) Recreation.gov's. |
 | [`docs/adding-a-line.md`](docs/adding-a-line.md) | Bringing a line for another booking site: what a line is made of, what can be built here today, and what is still missing. |
 | [`rgov/`](rgov/) | The Recreation.gov robots, for the Yosemite campsites line: read the public availability feed for openings, and book and pay for a person's allocated campsite in their own account, over the same RQP/1 envelopes. Its [README](rgov/README.md) says how; [SERVER.md](rgov/SERVER.md) is what the server needs for the line. |
 
@@ -89,7 +89,8 @@ and the robots' own tests:
 ```bash
 cd dmq && npm test && cd ..
 cd simulators/ca-dmv && npm test && npm run test:robots && cd ../..   # the robots through the DMV simulator
-cd rgov && npm test             # and `npm run test:e2e` for the checkout in a browser, against a stand-in
+cd rgov && npm test && cd ..
+cd simulators/recreation-gov && npm test && npm run test:robots   # the Yosemite robots through the Recreation.gov simulator
 ```
 
 Installers are built by `.github/workflows/desktop-release.yml` when a
