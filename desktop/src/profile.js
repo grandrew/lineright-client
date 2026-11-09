@@ -37,10 +37,18 @@ const FIELDS = [
   { key: 'city', label: 'City', group: 'address', autocomplete: 'address-level2' },
   { key: 'state', label: 'State', group: 'address', autocomplete: 'address-level1', placeholder: 'CA' },
   { key: 'zip', label: 'ZIP code', group: 'address', autocomplete: 'postal-code', placeholder: '92064' },
+  // For a line whose booking site takes payment as it books (Recreation.gov,
+  // for the Yosemite campsites): typed only into that site's own payment form,
+  // when it is the person's turn. The address above is the card's billing one.
+  { key: 'card_name', label: 'Name on card', group: 'payment', autocomplete: 'cc-name' },
+  { key: 'card_number', label: 'Card number', group: 'payment', autocomplete: 'cc-number', secret: true, pattern: '^[\\d -]{12,23}$', hint: 'Only typed into the booking site\u2019s own payment form, when a campsite is yours.' },
+  { key: 'card_exp_month', label: 'Expiry month', group: 'payment', autocomplete: 'cc-exp-month', placeholder: 'MM', pattern: '^(0?[1-9]|1[0-2])$' },
+  { key: 'card_exp_year', label: 'Expiry year', group: 'payment', autocomplete: 'cc-exp-year', placeholder: 'YYYY', pattern: '^(\\d{2}|\\d{4})$' },
+  { key: 'card_cvc', label: 'Security code', group: 'payment', autocomplete: 'cc-csc', secret: true, pattern: '^\\d{3,4}$' },
 ];
 const KEYS = new Set(FIELDS.map((f) => f.key));
 const GROUPS = [
-  ['name', 'Name'], ['identity', 'Identity'], ['contact', 'Contact'], ['address', 'Address'],
+  ['name', 'Name'], ['identity', 'Identity'], ['contact', 'Contact'], ['address', 'Address'], ['payment', 'Payment card'],
 ];
 
 /** Keep only known keys, as trimmed strings. */

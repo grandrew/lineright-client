@@ -829,9 +829,10 @@
    * The ask: let this app check lines for everybody, and earn credits for it.
    *
    * Every opening anyone in line gets is found by somebody's app, and the site
-   * pays for the looking (its allowance.py). On a site whose lines are on the
-   * real DMV the app looks only once its person has said yes — it is automated
-   * traffic from their address — so it asks, once, with yes as the button.
+   * pays for the looking (its allowance.py). On a site whose lines are on a
+   * real booking site — the DMV, Recreation.gov — the app looks only once its
+   * person has said yes — it is automated traffic from their address — so it
+   * asks, once, with yes as the button.
    * Either answer is kept; Settings changes it after.
    */
   function checkingAsk() {
@@ -843,9 +844,10 @@
       <div class="row" style="margin-bottom:7px"><span class="chip chip-accent">${per ? 'Earn credits' : 'Help everyone in line'}</span>
         <b>Check lines while this app runs</b></div>
       <p class="small" style="margin:0 0 12px; max-width:74ch">Every opening anybody in line gets is found by somebody's app, looking
-      at the DMV's booking pages. Let this one take its turn: now and then it checks a line's offices from this computer, in a browser
-      you do not see${per ? ` — and earns you <b>${per} an hour</b> while the app runs` : ''}. It is automated traffic from your own
-      internet address, a few pages at a time. Whatever it finds goes to whoever is first in line, which may be you.</p>
+      at the booking sites — the DMV's appointment calendars, Recreation.gov's campsite availability. Let this one take its turn: now
+      and then it checks a line's offices or campgrounds from this computer, out of sight${per ? ` — and earns you <b>${per} an hour</b> while the app runs` : ''}.
+      It is automated traffic from your own internet address, a few requests at a time. Whatever it finds goes to whoever is first in
+      line, which may be you.</p>
       <div class="row"><button class="btn btn-accent" id="earn-yes">Check lines${per ? ' and earn credits' : ''}</button>
         <button class="btn btn-ghost btn-sm" id="earn-no">Not now</button>
         <span class="tiny muted">Settings turns it off again.</span></div></div>`;
@@ -2157,7 +2159,11 @@
     if (state.route.page === 'bookings') renderBookings();
   }
 
-  const PROGRESS = { cancelling: '…', cancelled: '✓', 'not-listed': '!', error: '!', stopped: '!' };
+  const PROGRESS = { cancelling: '…', cancelled: '✓', 'not-listed': '!', error: '!', stopped: '!', handed: '→' };
+
+  /** How a booking's site is spoken of (the main process's sites.js); the DMV for one that does not say. */
+  const siteOfBooking = (b) => (b && b.site) || { key: 'dmv', name: 'the DMV', Name: 'The DMV', their: "the DMV's", thing: 'appointment' };
+  const nightsWords = (b) => (Number(b && b.nights) > 0 ? `${num(b.nights)} night${Number(b.nights) === 1 ? '' : 's'}` : '');
 
   function bookingCard(b, now) {
     const P = bk();
@@ -2166,11 +2172,15 @@
     const where = [b.address].filter(Boolean).join('');
     const c = b.cancelling;
     const busy = c && c.phase === 'cancelling';
+    const S = siteOfBooking(b);
+    const showTab = c && c.tabId && (busy || c.phase === 'handed');
+    const nights = nightsWords(b);
     const next = P.nextWords(b);
     return `<div class="bk-card${soon ? ' soon' : ''}" data-booking="${num(b.id)}" style="--accent-raw:${esc(b.accent || '')}">
       <div class="bk-when">
         <div class="bk-day">${esc(prettyDate(b.date))}</div>
         <div class="bk-time">${esc(P.timeLabel(b.time))}</div>
+        ${nights ? `<div class="bk-left">${esc(nights)}</div>` : ''}
         <div class="bk-left">${esc(P.untilWords(left))}</div>
       </div>
       <div class="bk-what">
@@ -2178,11 +2188,11 @@
         ${where ? `<p>${esc(where)}</p>` : ''}
         <p class="small">${b.confirmation ? `Confirmation <span class="bk-ref">${esc(b.confirmation)}</span> · ` : ''}${esc(P.viaWords(b) || 'booked')} · ${esc(b.site_name || '')}</p>
         ${next ? `<p class="small muted">Next reminder: ${esc(next)}</p>` : ''}
-        ${c ? `<div class="bk-progress ${esc(c.phase)}">${esc(PROGRESS[c.phase] || '')} ${esc(c.text || '')}${busy && c.tabId ? ' <a data-bk-tab="' + num(c.tabId) + '">Show the DMV page</a>' : ''}</div>` : ''}
+        ${c ? `<div class="bk-progress ${esc(c.phase)}">${esc(PROGRESS[c.phase] || '')} ${esc(c.text || '')}${showTab ? ` <a data-bk-tab="${num(c.tabId)}">Show ${esc(S.their)} page</a>` : ''}</div>` : ''}
       </div>
       <div class="bk-actions">
-        <button class="btn btn-danger" data-bk-cancel="${num(b.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Cancelling…' : 'Cancel appointment…'}</button>
-        ${b.manage_url ? `<button class="btn btn-ghost btn-sm" data-bk-open="${num(b.id)}">View it on the DMV</button>` : ''}
+        <button class="btn btn-danger" data-bk-cancel="${num(b.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Cancelling…' : `Cancel ${esc(S.thing)}…`}</button>
+        ${b.manage_url ? `<button class="btn btn-ghost btn-sm" data-bk-open="${num(b.id)}">View it on ${esc(S.name)}</button>` : ''}
         ${b.shot ? `<button class="btn btn-ghost btn-sm" data-bk-shot="${num(b.id)}">Confirmation picture</button>` : ''}
         <a class="tiny" data-bk-mark="${num(b.id)}" style="text-align:center">Cancelled it some other way?</a>
       </div>
@@ -2236,9 +2246,19 @@
     const b = a && state.bookings && state.bookings.list.find((x) => x.id === a.id);
     if (!a || !b) { box.classList.add('hidden'); box.innerHTML = ''; state.bookingAsk = null; return; }
     const P = bk();
-    const what = `<p><b>${esc(b.queue_name)}</b> — ${esc(b.office_name)}, ${esc(prettyDate(b.date))} at ${esc(P.timeLabel(b.time))}${b.confirmation ? `. Confirmation <span class="num">${esc(b.confirmation)}</span>` : ''}.</p>`;
+    const S = siteOfBooking(b);
+    const nights = nightsWords(b);
+    const when = b.time ? `${esc(prettyDate(b.date))} at ${esc(P.timeLabel(b.time))}` : `arriving ${esc(prettyDate(b.date))}`;
+    const what = `<p><b>${esc(b.queue_name)}</b> — ${esc(b.office_name)}, ${when}${nights ? `, ${esc(nights)}` : ''}${b.confirmation ? `. Confirmation <span class="num">${esc(b.confirmation)}</span>` : ''}.</p>`;
     const profileGap = a.error && /^To find your appointment/.test(a.error);
-    const body = a.kind === 'cancel'
+    const body = a.kind === 'cancel' && S.key === 'rgov'
+      ? `<h2 id="ask-title">Cancel this reservation?</h2>${what}
+        <p class="small">You cancel it yourself, in your Recreation.gov account: the app opens the reservation in a tab and leaves the cancelling to you. Recreation.gov keeps a $10 fee, and the first night's fee if you cancel the day before you arrive or later — that is its general rule, and a campground's own page may say more. The credits your bid spent are not returned. Once it is cancelled there, mark it cancelled here.</p>
+        ${a.error ? `<div class="note bad" style="margin:8px 0">${esc(a.error)}</div>` : ''}
+        <div class="row" style="margin-top:14px">
+          <button class="btn btn-danger solid" id="ask-yes" ${a.busy ? 'disabled' : ''}>${a.busy ? 'Opening Recreation.gov…' : 'Open it on Recreation.gov'}</button>
+          <button class="btn btn-ghost" id="ask-no">Keep it</button></div>`
+      : a.kind === 'cancel'
       ? `<h2 id="ask-title">Cancel this appointment?</h2>${what}
         <p class="small">The app opens the DMV's own View/Cancel page in a tab, looks your appointments up under your name and phone number, and cancels this one — the confirmation number tells it apart. The DMV gives the time to somebody else. It cannot be undone, and the credits your bid spent are not returned.</p>
         ${a.error ? `<div class="note bad" style="margin:8px 0">${esc(a.error)}</div>` : ''}
@@ -2247,7 +2267,7 @@
             : `<button class="btn btn-danger solid" id="ask-yes" ${a.busy ? 'disabled' : ''}>${a.busy ? 'Opening the DMV page…' : 'Cancel the appointment'}</button>`}
           <button class="btn btn-ghost" id="ask-no">Keep it</button></div>`
       : `<h2 id="ask-title">Mark it cancelled?</h2>${what}
-        <p class="small">Only if it is cancelled already — on the DMV's site, by phone, or at the office. The app stops reminding you of it, and the DMV is not asked anything.</p>
+        <p class="small">Only if it is cancelled already — on ${esc(S.their)} site${S.key === 'dmv' ? ', by phone, or at the office' : ' or by phone'}. The app stops reminding you of it, and ${esc(S.name)} is not asked anything.</p>
         ${a.error ? `<div class="note bad" style="margin:8px 0">${esc(a.error)}</div>` : ''}
         <div class="row" style="margin-top:14px"><button class="btn btn-danger" id="ask-yes" ${a.busy ? 'disabled' : ''}>It is cancelled</button>
           <button class="btn btn-ghost" id="ask-no">Keep it</button></div>`;
@@ -3811,12 +3831,12 @@
     return `<div class="panel"><div class="panel-title">This computer's robots</div>
       ${connectionLine}
       <div class="check"><input type="checkbox" id="s-reader" ${s.checking ? 'checked' : ''}>
-        <label for="s-reader"><span class="small"><b>Check lines for everybody in line</b>${s.publicSite ? ' — on the real DMV (dmv.ca.gov)' : ''}${perHour ? ` · earns ${perHour} an hour` : ''}</span>
-        <span class="field-help">Now and then the site asks this app to look at a line's offices and report what it sees, from this computer, with a browser the app runs out of sight. What it finds goes to whoever is first — which may be you. With nothing else to do it also looks, slowly, at lines nobody bids on, so every line shows what was seen lately.${s.publicSite ? ' On the real DMV it is automated traffic from your own internet address, a few pages at a time, so it waits for your yes.' : ''}${perHour ? ` The site adds ${perHour} to your credits for every hour this app is checking.` : ''}</span></label></div>
+        <label for="s-reader"><span class="small"><b>Check lines for everybody in line</b>${s.publicSite ? ' — on the real booking sites (dmv.ca.gov, recreation.gov)' : ''}${perHour ? ` · earns ${perHour} an hour` : ''}</span>
+        <span class="field-help">Now and then the site asks this app to look at a line's offices or campgrounds and report what it sees, from this computer, out of sight: the DMV's calendars in a browser the app runs, Recreation.gov's public availability feed by asking it directly. What it finds goes to whoever is first — which may be you. With nothing else to do it also looks, slowly, at lines nobody bids on, so every line shows what was seen lately.${s.publicSite ? ' On the real sites it is automated traffic from your own internet address, a few requests at a time, so it waits for your yes.' : ''}${perHour ? ` The site adds ${perHour} to your credits for every hour this app is checking.` : ''}</span></label></div>
       <div class="check"><input type="checkbox" id="s-bookforme" ${s.robotBooking ? 'checked' : ''}>
-        <label for="s-bookforme"><span class="small"><b>Let the app book for me</b>${s.publicSite ? ' — on the real DMV (dmv.ca.gov)' : ''}</span>
-        <span class="field-help">On, when a slot is yours the app's robot books it with the details in your profile — even when you are away from the computer, so the turn does not run out — while a tab says what it is doing, then shows you the DMV's confirmation; if it cannot finish, the tab is yours to book in. Off, the booking page opens in a tab with your details filled in, and you book it.${s.publicSite ? ' A booking it makes is a real appointment in your name.' : ''}${s.robotBookingDefault ? (s.robotBooking ? ' <b>On by default</b>, because your profile has your name, email and phone.' : ' It turns on by itself once your profile has your name, email and phone, unless you turn it off here.') : ''}</span></label></div>
-      <p class="tiny muted" style="margin:8px 0 0" id="s-robots-now">${r.booking ? `Booking ${esc(r.booking.where)} now.` : r.diagnosing ? `The AI is checking why ${esc(r.diagnosing.queue_name)} cannot be read, for the site.` : r.reading ? `${r.reading.purpose === 'watch' ? 'Watching' : 'Looking at'} ${esc(r.reading.queue_name)} now — ${num(r.reading.offices)} office${r.reading.offices === 1 ? '' : 's'}.` : lastLine}</p>
+        <label for="s-bookforme"><span class="small"><b>Let the app book for me</b>${s.publicSite ? ' — on the real booking sites (dmv.ca.gov, recreation.gov)' : ''}</span>
+        <span class="field-help">On, when a slot is yours the app's robot books it with the details in your profile — even when you are away from the computer, so the turn does not run out — while a tab says what it is doing, then shows you the booking site's confirmation; if it cannot finish, the tab is yours to book in. On Recreation.gov it also <b>pays</b>, with the card in your profile, in your own signed-in account. Off, the booking page opens in a tab with your details filled in, and you book it.${s.publicSite ? ' A booking it makes is a real appointment or reservation in your name, and a campsite it books is paid for.' : ''}${s.robotBookingDefault ? (s.robotBooking ? ' <b>On by default</b>, because your profile has your name, email and phone.' : ' It turns on by itself once your profile has your name, email and phone, unless you turn it off here.') : ''}</span></label></div>
+      <p class="tiny muted" style="margin:8px 0 0" id="s-robots-now">${r.booking ? `Booking ${esc(r.booking.where)} now.` : r.diagnosing ? `The AI is checking why ${esc(r.diagnosing.queue_name)} cannot be read, for the site.` : r.reading ? `${r.reading.purpose === 'watch' ? 'Watching' : 'Looking at'} ${esc(r.reading.queue_name)} now — ${num(r.reading.offices)} ${r.reading.campgrounds ? 'campground' : 'office'}${r.reading.offices === 1 ? '' : 's'}.` : lastLine}</p>
       ${bookedLine && !r.booking ? `<p class="tiny muted" style="margin:4px 0 0">${bookedLine}</p>` : ''}
     </div>`;
   }
@@ -3843,7 +3863,7 @@
     return `<div class="panel" id="s-oversight"><div class="panel-title">AI booking oversight</div>
       <div class="check" style="margin-bottom:0"><input type="checkbox" id="s-ai" ${live.on ? 'checked' : ''} ${offered || live.on ? '' : 'disabled'}>
         <label for="s-ai"><span class="small"><b>Let an AI finish a booking the robot gets stuck on</b></span>
-        <span class="field-help">The app's robot follows the DMV's pages as they were when it was written. When the DMV changes a page and the robot stops, the AI takes its browser over — the time it holds still held — reads the page, and finishes the booking; or reads the confirmation the robot could not find. A human check stays yours. Your details never go to the AI: it sees "[first_name]" where your name is, and the app types the real one. It goes through LineRight Regbot, which keeps what it did, to fix the robot. And when the robots cannot read a line at all, the site may ask this app's AI to look at the booking site and say why — at the site's cost, never your credits; nothing is booked or held, and nothing of yours is used.</span></label></div>
+        <span class="field-help">The app's robot follows a booking site's pages — the DMV's, Recreation.gov's — as they were when it was written. When the booking site changes a page and the robot stops, the AI takes its browser over — the time it holds still held — reads the page, and finishes the booking; or reads the confirmation the robot could not find. A human check stays yours. Your details never go to the AI: it sees "[first_name]" where your name is, and the app types the real one. It goes through LineRight Regbot, which keeps what it did, to fix the robot. And when the robots cannot read a line at all, the site may ask this app's AI to look at the booking site and say why — at the site's cost, never your credits; nothing is booked or held, and nothing of yours is used.</span></label></div>
       <p class="tiny ${offered ? 'muted' : 'warn'}" style="margin:8px 0 0">${terms}${!offered && t.why === 'needs_purchase' ? ' <a id="s-ai-buy">Buy credits</a>' : ''}</p>
       ${lastLine ? `<p class="tiny muted" style="margin:4px 0 0" id="s-ai-now">${lastLine}</p>` : ''}
     </div>`;
@@ -4113,7 +4133,7 @@
       <h2>Your account and the LineRight Regbot site</h2>
       <p>The line itself — who is waiting, in what order, and what a place is worth — is kept on the LineRight Regbot website, and your account is there. The first time the app opens it asks you to create that account, or sign in if you have one: it opens the website in your usual browser on a page showing this app's code, you create the account (or sign in, with a password or with Google when the site offers it) and approve the code, and the app is signed in within a few seconds. It never sees your password. <b>File → Sign out</b> revokes this device; your positions keep their rank. Other devices of yours are listed under <b>Console → Account</b>, where any of them can be unpaired.</p>
       <h2>This app looks, and books, for you</h2>
-      <p>While it is open the app checks lines for everybody in line: now and then the site asks it to look at a line's offices for openings, and the app's robot does, from this computer, and reports what it saw — and the site adds credits to your account for every hour of it. On the real DMV that is automated traffic from your own internet address, so the app asks once before it starts (<b>Check lines and earn credits</b>), and <b>Settings</b> turns it off again. The site decides who is first — finding a slot gives nobody a claim on it — and tells that person's app. When it is you, the booking page opens in a tab, and you book it there before the clock runs out. Once you have said it may, in <b>Settings</b> (a separate yes from checking lines), your app's robot books it for you instead, with the details in your profile, on this computer; if the booking site asks for a human check, or anything else stops the robot, the tab is yours to finish in. When a turn is over, a page you did not use gives its tab to your next turn on that line, or closes a quarter of an hour later; one you used, or one showing a booking confirmation, stays until you close it.</p>
+      <p>While it is open the app checks lines for everybody in line: now and then the site asks it to look at a line's offices or campgrounds for openings, and the app's robot does, from this computer, and reports what it saw — and the site adds credits to your account for every hour of it. On the real booking sites (the DMV, Recreation.gov) that is automated traffic from your own internet address, so the app asks once before it starts (<b>Check lines and earn credits</b>), and <b>Settings</b> turns it off again. The site decides who is first — finding a slot gives nobody a claim on it — and tells that person's app. When it is you, the booking page opens in a tab, and you book it there before the clock runs out. Once you have said it may, in <b>Settings</b> (a separate yes from checking lines), your app's robot books it for you instead, with the details in your profile, on this computer; if the booking site asks for a human check, or anything else stops the robot, the tab is yours to finish in. When a turn is over, a page you did not use gives its tab to your next turn on that line, or closes a quarter of an hour later; one you used, or one showing a booking confirmation, stays until you close it.</p>
       ${dev() ? `<h2>Developer mode</h2>
       <p>Developer mode is for the people who work on LineRight Regbot, and it is on: <b>View → Developer mode</b> turns it off (or on again), and <span class="num">--developer</span> on the command line turns it on for one run. It adds:</p>
       <ul>
@@ -4125,17 +4145,17 @@
       <h2>Sites and lines</h2>
       <p><b>Sites</b> lists the booking systems LineRight Regbot keeps lines for; search by name or line. A site has one or more <em>lines</em> — one per appointment type — and each line is a live order book. Open a line to see who is ahead of you and to join it: your bid, the date and time you would like, and for some sites which office (or how far you will travel). Raise from the same panel; withdraw and the whole escrow comes back.</p>
       <h2>Your turn</h2>
-      <p>When the board hands you a slot, a bar appears at the top with a countdown, your desktop gets a notification, and the booking page opens in a tab. Book it there; the app notices the DMV's confirmation, or click <b>I booked it</b> (a reference is optional), and the processor captures your escrow. If you let the app book for you (<b>Settings</b>), its robot books it in that tab, says so, and opens the confirmation in a second tab. Click <b>Pass</b> and it goes to the next bidder; you keep your place. Let the clock run out and you leave the line with part of your bid back; the bar says how much.</p>
+      <p>When the board hands you a slot, a bar appears at the top with a countdown, your desktop gets a notification, and the booking page opens in a tab. Book it there; the app notices the booking site's confirmation, or click <b>I booked it</b> (a reference is optional), and the processor captures your escrow. If you let the app book for you (<b>Settings</b>), its robot books it in that tab, says so, and opens the confirmation in a second tab. Click <b>Pass</b> and it goes to the next bidder; you keep your place. Let the clock run out and you leave the line with part of your bid back; the bar says how much.</p>
       <h2>Found a slot yourself?</h2>
       <p><b>⌕ Found a slot</b> reports it to the board. If it is yours, the board hands it to you within moments; if somebody above you will take it, it is passed to them and you are told who — that is how everyone's place is respected.</p>
       <h2>Your profile</h2>
-      <p><b>File → Profile</b> holds what booking forms ask for: name, date of birth, licence number, Social Security number, contact and address. It stays on this machine, encrypted by the operating system where a keychain exists, and is typed into the booking form when the app opens one. <b>✎ Fill form</b> in the browser bar does it on request. Nothing in the profile is ever sent to LineRight Regbot.</p>
+      <p><b>File → Profile</b> holds what booking forms ask for: name, date of birth, licence number, Social Security number, contact and address — and, for a line whose site takes payment as it books (Yosemite campsites on Recreation.gov), a payment card, which is only ever typed into that site's own payment form. It stays on this machine, encrypted by the operating system where a keychain exists, and is typed into the booking form when the app opens one. <b>✎ Fill form</b> in the browser bar does it on request. Nothing in the profile is ever sent to LineRight Regbot.</p>
       <h2>Importing from a browser</h2>
       <p><b>File → Import from your browser</b> looks for Chrome, Edge, Brave, Vivaldi, Opera, Arc, Comet and any other Chromium browser on this machine, and offers what they hold that this app can use: the name, email, phone and address you have saved for filling forms in, and the sign-ins you already have, so your turn does not start at a login page. Each booking site LineRight Regbot knows is listed and counted on its own; everything else you are signed in to is one line with a number on it, for the portals that hand you to an identity provider and leave half the sign-in on a host LineRight Regbot has never heard of. Both start ticked; untick either, and what you leave unticked is never copied. Passwords, payment cards, history and bookmarks are never touched.</p>
       <p>It is the quickest way to be ready to bid, so the app opens it on startup while your profile is still empty and there is a browser to take it from — once you have imported, filled the profile in, or said <em>skip for now</em>, it stays in the File menu and startup goes straight to your lines.</p>
       <p>Your browser goes on keeping things current — a new phone number, a sign-in renewed — so a week after an import the app asks to bring them across again: one button, <b>Re-import data from your browser</b>, takes the same things from the same browsers — the details you took, and the sign-ins you chose. A detail you have changed in your profile by hand is yours and is left alone, and a sign-in this app already holds fresher is kept. <b>Not now</b> asks again the next day; <b>File → Re-import data</b> does it whenever you like, and <b>Settings → Your browser</b> stops the asking or forgets a browser.</p>
       <h2>The browser</h2>
-      <p>A booking site opens as a tab with an address bar, back and forward — a browser, because signing in to a DMV needs one. <b>◉ LineRight Regbot</b> in the tab strip (or <kbd>Ctrl</kbd>+<kbd>0</kbd>) brings the application back; the tab stays open.</p>
+      <p>A booking site opens as a tab with an address bar, back and forward — a browser, because signing in to a booking site needs one (Recreation.gov books only for a signed-in person, and the app keeps your sign-in for the robot). <b>◉ LineRight Regbot</b> in the tab strip (or <kbd>Ctrl</kbd>+<kbd>0</kbd>) brings the application back; the tab stays open.</p>
       <h2>Keys</h2>
       <table class="data"><tbody>
         <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>Sites</td></tr>

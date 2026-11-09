@@ -14,8 +14,9 @@ in, when the site wants a person.
 |---|---|
 | [`desktop/`](desktop/) | The Electron app: screens, sign-in by code, the profile kept on this machine, bringing details across from a browser, the robots it runs for the site, booking a hand-off, the numbers it shares when its person says so, and the trace the site asks for, with the person taken out. Its [README](desktop/README.md) is the long version. |
 | [`dmq/`](dmq/) | The California DMV robots (Node + Playwright): look for openings (`bin/rqp-scout.js`) and book one (`bin/rqp-handler.js`) over RQP/1 envelopes on a pipe, and the office catalogue. Its [README](dmq/README.md) says how they work, and where they stop. |
-| [`simulators/`](simulators/) | Copies of booking sites that run on your own computer, which the robots are built and tested against so that no test takes a real appointment. [`ca-dmv/`](simulators/ca-dmv/) is the California DMV's. |
+| [`simulators/`](simulators/) | Copies of booking sites that run on your own computer, which the robots are built and tested against so that no test takes a real appointment. [`ca-dmv/`](simulators/ca-dmv/) is the California DMV's, [`recreation-gov/`](simulators/recreation-gov/) Recreation.gov's. |
 | [`docs/adding-a-line.md`](docs/adding-a-line.md) | Bringing a line for another booking site: what a line is made of, what can be built here today, and what is still missing. |
+| [`rgov/`](rgov/) | The Recreation.gov robots, for the Yosemite campsites line: read the public availability feed for openings, and book and pay for a person's allocated campsite in their own account, over the same RQP/1 envelopes. Its [README](rgov/README.md) says how; [SERVER.md](rgov/SERVER.md) is what the server needs for the line. |
 
 Installers for Windows, macOS and Linux are on the [releases page](https://github.com/grandrew/lineright-client/releases),
 which is also where an installed app updates itself from.
@@ -76,7 +77,7 @@ real there.
 ## Running it
 
 ```bash
-cd dmq && npm ci && cd ..
+cd dmq && npm ci && cd ..      # rgov/ needs nothing of its own: it uses dmq's
 cd desktop && npm ci
 npm run bundle          # the robots' browser, as an installer carries it
 npm start               # the site config.json names (lineright.org)
@@ -87,7 +88,9 @@ and the robots' own tests:
 
 ```bash
 cd dmq && npm test && cd ..
-cd simulators/ca-dmv && npm test && npm run test:robots   # the robots through the DMV simulator
+cd simulators/ca-dmv && npm test && npm run test:robots && cd ../..   # the robots through the DMV simulator
+cd rgov && npm test && cd ..
+cd simulators/recreation-gov && npm test && npm run test:robots   # the Yosemite robots through the Recreation.gov simulator
 ```
 
 Installers are built by `.github/workflows/desktop-release.yml` when a
@@ -97,11 +100,13 @@ and published to this repository's releases.
 ## Contributing
 
 Issues and pull requests are welcome. Before sending a change, run `npm test` in
-both `desktop/` and `dmq/`; on Linux the desktop suite's smoke tests want a
+`desktop/`, `dmq/` and `rgov/`; on Linux the desktop suite's smoke tests want a
 display, so `xvfb-run -a npm test` there. Please do not point anything at
 dmv.ca.gov beyond the read-only live checks (`npm run test:live` in `dmq/`), and
 run those sparingly: it is the state's website, and every appointment on it is
-somebody's.
+somebody's. The same goes for recreation.gov (`npm run test:live` in `rgov/`
+reads its public feed and nothing else): never put a real campsite in a cart
+from a test.
 
 A change to what the app sends the site — the sync body, a new kind of event in
 the trace — goes with a test that nothing personal rides along:

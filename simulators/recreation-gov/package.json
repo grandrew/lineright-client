@@ -1,0 +1,16 @@
+{
+  "name": "lineright-sim-recreation-gov",
+  "version": "1.0.0",
+  "description": "A local stand-in for Recreation.gov's campsite availability feed and booking flow: what LineRight Regbot's Yosemite robots are developed and tested against",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node standin.mjs",
+    "test": "node --test test/*.test.js",
+    "test:robots": "RGOV_SIM=1 node --test test/robots.test.js"
+  }
+}

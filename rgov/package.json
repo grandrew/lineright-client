@@ -1,0 +1,15 @@
+{
+  "name": "lineright-rgov-robots",
+  "version": "1.0.0",
+  "description": "The Recreation.gov robots the LineRight Regbot desktop app runs for Yosemite campsites: they look for openings, and book a person's own campsite",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:live": "LIVE=1 node --test test/live.test.js"
+  }
+}

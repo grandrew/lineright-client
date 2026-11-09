@@ -65,9 +65,10 @@ function nodeRequire(file) {
 /**
  * Where the robots, their browser and the server are.
  *
- * The robots (dmq/), how the app starts them (host/) and the robots' browser
- * come with the app. Installed: under its resources, where electron-builder put
- * them. A checkout: the sibling ../dmq and this app's host/, and the browser
+ * The robots (dmq/ for the DMV, rgov/ for Recreation.gov), how the app starts
+ * them (host/) and the robots' browser come with the app. Installed: under its
+ * resources, where electron-builder put them. A checkout: the siblings ../dmq
+ * and ../rgov and this app's host/, and the browser
  * scripts/bundle.js fetched into vendor/ when there is one (otherwise
  * Playwright's usual cache).
  *
@@ -95,6 +96,7 @@ function locate({
     return {
       packaged: true, server, regbot, python, standin,
       dmq: path.join(stack, 'dmq'),
+      rgov: path.join(stack, 'rgov'),
       host: path.join(stack, 'host'),
       browsers: path.join(resourcesPath, 'browsers'),
     };
@@ -104,6 +106,7 @@ function locate({
   return {
     packaged: false, server, regbot, python, standin,
     dmq: path.join(repo, 'dmq'),
+    rgov: path.join(repo, 'rgov'),
     host: path.join(appPath, 'host'),
     browsers: exists(path.join(vendor, 'browsers')) ? path.join(vendor, 'browsers') : null,
   };

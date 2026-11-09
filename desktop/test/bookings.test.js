@@ -106,6 +106,7 @@ test('reminders: kept, given when due with a notification and a sound, and not a
   assert.deepEqual(r.tick(), []);
   assert.equal(r.coming().length, 0);
   assert.equal(r.view().coming, 0);
+  assert.equal(r.view().list[0].site.key, 'dmv', 'each booking says how its site is spoken of');
   // Long after the appointment, what was given for it is forgotten.
   now = at('2026-11-02', '12:00');
   r.update([]);

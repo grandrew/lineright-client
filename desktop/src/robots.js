@@ -1,12 +1,15 @@
 'use strict';
 /**
- * The DMV robots, run by this app for the regbot site.
+ * The robots, run by this app for the regbot site: the DMV's (../dmq) and
+ * Recreation.gov's, for the Yosemite campsites line (../rgov).
  *
  * The site holds the queue; the looking and the booking happen here, on the
  * person's own machine. When the site hands this device a read, the scout
- * (../dmq/bin/rqp-scout.js) looks at the offices it names; when a slot is this
- * person's, the booking handler (../dmq/bin/rqp-handler.js) books it with the
- * details kept in the profile here. Each is one process per run, on the app's
+ * (bin/rqp-scout.js) looks at the offices or campgrounds it names; when a slot
+ * is this person's, the booking handler (bin/rqp-handler.js) books it with the
+ * details kept in the profile here. Which robots run is the envelope's
+ * connector (`target.connector`): an envelope without one is the DMV's, as
+ * every envelope was before there were two. Each is one process per run, on the app's
  * own binary as Node (ELECTRON_RUN_AS_NODE) with the Chromium the installer
  * carries: an RQP/1 envelope goes in on stdin and one comes back on stdout —
  * the last JSON line of it, since the handler logs as it goes.
@@ -35,10 +38,28 @@ const SCRIPTS = { scout: 'rqp-scout.js', book: 'rqp-handler.js',
   // A browser with no robot's script, for the AI to work on a site described in words (agent/sitetask.js).
   browse: 'rqp-browser.js' };
 /** The robots this app carries, as the site knows them (a connector's app_robot). */
-const ROBOTS = ['dmq-rqp/1'];
+const ROBOTS = ['dmq-rqp/1', 'rgov-rqp/1'];
 /** The booking systems they work, as the site names them (a site's connector). */
-const CONNECTORS = ['dmv.ca.gov.qmatic'];
+const CONNECTORS = ['dmv.ca.gov.qmatic', 'recreation.gov.camps'];
 const REAL_DMV = 'https://www.dmv.ca.gov';
+const REAL_RGOV = 'https://www.recreation.gov';
+
+/**
+ * Each booking system's robots: where they are (a key of locate()'s paths),
+ * the one real site they may be sent to, the variable that tells them where
+ * the site is, and the log they write.
+ */
+const PACKAGES = {
+  'dmv.ca.gov.qmatic': { dir: 'dmq', real: REAL_DMV, baseVar: 'DMV_BASE_URL', log: 'dmv-robot.log' },
+  'recreation.gov.camps': { dir: 'rgov', real: REAL_RGOV, baseVar: 'RGOV_BASE_URL', log: 'rgov-robot.log' },
+};
+
+/** The robots for an envelope, by its connector. Null for a connector this app has no robots for. */
+function packageFor(envelope) {
+  const connector = envelope && envelope.target && envelope.target.connector;
+  if (!connector) return PACKAGES['dmv.ca.gov.qmatic'];
+  return PACKAGES[connector] || null;
+}
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
 function isLoopback(url) {
@@ -51,15 +72,27 @@ function isLoopback(url) {
 
 const trim = (url) => String(url || '').trim().replace(/\/+$/, '');
 
-/** Whether a robot may be sent to `base` for the site at `serverUrl`. */
-function targetAllowed(base, serverUrl) {
-  if (trim(base) === REAL_DMV) return true;
-  return isLoopback(base) && isLoopback(serverUrl);
+/**
+ * Whether a robot may be sent to `base` for the site at `serverUrl`: a real
+ * booking system's own site, or a practice one when the site is on this
+ * machine too. Given the envelope, only to the real site its own robots work:
+ * the DMV's robots are never sent to Recreation.gov, nor the other way round.
+ */
+function targetAllowed(base, serverUrl, envelope = undefined) {
+  if (isLoopback(base) && isLoopback(serverUrl)) return true;
+  if (envelope === undefined) return isRealSite(base);
+  const pkg = packageFor(envelope);
+  return Boolean(pkg) && trim(base) === pkg.real;
 }
 
 /** Is this the real DMV, where the person has to have said yes first? */
 function isRealDmv(base) {
   return trim(base) === REAL_DMV;
+}
+
+/** Is this any real booking system's site — not a practice one — where the person has to have said yes first? */
+function isRealSite(base) {
+  return Object.values(PACKAGES).some((pkg) => trim(base) === pkg.real);
 }
 
 /**
@@ -70,20 +103,20 @@ function isRealDmv(base) {
  */
 function robotEnv({ env = process.env, paths, platform = process.platform, stateDir, dmvBase = '',
   solverUrl = '', allowBooking = false, confirmationShot = '', traceDir = '', traceScreenshots = false,
-  runLogPath = '', control = false }) {
+  runLogPath = '', control = false, pkg = PACKAGES['dmv.ca.gov.qmatic'], storageState = '' }) {
   // Tests only: an unpackaged app may be told to run the robots in their own
   // simulate mode, which answers without a browser. An installed one never is.
   const simulate = !paths.packaged && env.REGBOT_ROBOT_SIMULATE === '1';
   const out = {};
   for (const [key, value] of Object.entries(env)) {
-    if (value === undefined || OWNED.has(key) || /^(RQP_|DMV_|CAPTCHA_)/.test(key) || key === 'HEADLESS') continue;
+    if (value === undefined || OWNED.has(key) || /^(RQP_|DMV_|RGOV_|CAPTCHA_)/.test(key) || key === 'HEADLESS') continue;
     out[key] = value;
   }
   Object.assign(out, {
     ELECTRON_RUN_AS_NODE: '1',
     HEADLESS: 'true',
     RQP_STATE_PATH: path.join(stateDir, 'rqp-bookings.json'),
-    RUN_LOG_PATH: runLogPath || path.join(stateDir, 'dmv-robot.log'),
+    RUN_LOG_PATH: runLogPath || path.join(stateDir, pkg.log),
   }, robotPlatformEnv(paths, platform));
   // Everything the run does on the site, kept where the app keeps its logs.
   if (traceDir) {
@@ -91,9 +124,13 @@ function robotEnv({ env = process.env, paths, platform = process.platform, state
     out.RQP_TRACE_SCREENSHOTS = traceScreenshots ? '1' : '0';
   }
   if (paths.browsers) out.PLAYWRIGHT_BROWSERS_PATH = paths.browsers;
-  if (dmvBase) out.DMV_BASE_URL = trim(dmvBase);
+  // Where the site is, in the variable these robots read (`dmvBase` names it for both).
+  if (dmvBase) out[pkg.baseVar] = trim(dmvBase);
   // A practice farm only, and only for a practice DMV: the robot checks the same.
-  if (solverUrl && isLoopback(solverUrl) && isLoopback(dmvBase)) out.CAPTCHA_SOLVER_URL = solverUrl;
+  if (pkg.dir === 'dmq' && solverUrl && isLoopback(solverUrl) && isLoopback(dmvBase)) out.CAPTCHA_SOLVER_URL = solverUrl;
+  // The person's own sign-in to the booking site, for a booking robot that needs
+  // one (Recreation.gov's): a storage-state file this app wrote for this run alone.
+  if (allowBooking && storageState) out.RGOV_STORAGE_STATE = storageState;
   if (allowBooking) out.RQP_ALLOW_BOOKING = 'true';
   // A channel to the app as it books, for its AI oversight (dmq's control.js).
   if (control) out.RQP_CONTROL = '1';
@@ -147,9 +184,19 @@ class RobotRunner {
     return String(this.tails[kind] || '').split(/\r?\n/).filter((l) => l.trim()).slice(-lines);
   }
 
-  /** Whether this build has the robots at all (an unbundled checkout may not). */
-  available() {
-    return Boolean(this.paths && this.paths.dmq && fs.existsSync(path.join(this.paths.dmq, 'bin', SCRIPTS.scout)));
+  /** Where the robots for `envelope` are, or null when this build has none for it. */
+  dirFor(envelope) {
+    const pkg = packageFor(envelope);
+    return pkg && this.paths ? this.paths[pkg.dir] || null : null;
+  }
+
+  /**
+   * Whether this build has the robots at all (an unbundled checkout may not):
+   * the DMV's, or given an envelope, the ones that envelope is for.
+   */
+  available(envelope = undefined) {
+    const dir = this.dirFor(envelope);
+    return Boolean(dir && fs.existsSync(path.join(dir, 'bin', SCRIPTS.scout)));
   }
 
   /**
@@ -157,16 +204,22 @@ class RobotRunner {
    * one saying why there is none — a robot that could not run is an answer too.
    */
   run(kind, envelope, { dmvBase = '', solverUrl = '', allowBooking = false, timeoutMs = 600000,
-    confirmationShot = '', context = {}, watch = null } = {}) {
-    const script = path.join(this.paths.dmq, 'bin', SCRIPTS[kind]);
+    confirmationShot = '', context = {}, watch = null, storageState = '' } = {}) {
+    const failed = (message) => ({ protocol: 'RQP/1', kind: kind === 'scout' ? 'discovery.result' : 'booking.result',
+      status: 'unavailable', message, offers: [], checked: [] });
+    const pkg = packageFor(envelope);
+    const dir = this.dirFor(envelope);
+    if (!pkg || !dir) {
+      const connector = envelope && envelope.target && envelope.target.connector;
+      return Promise.resolve(failed(`This app has no robots for ${connector || 'that booking system'}.`));
+    }
+    const script = path.join(dir, 'bin', SCRIPTS[kind]);
     fs.mkdirSync(this.stateDir, { recursive: true });
     const record = this.record(kind, envelope, { dmvBase, allowBooking: kind === 'book' && allowBooking, timeoutMs });
     const env = robotEnv({ env: this.env, paths: this.paths, platform: this.platform, stateDir: this.stateDir,
       dmvBase, solverUrl, allowBooking: kind === 'book' && allowBooking, confirmationShot,
       traceDir: record ? record.dir : '', traceScreenshots: kind === 'book',
-      runLogPath: this.logbook ? this.logbook.file('robot', 'log') : '', control: Boolean(watch) });
-    const failed = (message) => ({ protocol: 'RQP/1', kind: kind === 'scout' ? 'discovery.result' : 'booking.result',
-      status: 'unavailable', message, offers: [], checked: [] });
+      runLogPath: this.logbook ? this.logbook.file('robot', 'log') : '', control: Boolean(watch), pkg, storageState });
     const started = Date.now();
     let printed = '';
     let complained = '';
@@ -186,7 +239,7 @@ class RobotRunner {
       let child;
       try {
         child = this.spawn(this.node, [script], {
-          cwd: this.paths.dmq, env, stdio: watch ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
+          cwd: dir, env, stdio: watch ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
           // Its own process group, so stopping it reaches the browser it started.
           detached: this.platform !== 'win32', windowsHide: true,
         });
@@ -289,4 +342,5 @@ class RobotRunner {
   }
 }
 
-module.exports = { RobotRunner, robotEnv, targetAllowed, isRealDmv, isLoopback, lastJson, ROBOTS, CONNECTORS, REAL_DMV, SCRIPTS };
+module.exports = { RobotRunner, robotEnv, targetAllowed, isRealDmv, isRealSite, isLoopback, lastJson, packageFor,
+  ROBOTS, CONNECTORS, PACKAGES, REAL_DMV, REAL_RGOV, SCRIPTS };

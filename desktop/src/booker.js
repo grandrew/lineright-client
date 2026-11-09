@@ -56,6 +56,7 @@
  */
 const path = require('node:path');
 const { targetAllowed } = require('./robots');
+const { siteOf } = require('./sites');
 
 /** What every DMV booking form asks for: with all of it, the app books unless told not to. */
 const BOOKS_WITH = ['first_name', 'last_name', 'email', 'phone'];
@@ -108,10 +109,14 @@ class Booker {
    * @param {function} [opts.onOutcome] ({kind, ms, job, outcome}) after each booking attempt, for
    *                                    telemetry.js and the trace (traces.js)
    * @param {string} [opts.shotsDir]   where the robot keeps its pictures of confirmation pages; none without
+   * @param {function} [opts.signInFor] (baseUrl, envelope) -> { file, done() } | null: the person's sign-in
+   *                                    to a booking site that needs one (Recreation.gov), as a storage-state
+   *                                    file for this one run; done() deletes it
    */
   constructor({ runner, getClient, getStore, getProfile, reader = null, log = () => {}, onState = () => {},
-    onOutcome = () => {}, shotsDir = '', overseer = null }) {
-    Object.assign(this, { runner, getClient, getStore, getProfile, reader, log, onState, onOutcome, shotsDir, overseer });
+    onOutcome = () => {}, shotsDir = '', overseer = null, signInFor = null }) {
+    Object.assign(this, { runner, getClient, getStore, getProfile, reader, log, onState, onOutcome, shotsDir, overseer,
+      signInFor });
     this.current = null;
     // Two hand-offs can arrive in one sync (one person, two lines), and each is
     // booked at once: busy, and the booking on show, last until both are done.
@@ -192,8 +197,8 @@ class Booker {
     // person's devices holds the slot now. book() says so.
     if (this.recorded(h)) return { ok: true, recorded: true };
     if (h.booker && !h.booker.you && !h.booker.silent) return { ok: false, why: 'elsewhere', device: h.booker.name };
-    if (!this.runner.available()) return { ok: false, why: 'no-robot' };
-    if (!targetAllowed(h.robot.base_url, this.getClient().serverUrl)) return { ok: false, why: 'target' };
+    if (!this.runner.available(h.robot.request)) return { ok: false, why: 'no-robot' };
+    if (!targetAllowed(h.robot.base_url, this.getClient().serverUrl, h.robot.request)) return { ok: false, why: 'target' };
     const values = this.getProfile();
     if (!mayBook(store, values)) return { ok: false, why: 'not-agreed' };
     const missing = (h.robot.requires || []).filter((key) => !String(values[key] || '').trim());
@@ -247,6 +252,7 @@ class Booker {
    */
   async book(h) {
     const started = Date.now();
+    const site = siteOf(h);
     this.tried.add(h.job_id);
     const client = this.getClient();
     const where = h.slot ? `${h.slot.office_name} on ${h.slot.date} at ${h.slot.time}` : h.queue_name;
@@ -300,10 +306,22 @@ class Booker {
       // for its stuck moments (overseer.js).
       const timeoutMs = budgetMs(h.seconds_left);
       const watch = this.overseer && this.overseer.wanted() ? this.overseer.watch(h, { deadline: Date.now() + timeoutMs }) : null;
-      const result = await this.runner.run('book', this.request(h), {
-        dmvBase: h.robot.base_url, solverUrl: h.robot.captcha_solver_url || '', allowBooking: true,
-        timeoutMs, confirmationShot: this.shotFor(h), context: { job: h.job_id }, ...(watch ? { watch } : {}),
-      });
+      // A booking site that books only for a signed-in person gets that
+      // person's sign-in, from this app's own browser, for this run alone.
+      const signIn = this.signInFor ? await Promise.resolve(this.signInFor(h.robot.base_url, h.robot.request)).catch((err) => {
+        this.log(`no sign-in to hand the robot for ${h.robot.base_url}: ${err.message}`);
+        return null;
+      }) : null;
+      let result;
+      try {
+        result = await this.runner.run('book', this.request(h), {
+          dmvBase: h.robot.base_url, solverUrl: h.robot.captcha_solver_url || '', allowBooking: true,
+          timeoutMs, confirmationShot: this.shotFor(h), context: { job: h.job_id }, ...(watch ? { watch } : {}),
+          ...(signIn && signIn.file ? { storageState: signIn.file } : {}),
+        });
+      } finally {
+        if (signIn && typeof signIn.done === 'function') signIn.done();
+      }
       const overseen = result.overseen ? { overseen: true } : {};
       if (result.status === 'confirmed' && result.confirmation) {
         outcome = { kind: 'booked', confirmation: result.confirmation,
@@ -330,9 +348,21 @@ class Booker {
           this.log(`the site did not take "gone" for job ${h.job_id}: ${err.message}`);
         }
       } else if (result.unconfirmed) {
-        outcome = { kind: 'page', unconfirmed: true, ...overseen, why: 'The robot went as far as booking it, but the DMV showed no confirmation. Check your email for one before you book it again.' };
+        outcome = { kind: 'page', unconfirmed: true, ...overseen, why: site.key === 'rgov'
+          ? 'The robot placed the order, but Recreation.gov showed no reservation number, so you may have been charged. '
+            + 'Look in your Recreation.gov reservations and email before you book it again.'
+          : 'The robot went as far as booking it, but the DMV showed no confirmation. Check your email for one before you book it again.' };
+      } else if (result.payment_declined) {
+        // Nothing was bought. The campsite sits in the person's own cart until
+        // the hold runs out: that page, not the booking page, is where to pay.
+        outcome = { kind: 'page', declined: true, cart: result.cart_url || null, held: result.held_until || null,
+          why: `Recreation.gov declined the card in your profile, and nothing was charged. `
+            + (result.held_until ? `The campsite is in your Recreation.gov cart until ${result.held_until}: pay there with another card to keep it.`
+              : 'Pay with another card on the page, or update the card in your profile.') };
+      } else if (result.gate && result.gate.kind === 'signin') {
+        outcome = { kind: 'page', signin: true, why: `${site.Name} wants you signed in. Sign in on the page — the app keeps it for your next turn — and book it there.` };
       } else if (result.gate) {
-        outcome = { kind: 'page', why: 'The DMV asked for a human check. Finish booking it on the page.' };
+        outcome = { kind: 'page', why: `${site.Name} asked for a human check. Finish booking it on the page.` };
       } else {
         outcome = { kind: 'page', why: `The robot could not book it (${result.message || result.status}). Finish booking it on the page.` };
       }
