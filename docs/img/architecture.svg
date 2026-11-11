@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500" role="img" aria-labelledby="title desc">
+  <title id="title">Who does what: the server, the app, and the booking site</title>
+  <desc id="desc">The server, lineright.org, keeps the lines and order books, credits and escrow, which app checks what and when, statistics and history. It sends the app lines to check, your turn and statistics; the app sends back what was found and whether a turn was booked or passed, as JSON over HTTPS. The app, from this repository, keeps your profile, runs the robots, shows the lines and your turn, and can use AI oversight. Its robots look and book on the booking site in a real browser, and bring back openings and confirmation numbers. Your details stay with you; no code comes from the server; the robots check a booking site from your connection only if you agree.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+    .bg { fill: #f6f8fc; stroke: #e1e6f1; }
+    .card { fill: #ffffff; stroke: #dce2ef; }
+    .sunk { fill: #eef1f8; }
+    .ink { fill: #101a2d; } .muted { fill: #56667e; } .faint { fill: #8a99b1; }
+    .rule { stroke: #e6eaf3; }
+    .cell { fill: #dfe4ef; }
+    .soft { fill: #e9ecff; }
+    .accent { fill: #4f46e5; } .accent-s { stroke: #4f46e5; }
+    .gold-soft { fill: #fff3d6; } .ok-soft { fill: #dcf5ea; }
+    .mine { fill: #ffffff; stroke: #4f46e5; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0f1526; stroke: #222b44; }
+      .card { fill: #161d33; stroke: #29334f; }
+      .sunk { fill: #1c2440; }
+      .ink { fill: #e8ecf7; } .muted { fill: #a6b1c9; } .faint { fill: #76839f; }
+      .rule { stroke: #252e48; }
+      .cell { fill: #2a3352; }
+      .soft { fill: #252a5c; }
+      .accent { fill: #7c7ff7; } .accent-s { stroke: #7c7ff7; }
+      .gold-soft { fill: #3a2a0e; } .ok-soft { fill: #0f3a2d; }
+      .mine { fill: #161d33; stroke: #7c7ff7; }
+    }
+  </style>
+  <defs>
+    <marker id="acc-tip" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M1 1 9 5 1 9Z" fill="#6366f1"/>
+    </marker>
+    <marker id="ok-tip" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M1 1 9 5 1 9Z" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0.5" y="0.5" width="999" height="499" rx="20"/>
+
+  <!-- ===== the server ===== -->
+  <rect class="card" x="20" y="56" width="240" height="300" rx="18"/>
+  <rect class="soft" x="44" y="78" width="34" height="13" rx="3.5" stroke="#6366f1" stroke-width="2"/>
+  <rect class="soft" x="44" y="95" width="34" height="13" rx="3.5" stroke="#6366f1" stroke-width="2"/>
+  <circle cx="51" cy="84.5" r="2" fill="#6366f1"/><circle cx="51" cy="101.5" r="2" fill="#6366f1"/>
+  <text x="90" y="95" class="ink" font-size="18" font-weight="700">lineright.org</text>
+  <text x="90" y="114" class="muted" font-size="13">the server</text>
+  <path class="rule" d="M40 132H240" stroke-width="1.5"/>
+  <g fill="#6366f1">
+    <circle cx="48" cy="157" r="4"/><circle cx="48" cy="191" r="4"/><circle cx="48" cy="225" r="4"/><circle cx="48" cy="259" r="4"/><circle cx="48" cy="293" r="4"/>
+  </g>
+  <g class="ink" font-size="14.5">
+    <text x="62" y="162">Lines and order books</text>
+    <text x="62" y="196">Credits, bids, escrow</text>
+    <text x="62" y="230">Who checks what, when</text>
+    <text x="62" y="264">Statistics for everyone</text>
+    <text x="62" y="298">History of every turn</text>
+  </g>
+  <text x="44" y="338" class="faint" font-size="12.5">not open source</text>
+
+  <!-- ===== the app ===== -->
+  <rect class="mine" x="380" y="56" width="240" height="300" rx="18" stroke-width="2"/>
+  <rect x="432" y="44" width="136" height="24" rx="12" fill="#4f46e5"/>
+  <text x="500" y="60.5" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">this repository</text>
+  <g transform="translate(404 80) scale(0.37)">
+    <rect width="92" height="92" rx="20" fill="#4f46e5"/>
+    <path d="M20.5 27h51M20.5 46h33.8M20.5 65h18.7" stroke="#fff" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+    <circle cx="69.4" cy="66" r="6.3" fill="none" stroke="#fff" stroke-width="5.4"/>
+  </g>
+  <text x="450" y="95" class="ink" font-size="18" font-weight="700">The app</text>
+  <text x="450" y="114" class="muted" font-size="13">on your computer</text>
+  <path class="rule" d="M400 132H600" stroke-width="1.5"/>
+  <!-- icons: lock, robot, window, clock, spark -->
+  <rect x="402" y="152" width="12" height="9" rx="2" fill="#f59e0b"/>
+  <path d="M404.5 152v-3a3.5 3.5 0 0 1 7 0v3" stroke="#f59e0b" stroke-width="2" fill="none"/>
+  <rect x="401" y="185" width="14" height="11" rx="3" fill="#6366f1"/>
+  <circle cx="405.5" cy="190.5" r="1.6" fill="#fff"/><circle cx="410.5" cy="190.5" r="1.6" fill="#fff"/>
+  <path d="M408 185v-3" stroke="#6366f1" stroke-width="1.8"/><circle cx="408" cy="181" r="1.6" fill="#6366f1"/>
+  <rect x="401" y="218" width="14" height="12" rx="2" fill="none" stroke="#6366f1" stroke-width="2"/>
+  <path d="M401 222h14" stroke="#6366f1" stroke-width="2"/>
+  <circle cx="408" cy="258" r="6" fill="none" stroke="#6366f1" stroke-width="2"/>
+  <path d="M408 255v3.5l2.5 1.5" stroke="#6366f1" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M408 285l1.8 4.2 4.2 1.8-4.2 1.8-1.8 4.2-1.8-4.2-4.2-1.8 4.2-1.8z" fill="#6366f1"/>
+  <g class="ink" font-size="14.5">
+    <text x="424" y="162">Your profile, kept here</text>
+    <text x="424" y="196">Robots: scout, booker</text>
+    <text x="424" y="230">Lines, bids, your turn</text>
+    <text x="424" y="264">History and alerts</text>
+    <text x="424" y="298">AI oversight, if you like</text>
+  </g>
+  <text x="404" y="338" class="faint" font-size="12.5">Windows · macOS · Linux</text>
+
+  <!-- ===== the booking site ===== -->
+  <rect class="card" x="740" y="56" width="240" height="300" rx="18"/>
+  <g class="accent">
+    <path d="M764 90 780 79 796 90Z"/>
+    <rect x="766" y="91.5" width="28" height="3"/>
+    <rect x="768" y="96.5" width="4.5" height="10"/><rect x="775.5" y="96.5" width="4.5" height="10"/><rect x="783" y="96.5" width="4.5" height="10"/><rect x="790" y="96.5" width="4" height="10"/>
+    <rect x="764" y="107.5" width="32" height="3.5" rx="1"/>
+  </g>
+  <text x="810" y="95" class="ink" font-size="18" font-weight="700">Booking site</text>
+  <text x="810" y="114" class="muted" font-size="13">dmv.ca.gov today</text>
+  <path class="rule" d="M760 132H960" stroke-width="1.5"/>
+  <rect class="sunk" x="764" y="148" width="192" height="134" rx="10"/>
+  <circle cx="777" cy="160" r="3.2" fill="#f87171"/><circle cx="787" cy="160" r="3.2" fill="#fbbf24"/><circle cx="797" cy="160" r="3.2" fill="#34d399"/>
+  <g class="cell">
+    <rect x="776" y="174" width="28" height="22" rx="5"/><rect x="810" y="174" width="28" height="22" rx="5"/><rect x="844" y="174" width="28" height="22" rx="5"/><rect x="878" y="174" width="28" height="22" rx="5"/><rect x="912" y="174" width="28" height="22" rx="5"/>
+    <rect x="776" y="202" width="28" height="22" rx="5"/><rect x="844" y="202" width="28" height="22" rx="5"/><rect x="878" y="202" width="28" height="22" rx="5"/><rect x="912" y="202" width="28" height="22" rx="5"/>
+    <rect x="776" y="230" width="28" height="22" rx="5"/><rect x="810" y="230" width="28" height="22" rx="5"/><rect x="844" y="230" width="28" height="22" rx="5"/><rect x="878" y="230" width="28" height="22" rx="5"/><rect x="912" y="230" width="28" height="22" rx="5"/>
+  </g>
+  <rect x="810" y="202" width="28" height="22" rx="5" fill="#10b981"/>
+  <path d="M818 213l3.5 3.5 7-7" stroke="#fff" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="764" y="314" class="muted" font-size="13">Robots look and book here,</text>
+  <text x="764" y="332" class="muted" font-size="13">from people's own computers.</text>
+
+  <!-- ===== what goes between them ===== -->
+  <g class="muted" font-size="13" text-anchor="middle">
+    <text x="320" y="150">lines to check</text><text x="320" y="167">your turn</text><text x="320" y="184">statistics</text>
+    <text x="320" y="246">what was found</text><text x="320" y="263">booked · passed</text>
+    <text x="680" y="167">robots look</text><text x="680" y="184">and book</text>
+    <text x="680" y="246">openings,</text><text x="680" y="263">confirmation #</text>
+  </g>
+  <path d="M268 200H370" stroke="#6366f1" stroke-width="2.5" marker-end="url(#acc-tip)"/>
+  <path d="M372 224H270" stroke="#10b981" stroke-width="2.5" marker-end="url(#ok-tip)"/>
+  <path d="M628 200H730" stroke="#6366f1" stroke-width="2.5" marker-end="url(#acc-tip)"/>
+  <path d="M732 224H630" stroke="#10b981" stroke-width="2.5" marker-end="url(#ok-tip)"/>
+  <g class="faint" font-size="12" text-anchor="middle">
+    <text x="320" y="308">JSON over HTTPS</text>
+    <text x="680" y="308">a real browser</text>
+  </g>
+
+  <!-- ===== three promises ===== -->
+  <rect class="card" x="20" y="376" width="960" height="104" rx="16"/>
+  <path class="rule" d="M340 398V458M660 398V458" stroke-width="1.5"/>
+  <circle class="gold-soft" cx="60" cy="428" r="20"/>
+  <rect x="53" y="426" width="14" height="11" rx="2.5" fill="#f59e0b"/>
+  <path d="M56 426v-3.5a4 4 0 0 1 8 0v3.5" stroke="#f59e0b" stroke-width="2.2" fill="none"/>
+  <circle class="soft" cx="380" cy="428" r="20"/>
+  <path d="M370 422l10-5 10 5v12l-10 5-10-5z" fill="none" stroke="#6366f1" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M370 422l10 5 10-5M380 427v12" fill="none" stroke="#6366f1" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle class="ok-soft" cx="700" cy="428" r="20"/>
+  <path d="M700 415l10 4v8c0 7-5 11-10 13-5-2-10-6-10-13v-8z" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M695.5 428l3.2 3.2 6-6" stroke="#10b981" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <g class="ink" font-size="15" font-weight="700">
+    <text x="90" y="420">Your details stay with you</text>
+    <text x="410" y="420">No code from the server</text>
+    <text x="730" y="420">Checking needs your yes</text>
+  </g>
+  <g class="muted" font-size="13">
+    <text x="90" y="441">kept on your computer, typed only</text><text x="90" y="459">into the form they are for</text>
+    <text x="410" y="441">the robots ship inside the app;</text><text x="410" y="459">the server sends only data</text>
+    <text x="730" y="441">robots check a booking site from</text><text x="730" y="459">your connection only if you agree</text>
+  </g>
+</svg>

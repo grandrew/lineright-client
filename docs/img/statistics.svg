@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="520" viewBox="0 0 1000 520" role="img" aria-labelledby="title desc">
+  <title id="title">Monitoring: the server hands out reads, pools what the apps see, and sends statistics back</title>
+  <desc id="desc">Free apps are each handed a read: a line, its offices and days. They check the booking site and send back what they saw; an app checking earns credits. The server keeps every opening seen, times how long each lasted, looks now and then at quiet lines, and works out the chances. It sends statistics back to every app: for example 30 openings at the Poway area offices in 7 days, typically open 4 minutes, 62% gone within 5 minutes, busiest at 7 am, plotted by day and how long each lasted, and a bid's chance of a slot by its date.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+    .bg { fill: #f6f8fc; stroke: #e1e6f1; }
+    .card { fill: #ffffff; stroke: #dce2ef; }
+    .sunk { fill: #eef1f8; }
+    .ink { fill: #101a2d; } .muted { fill: #56667e; } .faint { fill: #8a99b1; }
+    .rule { stroke: #e6eaf3; }
+    .grid { stroke: #dfe4ef; }
+    .cell { fill: #dfe4ef; }
+    .soft { fill: #e9ecff; }
+    .acc-t { fill: #4338ca; }
+    .gold-soft { fill: #fff3d6; } .gold-t { fill: #a14a06; }
+    .gone { fill: #a9b4c8; }
+    .ring { fill: #ffffff; }
+    .halo { stroke: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0f1526; stroke: #222b44; }
+      .card { fill: #161d33; stroke: #29334f; }
+      .sunk { fill: #1c2440; }
+      .ink { fill: #e8ecf7; } .muted { fill: #a6b1c9; } .faint { fill: #76839f; }
+      .rule { stroke: #252e48; }
+      .grid { stroke: #2a3350; }
+      .cell { fill: #2a3352; }
+      .soft { fill: #252a5c; }
+      .acc-t { fill: #a5a8ff; }
+      .gold-soft { fill: #3a2a0e; } .gold-t { fill: #fbbf24; }
+      .gone { fill: #56627f; }
+      .ring { fill: #161d33; }
+      .halo { stroke: #161d33; }
+    }
+  </style>
+  <defs>
+    <marker id="acc-tip" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M1 1 9 5 1 9Z" fill="#6366f1"/>
+    </marker>
+    <marker id="ok-tip" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M1 1 9 5 1 9Z" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0.5" y="0.5" width="999" height="519" rx="20"/>
+
+  <!-- ===== the apps ===== -->
+  <rect class="card" x="20" y="20" width="400" height="230" rx="18"/>
+  <text x="44" y="52" class="ink" font-size="16.5" font-weight="700">The apps in a line</text>
+  <text x="44" y="72" class="muted" font-size="13">each free app is handed a read</text>
+  <g>
+    <rect class="sunk" x="64" y="88" width="64" height="42" rx="6" stroke="#4f46e5" stroke-width="2.5"/>
+    <path d="M54 134h84l-6 8h-72z" fill="#4f46e5"/>
+    <rect class="sunk" x="188" y="88" width="64" height="42" rx="6" stroke="#4f46e5" stroke-width="2.5"/>
+    <path d="M178 134h84l-6 8h-72z" fill="#4f46e5"/>
+    <rect class="sunk" x="312" y="88" width="64" height="42" rx="6" stroke="#4f46e5" stroke-width="2.5" stroke-opacity="0.6"/>
+    <path d="M302 134h84l-6 8h-72z" fill="#4f46e5" fill-opacity="0.6"/>
+  </g>
+  <g class="cell">
+    <rect x="74" y="97" width="13" height="10" rx="2.5"/><rect x="91" y="97" width="13" height="10" rx="2.5"/><rect x="108" y="97" width="13" height="10" rx="2.5"/>
+    <rect x="74" y="112" width="13" height="10" rx="2.5"/><rect x="108" y="112" width="13" height="10" rx="2.5"/>
+    <rect x="198" y="97" width="13" height="10" rx="2.5"/><rect x="215" y="97" width="13" height="10" rx="2.5"/><rect x="232" y="97" width="13" height="10" rx="2.5"/>
+    <rect x="198" y="112" width="13" height="10" rx="2.5"/><rect x="215" y="112" width="13" height="10" rx="2.5"/><rect x="232" y="112" width="13" height="10" rx="2.5"/>
+    <rect x="322" y="97" width="13" height="10" rx="2.5"/><rect x="339" y="97" width="13" height="10" rx="2.5"/><rect x="356" y="97" width="13" height="10" rx="2.5"/>
+    <rect x="322" y="112" width="13" height="10" rx="2.5"/><rect x="339" y="112" width="13" height="10" rx="2.5"/><rect x="356" y="112" width="13" height="10" rx="2.5"/>
+  </g>
+  <rect x="91" y="112" width="13" height="10" rx="2.5" fill="#10b981"/>
+  <g class="ink" font-size="13.5" font-weight="700" text-anchor="middle">
+    <text x="96" y="166">Poway · El Cajon</text><text x="220" y="166">Santee · Vista</text><text x="344" y="166">A quiet line</text>
+  </g>
+  <g class="muted" font-size="12.5" text-anchor="middle">
+    <text x="96" y="184">for 14 bids</text><text x="220" y="184">for 6 bids</text><text x="344" y="184">a short look</text>
+  </g>
+  <rect class="gold-soft" x="44" y="206" width="232" height="26" rx="13"/>
+  <path d="M60 212h9l-9 14h9z" fill="#f59e0b"/>
+  <text x="76" y="223.5" class="gold-t" font-size="12.5" font-weight="700">an app earns credits as it checks</text>
+
+  <!-- reads out, findings back -->
+  <text x="490" y="98" class="muted" font-size="13" text-anchor="middle">what to check</text>
+  <path d="M554 110H428" stroke="#6366f1" stroke-width="2.5" marker-end="url(#acc-tip)"/>
+  <path d="M426 140H552" stroke="#10b981" stroke-width="2.5" marker-end="url(#ok-tip)"/>
+  <text x="490" y="164" class="muted" font-size="13" text-anchor="middle">what they saw</text>
+
+  <!-- ===== the server ===== -->
+  <rect class="card" x="560" y="20" width="420" height="230" rx="18"/>
+  <rect class="soft" x="584" y="38" width="30" height="12" rx="3" stroke="#6366f1" stroke-width="2"/>
+  <rect class="soft" x="584" y="54" width="30" height="12" rx="3" stroke="#6366f1" stroke-width="2"/>
+  <text x="626" y="56" class="ink" font-size="17" font-weight="700">lineright.org</text>
+  <text x="626" y="74" class="muted" font-size="13">pools every app's reads</text>
+  <g fill="#6366f1">
+    <circle cx="590" cy="104" r="4"/><circle cx="590" cy="132" r="4"/><circle cx="590" cy="160" r="4"/><circle cx="590" cy="188" r="4"/><circle cx="590" cy="216" r="4"/>
+  </g>
+  <g class="ink" font-size="14">
+    <text x="604" y="109">Hands out reads: a line, its offices, its days</text>
+    <text x="604" y="137">Keeps every opening the robots saw</text>
+    <text x="604" y="165">Times how long each one lasted</text>
+    <text x="604" y="193">Looks now and then at quiet lines</text>
+    <text x="604" y="221">Works out each bid's chances</text>
+  </g>
+
+  <path d="M770 252V284" stroke="#6366f1" stroke-width="2.5" marker-end="url(#acc-tip)"/>
+  <text x="756" y="274" class="muted" font-size="13" text-anchor="end">statistics, to every app and the website</text>
+
+  <!-- ===== the statistics ===== -->
+  <rect class="card" x="20" y="290" width="960" height="210" rx="18"/>
+  <text x="44" y="322" class="ink" font-size="15.5" font-weight="700">Recent openings · Poway area · 7 days</text>
+  <g font-size="12" class="muted">
+    <circle class="gone" cx="528" cy="318" r="4.5"/><text x="538" y="322">gone</text>
+    <circle cx="588" cy="318" r="4.5" fill="#8b5cf6"/><text x="598" y="322">handed to a bid</text>
+    <circle cx="704" cy="318" r="4.5" fill="#10b981"/><text x="714" y="322">booked</text>
+    <circle cx="774" cy="318" r="4.5" fill="#f59e0b"/><text x="784" y="322">yours</text>
+    <circle class="ring" cx="836" cy="318" r="4" stroke="#10b981" stroke-width="2"/><text x="846" y="322">open now</text>
+  </g>
+
+  <g class="sunk">
+    <rect x="44" y="340" width="152" height="64" rx="12"/><rect x="212" y="340" width="152" height="64" rx="12"/>
+    <rect x="44" y="416" width="152" height="64" rx="12"/><rect x="212" y="416" width="152" height="64" rx="12"/>
+  </g>
+  <g class="ink" font-size="22" font-weight="700">
+    <text x="60" y="370">30</text><text x="228" y="370">4 min</text><text x="60" y="446">62%</text><text x="228" y="446">7 am</text>
+  </g>
+  <g class="muted" font-size="12.5">
+    <text x="60" y="391">openings came</text><text x="228" y="391">typically open</text>
+    <text x="60" y="467">gone within 5 min</text><text x="228" y="467">the busiest hour</text>
+  </g>
+
+  <!-- how long each lasted, by day (a log scale) -->
+  <g class="faint" font-size="11" text-anchor="end">
+    <text x="434" y="356">1 day</text><text x="434" y="396">1 h</text><text x="434" y="448">1 min</text>
+  </g>
+  <path class="grid" d="M440 352H750M440 392H750M440 444H750" stroke-width="1" stroke-dasharray="3 4"/>
+  <g class="faint" font-size="11" text-anchor="middle">
+    <text x="462" y="472">Mon</text><text x="508" y="472">Tue</text><text x="554" y="472">Wed</text><text x="600" y="472">Thu</text><text x="646" y="472">Fri</text><text x="692" y="472">Sat</text><text x="738" y="472">Sun</text>
+  </g>
+  <g class="gone">
+    <circle cx="452" cy="430" r="4.5"/><circle cx="474" cy="403" r="4.5"/><circle cx="470" cy="435" r="4.5"/>
+    <circle cx="498" cy="426" r="4.5"/><circle cx="512" cy="442" r="4.5"/><circle cx="504" cy="387" r="4.5"/>
+    <circle cx="544" cy="432" r="4.5"/><circle cx="566" cy="430" r="4.5"/><circle cx="550" cy="363" r="4.5"/>
+    <circle cx="590" cy="437" r="4.5"/><circle cx="614" cy="434" r="4.5"/><circle cx="596" cy="398" r="4.5"/>
+    <circle cx="636" cy="435" r="4.5"/><circle cx="658" cy="440" r="4.5"/><circle cx="642" cy="410" r="4.5"/>
+    <circle cx="682" cy="425" r="4.5"/><circle cx="690" cy="377" r="4.5"/>
+    <circle cx="726" cy="430" r="4.5"/><circle cx="748" cy="433" r="4.5"/>
+  </g>
+  <g fill="#8b5cf6">
+    <circle cx="458" cy="419" r="4.5"/><circle cx="558" cy="414" r="4.5"/><circle cx="650" cy="418" r="4.5"/><circle cx="740" cy="438" r="4.5"/>
+  </g>
+  <g fill="#10b981">
+    <circle cx="466" cy="439" r="4.5"/><circle cx="520" cy="421" r="4.5"/><circle cx="604" cy="424" r="4.5"/><circle cx="700" cy="432" r="4.5"/>
+  </g>
+  <circle class="halo" cx="608" cy="428" r="5.5" fill="#f59e0b" stroke-width="2"/>
+  <circle class="ring" cx="733" cy="421" r="4.5" stroke="#10b981" stroke-width="2.2"/>
+  <path d="M462 430L508 424L554 419L600 428L646 424L692 425L738 431" stroke="#6366f1" stroke-width="2" fill="none" stroke-linejoin="round" opacity="0.85"/>
+
+  <!-- a bid's chance -->
+  <rect class="sunk" x="780" y="340" width="176" height="140" rx="12"/>
+  <text x="796" y="364" class="muted" font-size="12.5">Your bid</text>
+  <text x="796" y="394" class="acc-t" font-size="22" font-weight="700">about 70%</text>
+  <text x="796" y="415" class="muted" font-size="12.5">chance of a slot</text>
+  <text x="796" y="432" class="muted" font-size="12.5">by Nov 30</text>
+  <rect class="cell" x="796" y="450" width="144" height="10" rx="5"/>
+  <rect x="796" y="450" width="101" height="10" rx="5" fill="#6366f1"/>
+</svg>

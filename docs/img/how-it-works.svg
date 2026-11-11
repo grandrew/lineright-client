@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="300" viewBox="0 0 1000 300" role="img" aria-labelledby="title desc">
+  <title id="title">How LineRight works, in five steps</title>
+  <desc id="desc">1. Join a line: stake credits on the slot you need. 2. Apps keep watch: each one checks the booking site for everybody. 3. A slot opens: somebody cancels and a robot spots it. 4. Top bid first: it is offered to the top bid that wants it. 5. Booked for you: your app books it with your details.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+    .bg { fill: #f6f8fc; stroke: #e1e6f1; }
+    .card { fill: #ffffff; stroke: #dce2ef; }
+    .ink { fill: #101a2d; } .muted { fill: #56667e; }
+    .num { fill: #e9ecff; } .num-t { fill: #3f3ac0; }
+    .soft { fill: #e9ecff; }
+    .cell { fill: #e4e8f2; }
+    .pawn { fill: #c6cee0; }
+    .halo { stroke: #f6f8fc; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0f1526; stroke: #222b44; }
+      .card { fill: #161d33; stroke: #29334f; }
+      .ink { fill: #e8ecf7; } .muted { fill: #a6b1c9; }
+      .num { fill: #252a5c; } .num-t { fill: #b9bbff; }
+      .soft { fill: #252a5c; }
+      .cell { fill: #252e4a; }
+      .pawn { fill: #3b4566; }
+      .halo { stroke: #161d33; }
+    }
+  </style>
+  <defs>
+    <marker id="tip" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M1 1 9 5 1 9Z" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0.5" y="0.5" width="999" height="299" rx="20"/>
+
+  <!-- five cards -->
+  <g class="card">
+    <rect x="20" y="24" width="176" height="252" rx="16"/>
+    <rect x="216" y="24" width="176" height="252" rx="16"/>
+    <rect x="412" y="24" width="176" height="252" rx="16"/>
+    <rect x="608" y="24" width="176" height="252" rx="16"/>
+    <rect x="804" y="24" width="176" height="252" rx="16"/>
+  </g>
+
+  <!-- the arrows between them -->
+  <g>
+    <circle class="card" cx="206" cy="120" r="14"/><circle class="card" cx="402" cy="120" r="14"/>
+    <circle class="card" cx="598" cy="120" r="14"/><circle class="card" cx="794" cy="120" r="14"/>
+    <path d="M203 113l7 7-7 7M399 113l7 7-7 7M595 113l7 7-7 7M791 113l7 7-7 7" stroke="#6366f1" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- step numbers -->
+  <g class="num">
+    <circle cx="48" cy="52" r="14"/><circle cx="244" cy="52" r="14"/><circle cx="440" cy="52" r="14"/><circle cx="636" cy="52" r="14"/><circle cx="832" cy="52" r="14"/>
+  </g>
+  <g class="num-t" font-size="14" font-weight="700" text-anchor="middle">
+    <text x="48" y="57">1</text><text x="244" y="57">2</text><text x="440" y="57">3</text><text x="636" y="57">4</text><text x="832" y="57">5</text>
+  </g>
+
+  <!-- 1: a ticket staked with credits -->
+  <path d="M69 98H147A7 7 0 0 1 154 105V111A7 7 0 0 0 154 125V131A7 7 0 0 1 147 138H69A7 7 0 0 1 62 131V125A7 7 0 0 0 62 111V105A7 7 0 0 1 69 98Z" fill="#4f46e5"/>
+  <path d="M86 104v28" stroke="#fff" stroke-opacity="0.55" stroke-width="2" stroke-dasharray="3 3"/>
+  <path d="M97 110h10l-10 16h10z" fill="#fbbf24"/>
+  <text x="111" y="124.5" font-size="17" font-weight="700" fill="#fff">120</text>
+
+  <!-- 2: apps keep watch -->
+  <g opacity="0.55">
+    <rect class="soft" x="296" y="80" width="52" height="34" rx="5" stroke="#6366f1" stroke-width="2"/>
+    <path d="M288 117h68l-5 6h-58z" fill="#6366f1"/>
+  </g>
+  <rect class="card" x="262" y="96" width="62" height="40" rx="6" stroke="#4f46e5" stroke-width="3"/>
+  <path d="M252 140h82l-6 8h-70z" fill="#4f46e5"/>
+  <circle cx="289" cy="114" r="8.5" fill="none" stroke="#4f46e5" stroke-width="3"/>
+  <path d="M295.5 120.5l6 6" stroke="#4f46e5" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- 3: a slot opens on a booked-solid calendar -->
+  <rect class="card" x="466" y="92" width="68" height="58" rx="8" stroke="#4f46e5" stroke-width="2"/>
+  <path d="M466 100a8 8 0 0 1 8-8h52a8 8 0 0 1 8 8v8h-68z" fill="#4f46e5"/>
+  <g class="cell">
+    <rect x="474" y="116" width="11" height="10" rx="2.5"/><rect x="489" y="116" width="11" height="10" rx="2.5"/><rect x="504" y="116" width="11" height="10" rx="2.5"/><rect x="519" y="116" width="11" height="10" rx="2.5"/>
+    <rect x="474" y="131" width="11" height="10" rx="2.5"/><rect x="489" y="131" width="11" height="10" rx="2.5"/><rect x="519" y="131" width="11" height="10" rx="2.5"/>
+  </g>
+  <rect x="504" y="131" width="11" height="10" rx="2.5" fill="#10b981"/>
+  <path d="M545 78l2.6 5.4 5.4 2.6-5.4 2.6-2.6 5.4-2.6-5.4-5.4-2.6 5.4-2.6z" fill="#10b981"/>
+  <path d="M555 98l1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5z" fill="#10b981"/>
+
+  <!-- 4: the top bid that wants it -->
+  <circle cx="670" cy="105" r="7.5" fill="#f59e0b"/><rect x="683" y="100" width="40" height="10" rx="5" fill="#f59e0b"/>
+  <g class="pawn">
+    <circle cx="670" cy="124" r="7.5"/><rect x="683" y="119" width="30" height="10" rx="5"/>
+    <circle cx="670" cy="143" r="7.5"/><rect x="683" y="138" width="22" height="10" rx="5"/>
+  </g>
+  <rect x="732" y="128" width="16" height="16" rx="4" fill="#10b981"/>
+  <path d="M736 136l2.6 2.6 5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M740 126C740 114 736 107 729 106" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#tip)"/>
+
+  <!-- 5: booked, by your own app -->
+  <rect class="card" x="858" y="94" width="68" height="44" rx="6" stroke="#4f46e5" stroke-width="3"/>
+  <g class="pawn"><rect x="867" y="103" width="34" height="5" rx="2.5"/><rect x="867" y="113" width="44" height="5" rx="2.5"/><rect x="867" y="123" width="26" height="5" rx="2.5"/></g>
+  <path d="M848 142h88l-6 8h-76z" fill="#4f46e5"/>
+  <circle class="halo" cx="924" cy="134" r="12" fill="#10b981" stroke-width="3"/>
+  <path d="M918.5 134l3.8 3.8 7.2-7.2" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- words -->
+  <g class="ink" font-size="18" font-weight="700" text-anchor="middle">
+    <text x="108" y="196">Join a line</text>
+    <text x="304" y="196">Apps keep watch</text>
+    <text x="500" y="196">A slot opens</text>
+    <text x="696" y="196">Top bid first</text>
+    <text x="892" y="196">Booked for you</text>
+  </g>
+  <g class="muted" font-size="14.5" text-anchor="middle">
+    <text x="108" y="224">stake credits on</text><text x="108" y="245">the slot you need</text>
+    <text x="304" y="224">each one checks</text><text x="304" y="245">for everybody</text>
+    <text x="500" y="224">somebody cancels,</text><text x="500" y="245">a robot spots it</text>
+    <text x="696" y="224">offered to the top</text><text x="696" y="245">bid that wants it</text>
+    <text x="892" y="224">your app books it</text><text x="892" y="245">with your details</text>
+  </g>
+</svg>

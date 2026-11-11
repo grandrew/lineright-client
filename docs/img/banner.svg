@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="300" viewBox="0 0 1000 300" role="img" aria-labelledby="title desc">
+  <title id="title">LineRight Regbot</title>
+  <desc id="desc">A fair, open line for appointments that are hard to get. People wait in line, and when a slot opens at the DMV it goes to the person at the front.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+    .bg { fill: #f6f8fc; stroke: #e1e6f1; }
+    .card { fill: #ffffff; stroke: #dce2ef; }
+    .ink { fill: #101a2d; } .muted { fill: #56667e; } .faint { fill: #8a99b1; }
+    .pill { fill: #e9ecff; } .pill-t { fill: #3f3ac0; }
+    .cell { fill: #e4e8f2; }
+    .pawn { fill: #c6cee0; }
+    .floor { stroke: #dfe4ef; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0f1526; stroke: #222b44; }
+      .card { fill: #161d33; stroke: #29334f; }
+      .ink { fill: #e8ecf7; } .muted { fill: #a6b1c9; } .faint { fill: #76839f; }
+      .pill { fill: #252a5c; } .pill-t { fill: #b9bbff; }
+      .cell { fill: #252e4a; }
+      .pawn { fill: #3b4566; }
+      .floor { stroke: #29334f; }
+    }
+  </style>
+  <defs>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6366f1" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="lift" x="-30%" y="-20%" width="160%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#1b2559" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="frame"><rect x="0.5" y="0.5" width="999" height="299" rx="20"/></clipPath>
+    <marker id="tip" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1 9 5 1 9Z" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0.5" y="0.5" width="999" height="299" rx="20"/>
+  <g clip-path="url(#frame)"><circle cx="800" cy="150" r="250" fill="url(#halo)"/></g>
+
+  <!-- the app's icon -->
+  <g transform="translate(48 64)">
+    <rect width="92" height="92" rx="20" fill="#4f46e5"/>
+    <path d="M20.5 27h51M20.5 46h33.8M20.5 65h18.7" stroke="#fff" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+    <circle cx="69.4" cy="66" r="6.3" fill="none" stroke="#fff" stroke-width="5.4"/>
+  </g>
+
+  <text x="164" y="110" class="ink" font-size="44" font-weight="700" letter-spacing="-0.5">LineRight Regbot</text>
+  <text x="166" y="150" class="muted" font-size="22">A fair, open line for appointments</text>
+  <text x="166" y="178" class="muted" font-size="22">that are hard to get.</text>
+
+  <rect class="pill" x="164" y="202" width="214" height="32" rx="16"/>
+  <text x="271" y="223" class="pill-t" font-size="14.5" font-weight="600" text-anchor="middle">Windows · macOS · Linux</text>
+  <rect class="pill" x="388" y="202" width="222" height="32" rx="16"/>
+  <text x="499" y="223" class="pill-t" font-size="14.5" font-weight="600" text-anchor="middle">Open source · Apache-2.0</text>
+  <text x="166" y="268" class="faint" font-size="15">The California DMV first. New booking venues welcome.</text>
+
+  <g transform="translate(-112 -20) scale(1.12)">
+  <!-- a line of people at the door of a booked-solid calendar; one slot opens -->
+  <path class="floor" d="M688 247H806" stroke-width="2" stroke-linecap="round"/>
+  <g class="pawn">
+    <circle cx="708" cy="205" r="11"/><path d="M691 246v-10a17 17 0 0 1 34 0v10z"/>
+    <circle cx="748" cy="205" r="11"/><path d="M731 246v-10a17 17 0 0 1 34 0v10z"/>
+  </g>
+  <g fill="#f59e0b">
+    <circle cx="788" cy="205" r="11"/><path d="M771 246v-10a17 17 0 0 1 34 0v10z"/>
+  </g>
+  <rect x="772" y="166" width="32" height="20" rx="10" fill="#f59e0b"/>
+  <text x="788" y="180.5" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">#1</text>
+
+  <g filter="url(#lift)">
+    <rect class="card" x="822" y="42" width="146" height="196" rx="16"/>
+  </g>
+  <path d="M822 58a16 16 0 0 1 16-16h114a16 16 0 0 1 16 16v26H822z" fill="#4f46e5"/>
+  <text x="838" y="69" font-size="15" font-weight="700" fill="#fff">DMV · Poway</text>
+  <g class="cell">
+    <rect x="836" y="100" width="26" height="22" rx="5"/><rect x="866" y="100" width="26" height="22" rx="5"/><rect x="896" y="100" width="26" height="22" rx="5"/><rect x="926" y="100" width="26" height="22" rx="5"/>
+    <rect x="836" y="131" width="26" height="22" rx="5"/><rect x="866" y="131" width="26" height="22" rx="5"/><rect x="896" y="131" width="26" height="22" rx="5"/><rect x="926" y="131" width="26" height="22" rx="5"/>
+    <rect x="866" y="162" width="26" height="22" rx="5"/><rect x="896" y="162" width="26" height="22" rx="5"/><rect x="926" y="162" width="26" height="22" rx="5"/>
+    <rect x="836" y="193" width="26" height="22" rx="5"/><rect x="866" y="193" width="26" height="22" rx="5"/><rect x="896" y="193" width="26" height="22" rx="5"/><rect x="926" y="193" width="26" height="22" rx="5"/>
+  </g>
+  <rect x="831" y="157" width="36" height="32" rx="9" fill="none" stroke="#10b981" stroke-opacity="0.4" stroke-width="2"/>
+  <rect x="836" y="162" width="26" height="22" rx="5" fill="#10b981"/>
+  <path d="M843 173l4 4 8-8" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M829 176C816 178 810 186 806 198" stroke="#10b981" stroke-width="2.5" fill="none" stroke-dasharray="4 4" marker-end="url(#tip)"/>
+  </g>
+</svg>
